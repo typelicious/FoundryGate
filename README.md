@@ -266,26 +266,28 @@ Profile rules can match on:
 
 Profile hints use the same selector keys as policy rules, for example `prefer_tiers`, `allow_providers`, `require_capabilities`, or `capability_values`.
 
+FoundryGate also ships built-in presets for common callers:
+
+- `openclaw`
+- `n8n`
+- `cli`
+
+Enable them via `client_profiles.presets`. Presets add a default profile and header-matching rule, and you can still override the generated profile or rule explicitly in your own config.
+
 Example:
 
 ```yaml
 client_profiles:
   enabled: true
   default: generic
+  presets: ["openclaw", "n8n", "cli"]
   profiles:
     generic: {}
-    openclaw:
-      prefer_tiers: ["default", "reasoning"]
-    n8n:
-      prefer_tiers: ["cheap", "default"]
   rules:
-    - profile: openclaw
-      match:
-        header_present: ["x-openclaw-source"]
-    - profile: n8n
+    - profile: cli
       match:
         header_contains:
-          x-foundrygate-client: ["n8n"]
+          x-foundrygate-client: ["codex"]
 ```
 
 ## Configuration

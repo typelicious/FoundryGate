@@ -56,6 +56,44 @@ _POLICY_SELECT_KEYS = {
     "capability_values",
 }
 _CLIENT_PROFILE_MATCH_KEYS = {"header_contains", "header_present", "any", "all"}
+_SUPPORTED_CLIENT_PROFILE_PRESETS = {"openclaw", "n8n", "cli"}
+
+_CLIENT_PROFILE_PRESET_SPECS: dict[str, dict[str, Any]] = {
+    "openclaw": {
+        "profile": {"prefer_tiers": ["default", "reasoning"]},
+        "rule": {
+            "profile": "openclaw",
+            "match": {
+                "any": [
+                    {"header_present": ["x-openclaw-source"]},
+                    {"header_contains": {"x-foundrygate-client": ["openclaw"]}},
+                ]
+            },
+        },
+    },
+    "n8n": {
+        "profile": {"prefer_tiers": ["cheap", "default"]},
+        "rule": {
+            "profile": "n8n",
+            "match": {
+                "header_contains": {
+                    "x-foundrygate-client": ["n8n"],
+                }
+            },
+        },
+    },
+    "cli": {
+        "profile": {"prefer_tiers": ["default", "reasoning"]},
+        "rule": {
+            "profile": "cli",
+            "match": {
+                "header_contains": {
+                    "x-foundrygate-client": ["cli", "codex", "claude", "kilocode", "deepseek"],
+                }
+            },
+        },
+    },
+}
 
 
 class ConfigError(ValueError):
@@ -500,7 +538,29 @@ def _normalize_client_profiles(data: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(profiles, dict):
         raise ConfigError("'client_profiles.profiles' must be a mapping")
 
+    presets = raw.get("presets", [])
+    if presets is None:
+        presets = []
+    presets = _normalize_string_list(
+        presets,
+        field_name="presets",
+        rule_name="client_profiles",
+        allow_empty=True,
+    )
+    unknown_presets = sorted(set(presets) - _SUPPORTED_CLIENT_PROFILE_PRESETS)
+    if unknown_presets:
+        unknown_list = ", ".join(unknown_presets)
+        raise ConfigError(f"'client_profiles.presets' has unknown preset names: {unknown_list}")
+
     normalized_profiles = {}
+    for preset_name in presets:
+        preset = _CLIENT_PROFILE_PRESET_SPECS[preset_name]
+        normalized_profiles[preset_name] = _normalize_policy_select(
+            f"client profile '{preset_name}'",
+            dict(preset["profile"]),
+            data.get("providers", {}),
+        )
+
     for profile_name, hints in profiles.items():
         if not isinstance(profile_name, str) or not profile_name.strip():
             raise ConfigError("Client profile names must be non-empty strings")
@@ -527,6 +587,17 @@ def _normalize_client_profiles(data: dict[str, Any]) -> dict[str, Any]:
         raise ConfigError("'client_profiles.rules' must be a list")
 
     normalized_rules = []
+    seen_rule_profiles = set()
+    for preset_name in presets:
+        preset_rule = _CLIENT_PROFILE_PRESET_SPECS[preset_name]["rule"]
+        normalized_rules.append(
+            {
+                "profile": preset_name,
+                "match": _normalize_client_profile_match(preset_name, dict(preset_rule["match"])),
+            }
+        )
+        seen_rule_profiles.add(preset_name)
+
     for idx, rule in enumerate(rules, start=1):
         if not isinstance(rule, dict):
             raise ConfigError(f"Client profile rule #{idx} must be a mapping")
@@ -538,17 +609,21 @@ def _normalize_client_profiles(data: dict[str, Any]) -> dict[str, Any]:
             raise ConfigError(
                 f"Client profile rule #{idx} references unknown profile '{profile_name}'"
             )
+        if profile_name in seen_rule_profiles:
+            normalized_rules = [r for r in normalized_rules if r["profile"] != profile_name]
         normalized_rules.append(
             {
                 "profile": profile_name,
                 "match": _normalize_client_profile_match(profile_name, rule.get("match", {})),
             }
         )
+        seen_rule_profiles.add(profile_name)
 
     normalized = dict(data)
     normalized["client_profiles"] = {
         "enabled": enabled,
         "default": default_profile,
+        "presets": presets,
         "profiles": normalized_profiles,
         "rules": normalized_rules,
     }
