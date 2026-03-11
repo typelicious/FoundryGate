@@ -78,6 +78,13 @@ for r in d.get('requests',[]):
 "
 ```
 
+### /foundrygate traces
+Show the last 10 enriched route traces including requested model, resolved profile, client tag, decision reason, confidence, and attempt order.
+
+```bash
+curl -s 'http://127.0.0.1:8090/api/traces?limit=10' | python3 -m json.tool
+```
+
 ## Dashboard
 
 A web dashboard is available at http://127.0.0.1:8090/dashboard — open it in a browser for a live view with auto-refresh.

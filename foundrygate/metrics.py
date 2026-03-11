@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import sqlite3
 import time
@@ -43,12 +44,27 @@ CREATE TABLE IF NOT EXISTS requests (
     cost_usd    REAL    DEFAULT 0,
     latency_ms  REAL    DEFAULT 0,
     success     INTEGER DEFAULT 1,
-    error       TEXT    DEFAULT ''
+    error       TEXT    DEFAULT '',
+    requested_model TEXT DEFAULT 'auto',
+    client_profile  TEXT DEFAULT 'generic',
+    client_tag      TEXT DEFAULT '',
+    decision_reason TEXT DEFAULT '',
+    confidence      REAL DEFAULT 0,
+    attempt_order   TEXT DEFAULT '[]'
 );
 CREATE INDEX IF NOT EXISTS idx_req_ts       ON requests(timestamp);
 CREATE INDEX IF NOT EXISTS idx_req_provider ON requests(provider);
 CREATE INDEX IF NOT EXISTS idx_req_layer    ON requests(layer);
 """
+
+_OPTIONAL_COLUMNS: dict[str, str] = {
+    "requested_model": "TEXT DEFAULT 'auto'",
+    "client_profile": "TEXT DEFAULT 'generic'",
+    "client_tag": "TEXT DEFAULT ''",
+    "decision_reason": "TEXT DEFAULT ''",
+    "confidence": "REAL DEFAULT 0",
+    "attempt_order": "TEXT DEFAULT '[]'",
+}
 
 
 class MetricsStore:
@@ -67,8 +83,22 @@ class MetricsStore:
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA synchronous=NORMAL")
         self._conn.executescript(_CREATE_SQL)
+        self._ensure_optional_columns()
+        self._conn.execute("CREATE INDEX IF NOT EXISTS idx_req_profile ON requests(client_profile)")
+        self._conn.execute("CREATE INDEX IF NOT EXISTS idx_req_client ON requests(client_tag)")
         self._conn.commit()
         logger.info("Metrics DB ready: %s", self._db_path)
+
+    def _ensure_optional_columns(self) -> None:
+        """Add newer columns to an existing metrics DB without destroying data."""
+        if not self._conn:
+            return
+
+        existing = {row[1] for row in self._conn.execute("PRAGMA table_info(requests)").fetchall()}
+        for column_name, column_sql in _OPTIONAL_COLUMNS.items():
+            if column_name in existing:
+                continue
+            self._conn.execute(f"ALTER TABLE requests ADD COLUMN {column_name} {column_sql}")
 
     def log_request(
         self,
@@ -84,6 +114,12 @@ class MetricsStore:
         latency_ms: float = 0.0,
         success: bool = True,
         error: str = "",
+        requested_model: str = "auto",
+        client_profile: str = "generic",
+        client_tag: str = "",
+        decision_reason: str = "",
+        confidence: float = 0.0,
+        attempt_order: list[str] | None = None,
     ) -> None:
         if not self._conn:
             return
@@ -92,8 +128,10 @@ class MetricsStore:
                 """INSERT INTO requests
                    (timestamp,provider,model,layer,rule_name,
                     prompt_tok,compl_tok,cache_hit,cache_miss,
-                    cost_usd,latency_ms,success,error)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    cost_usd,latency_ms,success,error,
+                    requested_model,client_profile,client_tag,
+                    decision_reason,confidence,attempt_order)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     time.time(),
                     provider,
@@ -108,6 +146,12 @@ class MetricsStore:
                     latency_ms,
                     1 if success else 0,
                     error,
+                    requested_model,
+                    client_profile,
+                    client_tag,
+                    decision_reason,
+                    confidence,
+                    json.dumps(attempt_order or []),
                 ),
             )
             self._conn.commit()
@@ -142,6 +186,20 @@ class MetricsStore:
             GROUP BY layer, rule_name, provider ORDER BY requests DESC
         """)
 
+    def get_client_breakdown(self) -> list[dict]:
+        return self._q("""
+            SELECT client_profile,
+                client_tag,
+                provider,
+                layer,
+                COUNT(*)                 AS requests,
+                ROUND(SUM(cost_usd),6)   AS cost_usd,
+                ROUND(AVG(latency_ms),1) AS avg_latency_ms
+            FROM requests
+            GROUP BY client_profile, client_tag, provider, layer
+            ORDER BY requests DESC, client_profile ASC, client_tag ASC
+        """)
+
     def get_hourly_series(self, hours: int = 24) -> list[dict]:
         cutoff = time.time() - hours * 3600
         return self._q(
@@ -172,7 +230,15 @@ class MetricsStore:
         )
 
     def get_recent(self, limit: int = 50) -> list[dict]:
-        return self._q("SELECT * FROM requests ORDER BY timestamp DESC LIMIT ?", (limit,))
+        rows = self._q("SELECT * FROM requests ORDER BY timestamp DESC LIMIT ?", (limit,))
+        for row in rows:
+            attempt_order = row.get("attempt_order")
+            if isinstance(attempt_order, str) and attempt_order:
+                try:
+                    row["attempt_order"] = json.loads(attempt_order)
+                except json.JSONDecodeError:
+                    row["attempt_order"] = []
+        return rows
 
     def get_totals(self) -> dict:
         rows = self._q("""

@@ -110,6 +110,7 @@ def cmd_overview(metrics: MetricsStore):
     totals = metrics.get_totals()
     providers = metrics.get_provider_summary()
     routing = metrics.get_routing_breakdown()
+    clients = metrics.get_client_breakdown()
 
     print()
     print(_c("  ╔══════════════════════════════════════╗", BLUE))
@@ -185,6 +186,23 @@ def cmd_overview(metrics: MetricsStore):
                 ]
             )
         _table(["Layer", "Rule", "Provider", "Reqs", "Cost"], rows, [14, 24, 22, 8, 12])
+        print()
+
+    if clients:
+        print(_c("  ── Clients ───────────────────────────", DIM))
+        rows = []
+        for c in clients[:12]:
+            rows.append(
+                [
+                    c.get("client_profile", ""),
+                    c.get("client_tag", "") or "—",
+                    c.get("provider", ""),
+                    c.get("layer", ""),
+                    str(c.get("requests", 0)),
+                    _usd(c.get("cost_usd", 0)),
+                ]
+            )
+        _table(["Profile", "Client", "Provider", "Layer", "Reqs", "Cost"], rows)
         print()
 
 
@@ -292,6 +310,7 @@ def main():
             "totals": metrics.get_totals(),
             "providers": metrics.get_provider_summary(),
             "routing": metrics.get_routing_breakdown(),
+            "clients": metrics.get_client_breakdown(),
             "daily": metrics.get_daily_totals(args.days),
             "recent": metrics.get_recent(args.recent or 20),
         }
