@@ -16,6 +16,7 @@ The format is intentionally lightweight and human-readable. Group entries by rel
 - Added optional client profiles for caller-aware routing defaults based on request headers
 - Added a dry-run route introspection endpoint at `POST /api/route`
 - Added enriched route traces and client/profile breakdowns in metrics, stats, and CLI output
+- Added built-in `client_profiles` presets for `openclaw`, `n8n`, and `cli`
 - Added a repository `AGENTS.md` and a documented Git workflow for `main`, `feature/*`, `review/*`, and `hotfix/*`
 - Aligned release guidance around semantic-style `x.y.z` versioning with `v0.3.0` as the next target release
 
