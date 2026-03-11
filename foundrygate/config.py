@@ -18,13 +18,38 @@ set via FOUNDRYGATE_DB_PATH in the service environment.
 
 from __future__ import annotations
 
+import ipaddress
 import os
 import re
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import yaml
 from dotenv import load_dotenv
+
+_SUPPORTED_BACKENDS = {"openai-compat", "google-genai", "anthropic-compat"}
+_BOOL_CAPABILITY_FIELDS = {
+    "chat",
+    "reasoning",
+    "vision",
+    "tools",
+    "long_context",
+    "streaming",
+    "local",
+    "cloud",
+}
+_STRING_CAPABILITY_FIELDS = {
+    "cost_tier",
+    "latency_tier",
+    "network_zone",
+    "compliance_scope",
+}
+_ALL_CAPABILITY_FIELDS = _BOOL_CAPABILITY_FIELDS | _STRING_CAPABILITY_FIELDS
+
+
+class ConfigError(ValueError):
+    """Raised when config.yaml contains an invalid runtime configuration."""
 
 
 def _expand_env(value: str) -> str:
@@ -78,6 +103,121 @@ def _safe_db_path(configured: str | None = None) -> str:
 
     # 4. ~/.local/share/foundrygate/foundrygate.db
     return str(Path.home() / ".local" / "share" / "foundrygate" / "foundrygate.db")
+
+
+def _looks_local_base_url(base_url: str) -> bool:
+    """Return whether a provider URL points to localhost or private network space."""
+    parsed = urlparse(base_url)
+    host = (parsed.hostname or "").strip().lower()
+    if not host:
+        return False
+
+    if host in {"localhost", "::1"} or host.endswith(".local"):
+        return True
+
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+
+    return ip.is_loopback or ip.is_private or ip.is_link_local
+
+
+def _normalize_provider_capabilities(name: str, cfg: dict[str, Any]) -> dict[str, Any]:
+    """Normalize and validate provider capability metadata."""
+    raw = cfg.get("capabilities") or {}
+    if not isinstance(raw, dict):
+        raise ConfigError(f"Provider '{name}' capabilities must be a mapping")
+
+    unknown = sorted(set(raw) - _ALL_CAPABILITY_FIELDS)
+    if unknown:
+        unknown_list = ", ".join(unknown)
+        raise ConfigError(f"Provider '{name}' has unknown capability keys: {unknown_list}")
+
+    backend = cfg.get("backend", "openai-compat")
+    model = str(cfg.get("model", "")).lower()
+    tier = str(cfg.get("tier", "")).lower()
+    is_local = _looks_local_base_url(str(cfg.get("base_url", "")))
+
+    normalized: dict[str, Any] = {
+        "chat": True,
+        "reasoning": tier == "reasoning" or "reasoner" in model,
+        "vision": False,
+        "tools": False,
+        "long_context": False,
+        "streaming": backend != "google-genai",
+        "local": is_local,
+        "cloud": not is_local,
+    }
+
+    for key in _BOOL_CAPABILITY_FIELDS:
+        if key not in raw:
+            continue
+        value = raw[key]
+        if not isinstance(value, bool):
+            raise ConfigError(f"Provider '{name}' capability '{key}' must be a boolean")
+        normalized[key] = value
+
+    if "local" in raw and "cloud" not in raw:
+        normalized["cloud"] = not normalized["local"]
+    if "cloud" in raw and "local" not in raw:
+        normalized["local"] = not normalized["cloud"]
+
+    normalized["network_zone"] = "local" if normalized["local"] else "public"
+
+    for key in _STRING_CAPABILITY_FIELDS:
+        if key not in raw:
+            continue
+        value = raw[key]
+        if not isinstance(value, str) or not value.strip():
+            raise ConfigError(f"Provider '{name}' capability '{key}' must be a non-empty string")
+        normalized[key] = value.strip()
+
+    if not normalized["chat"]:
+        raise ConfigError(f"Provider '{name}' must support chat=true in the current runtime")
+    if normalized["local"] and normalized["cloud"]:
+        raise ConfigError(f"Provider '{name}' cannot be both local and cloud")
+    if backend == "google-genai" and normalized["streaming"]:
+        raise ConfigError(f"Provider '{name}' cannot enable streaming for backend google-genai yet")
+    if backend == "google-genai" and normalized["tools"]:
+        raise ConfigError(f"Provider '{name}' cannot enable tools for backend google-genai yet")
+
+    return normalized
+
+
+def _normalize_provider(name: str, cfg: Any) -> dict[str, Any]:
+    """Validate a provider definition and attach normalized capability metadata."""
+    if not isinstance(cfg, dict):
+        raise ConfigError(f"Provider '{name}' must be a mapping")
+
+    normalized = dict(cfg)
+    backend = normalized.get("backend", "openai-compat")
+    if backend not in _SUPPORTED_BACKENDS:
+        supported = ", ".join(sorted(_SUPPORTED_BACKENDS))
+        raise ConfigError(
+            f"Provider '{name}' uses unsupported backend '{backend}' (supported: {supported})"
+        )
+
+    for field in ("base_url", "model"):
+        value = normalized.get(field, "")
+        if not isinstance(value, str) or not value.strip():
+            raise ConfigError(f"Provider '{name}' must define a non-empty '{field}'")
+
+    normalized["capabilities"] = _normalize_provider_capabilities(name, normalized)
+    return normalized
+
+
+def _normalize_providers(data: dict[str, Any]) -> dict[str, Any]:
+    """Normalize every provider block before the Config object is created."""
+    providers = data.get("providers", {})
+    if not isinstance(providers, dict):
+        raise ConfigError("'providers' must be a mapping")
+
+    normalized = dict(data)
+    normalized["providers"] = {
+        name: _normalize_provider(name, cfg) for name, cfg in providers.items()
+    }
+    return normalized
 
 
 class Config:
@@ -151,5 +291,5 @@ def load_config(path: str | Path | None = None) -> Config:
     with path.open() as f:
         raw = yaml.safe_load(f)
 
-    expanded = _walk_expand(raw)
+    expanded = _normalize_providers(_walk_expand(raw))
     return Config(expanded)

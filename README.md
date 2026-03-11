@@ -1,7 +1,7 @@
 # FoundryGate
 
-[![repo-safety](https://github.com/typelicious/ClawGate/actions/workflows/repo-safety.yml/badge.svg)](https://github.com/typelicious/ClawGate/actions/workflows/repo-safety.yml)
-[![CI](https://github.com/typelicious/ClawGate/actions/workflows/ci.yml/badge.svg)](https://github.com/typelicious/ClawGate/actions/workflows/ci.yml)
+[![repo-safety](https://github.com/typelicious/FoundryGate/actions/workflows/repo-safety.yml/badge.svg)](https://github.com/typelicious/FoundryGate/actions/workflows/repo-safety.yml)
+[![CI](https://github.com/typelicious/FoundryGate/actions/workflows/ci.yml/badge.svg)](https://github.com/typelicious/FoundryGate/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
 [![OpenAI-compatible](https://img.shields.io/badge/OpenAI-compatible-0ea5e9.svg)](./README.md#api)
 [![OpenClaw-friendly](https://img.shields.io/badge/OpenClaw-friendly-111827.svg)](https://openclaw.ai/)
@@ -25,8 +25,6 @@
 🦞 Local OpenAI-compatible gateway for [OpenClaw](https://openclaw.ai/).
 
 FoundryGate is a local OpenAI-compatible router/proxy for OpenClaw and other clients. Point your client at a single local endpoint, and FoundryGate routes each request to the configured upstream provider and model, applies fallbacks on failures, and exposes health and usage data for operations.
-
-Repository note: the current GitHub repository path is still `typelicious/ClawGate`, so clone and release links use that URL until the repository itself is renamed on GitHub.
 
 OpenClaw site: [https://openclaw.ai/](https://openclaw.ai/)
 OpenClaw docs: [https://docs.openclaw.ai/](https://docs.openclaw.ai/)
@@ -57,7 +55,7 @@ The fastest path is a local Python run using the stock `config.yaml`.
 4. Install dependencies and run the app.
 
 ```bash
-git clone https://github.com/typelicious/ClawGate.git foundrygate
+git clone https://github.com/typelicious/FoundryGate.git foundrygate
 cd foundrygate
 cp .env.example .env
 mkdir -p "$HOME/.local/state/foundrygate"
@@ -120,6 +118,9 @@ Returns overall service status plus one object per loaded provider. Each provide
 - `consecutive_failures`
 - `avg_latency_ms`
 - `last_error`
+- `backend`
+- `tier`
+- `capabilities`
 
 ```bash
 curl -fsS http://127.0.0.1:8090/health
@@ -238,6 +239,38 @@ The stock `config.yaml` includes per-provider `timeout` stanzas for documentatio
 - read/response timeout: `120s`
 
 Timeouts and connection errors still participate in fallback behavior and health tracking.
+
+### Provider Capability Schema
+
+Each provider can expose normalized capability metadata under `capabilities:` in `config.yaml`. This is the first building block for policy-aware routing and future local-worker support.
+
+Supported keys today:
+
+- Boolean flags: `chat`, `reasoning`, `vision`, `tools`, `long_context`, `streaming`, `local`, `cloud`
+- String labels: `cost_tier`, `latency_tier`, `network_zone`, `compliance_scope`
+
+What the current runtime does with them:
+
+- validates the capability block at startup
+- derives safe defaults for `chat`, `reasoning`, `streaming`, `local`, `cloud`, and `network_zone`
+- rejects combinations the current runtime cannot honor, such as `google-genai` plus `streaming: true`
+- exposes the normalized capabilities in `/health` and `/v1/models`
+
+Example:
+
+```yaml
+providers:
+  local-worker:
+    backend: openai-compat
+    base_url: "http://127.0.0.1:11434/v1"
+    api_key: "local"
+    model: "llama3"
+    tier: local
+    capabilities:
+      tools: true
+      cost_tier: budget
+      latency_tier: low
+```
 
 ### Configuration Examples
 
@@ -427,7 +460,7 @@ Short version:
 
 - [CHANGELOG.md](./CHANGELOG.md) tracks notable user-facing changes
 - [RELEASES.md](./RELEASES.md) describes the lightweight release process for tags and GitHub Releases
-- GitHub Releases: [https://github.com/typelicious/ClawGate/releases](https://github.com/typelicious/ClawGate/releases)
+- GitHub Releases: [https://github.com/typelicious/FoundryGate/releases](https://github.com/typelicious/FoundryGate/releases)
 
 ## Contributing
 
