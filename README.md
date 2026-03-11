@@ -26,7 +26,7 @@
 
 FoundryGate is a local OpenAI-compatible router/proxy for OpenClaw and other clients. Point your client at a single local endpoint, and FoundryGate routes each request to the configured upstream provider and model, applies fallbacks on failures, and exposes health and usage data for operations.
 
-Current compatibility note: the product name is `FoundryGate`, while the current runtime package, service file, helper scripts, and environment variable names still use `clawgate` identifiers. Those compatibility names remain valid until the runtime rename lands.
+Repository note: the current GitHub repository path is still `typelicious/ClawGate`, so clone and release links use that URL until the repository itself is renamed on GitHub.
 
 OpenClaw site: [https://openclaw.ai/](https://openclaw.ai/)
 OpenClaw docs: [https://docs.openclaw.ai/](https://docs.openclaw.ai/)
@@ -38,7 +38,7 @@ OpenClaw docs: [https://docs.openclaw.ai/](https://docs.openclaw.ai/)
 - Multi-provider routing: use `auto` for routing or target a provider directly by model id.
 - Robust fallback behavior: provider errors, timeouts, and connection failures fall through the configured fallback chain.
 - Useful observability: `/health` reports provider status, consecutive failures, last error, and average latency.
-- Safe database path handling: metrics use `CLAWGATE_DB_PATH`, so the SQLite database does not need to live in the repo checkout.
+- Safe database path handling: metrics use `FOUNDRYGATE_DB_PATH`, so the SQLite database does not need to live in the repo checkout.
 
 ## Who Is This For?
 
@@ -53,20 +53,20 @@ The fastest path is a local Python run using the stock `config.yaml`.
 
 1. Clone the repo and create your environment file.
 2. Set at least one provider API key in `.env`.
-3. Override `CLAWGATE_DB_PATH` to a writable path outside the repo if you are not using the systemd unit.
+3. Override `FOUNDRYGATE_DB_PATH` to a writable path outside the repo if you are not using the systemd unit.
 4. Install dependencies and run the app.
 
 ```bash
-git clone https://github.com/typelicious/ClawGate.git
-cd ClawGate
+git clone https://github.com/typelicious/ClawGate.git foundrygate
+cd foundrygate
 cp .env.example .env
-mkdir -p "$HOME/.local/state/clawgate"
-printf '\nCLAWGATE_DB_PATH=%s\n' "$HOME/.local/state/clawgate/clawgate.db" >> .env
+mkdir -p "$HOME/.local/state/foundrygate"
+printf '\nFOUNDRYGATE_DB_PATH=%s\n' "$HOME/.local/state/foundrygate/foundrygate.db" >> .env
 $EDITOR .env
 python3 -m venv .venv
 . .venv/bin/activate
 pip install -r requirements.txt
-python -m clawgate
+python -m foundrygate
 ```
 
 In another terminal:
@@ -76,7 +76,7 @@ curl -fsS http://127.0.0.1:8090/health
 curl -fsS http://127.0.0.1:8090/v1/models
 ```
 
-If you install the project as a package, both `foundrygate` and `clawgate` console scripts are available during the transition.
+If you install the project as a package, the `foundrygate` and `foundrygate-stats` console scripts are available.
 
 If every configured provider API key is empty, FoundryGate still starts, but it skips those providers at startup and `v1/models` will only expose the virtual `auto` model.
 
@@ -110,7 +110,7 @@ Important implementation detail: heuristic keyword scoring only evaluates user m
 
 ## API
 
-These endpoints are implemented today in [clawgate/main.py](./clawgate/main.py). The runtime module path still uses `clawgate` during the transition.
+These endpoints are implemented today in [foundrygate/main.py](./foundrygate/main.py).
 
 ### `GET /health`
 
@@ -140,11 +140,11 @@ OpenAI-compatible chat completions endpoint.
 - `model: "auto"` routes through FoundryGate
 - `model: "<provider-id>"` routes directly to that loaded provider
 
-For non-streaming responses, FoundryGate also adds these compatibility response headers:
+For non-streaming responses, FoundryGate also adds these response headers:
 
-- `X-ClawGate-Provider`
-- `X-ClawGate-Layer`
-- `X-ClawGate-Rule`
+- `X-FoundryGate-Provider`
+- `X-FoundryGate-Layer`
+- `X-FoundryGate-Rule`
 
 ```bash
 curl -fsS http://127.0.0.1:8090/v1/chat/completions \
@@ -206,7 +206,7 @@ String values in `config.yaml` support `${ENV_VAR}` and `${ENV_VAR:-default}` ex
 
 | Variable | What it does | Notes |
 | --- | --- | --- |
-| `CLAWGATE_DB_PATH` | Path to the metrics SQLite database | Stock `config.yaml` defaults to `/var/lib/clawgate/clawgate.db` (not `./clawgate.db`) |
+| `FOUNDRYGATE_DB_PATH` | Path to the metrics SQLite database | Stock `config.yaml` defaults to `/var/lib/foundrygate/foundrygate.db` (not `./foundrygate.db`) |
 | `DEEPSEEK_API_KEY` | Enables the default DeepSeek providers | Used by `deepseek-chat` and `deepseek-reasoner` |
 | `GEMINI_API_KEY` | Enables the default Gemini providers | Used by `gemini-flash-lite` and `gemini-flash` |
 | `OPENROUTER_API_KEY` | Enables the default OpenRouter fallback provider | Optional |
@@ -247,7 +247,7 @@ Single provider:
 
 ```dotenv
 DEEPSEEK_API_KEY=your-key-here
-CLAWGATE_DB_PATH=/home/you/.local/state/clawgate/clawgate.db
+FOUNDRYGATE_DB_PATH=/home/you/.local/state/foundrygate/foundrygate.db
 ```
 
 Multi-provider with fallback:
@@ -256,7 +256,7 @@ Multi-provider with fallback:
 DEEPSEEK_API_KEY=your-key-here
 GEMINI_API_KEY=your-key-here
 OPENROUTER_API_KEY=your-key-here
-CLAWGATE_DB_PATH=/home/you/.local/state/clawgate/clawgate.db
+FOUNDRYGATE_DB_PATH=/home/you/.local/state/foundrygate/foundrygate.db
 ```
 
 Disable a provider:
@@ -270,39 +270,39 @@ FoundryGate runs fine as a plain Python process. `systemd` and helper scripts ar
 
 ### Generic Linux Host
 
-For a normal Linux host without `systemd`, use the Quickstart above and keep `CLAWGATE_DB_PATH` on a writable path outside the repo checkout.
+For a normal Linux host without `systemd`, use the Quickstart above and keep `FOUNDRYGATE_DB_PATH` on a writable path outside the repo checkout.
 
 Recommended runtime paths:
 
 - app checkout: wherever you keep the repo
-- metrics DB: `/var/lib/clawgate/clawgate.db` for system services, or a user path such as `$HOME/.local/state/clawgate/clawgate.db` for local runs
+- metrics DB: `/var/lib/foundrygate/foundrygate.db` for system services, or a user path such as `$HOME/.local/state/foundrygate/foundrygate.db` for local runs
 
 ### systemd
 
-The repo includes [clawgate.service](./clawgate.service), which still uses the current compatibility service name. Deploy it to:
+The repo includes [foundrygate.service](./foundrygate.service). Deploy it to:
 
 ```text
-/etc/systemd/system/clawgate.service
+/etc/systemd/system/foundrygate.service
 ```
 
 Key points:
 
-- Working directory: `/opt/clawgate`
-- Environment file: `/opt/clawgate/.env`
-- Database path: `CLAWGATE_DB_PATH=/var/lib/clawgate/clawgate.db`
-- Writable state directory: `/var/lib/clawgate/`
+- Working directory: `/opt/foundrygate`
+- Environment file: `/opt/foundrygate/.env`
+- Database path: `FOUNDRYGATE_DB_PATH=/var/lib/foundrygate/foundrygate.db`
+- Writable state directory: `/var/lib/foundrygate/`
 
-The unit also enables basic hardening with `NoNewPrivileges`, `ProtectSystem=strict`, `ProtectHome`, `ReadWritePaths=/var/lib/clawgate`, and `PrivateTmp`.
+The unit also enables basic hardening with `NoNewPrivileges`, `ProtectSystem=strict`, `ProtectHome`, `ReadWritePaths=/var/lib/foundrygate`, and `PrivateTmp`.
 
 Minimal `systemd` flow:
 
 ```bash
-sudo useradd --system --home /opt/clawgate --shell /usr/sbin/nologin clawgate || true
-sudo install -d -o clawgate -g clawgate -m 755 /var/lib/clawgate
-sudo install -m 644 clawgate.service /etc/systemd/system/clawgate.service
+sudo useradd --system --home /opt/foundrygate --shell /usr/sbin/nologin foundrygate || true
+sudo install -d -o foundrygate -g foundrygate -m 755 /var/lib/foundrygate
+sudo install -m 644 foundrygate.service /etc/systemd/system/foundrygate.service
 sudo systemctl daemon-reload
-sudo systemctl enable --now clawgate.service
-sudo systemctl status clawgate.service --no-pager -l
+sudo systemctl enable --now foundrygate.service
+sudo systemctl status foundrygate.service --no-pager -l
 ```
 
 ### Docker (quick example, no Dockerfile required)
@@ -310,16 +310,16 @@ sudo systemctl status clawgate.service --no-pager -l
 This repo does not currently ship a Dockerfile. For a quick evaluation run, you can use the official Python image and mount the repo read-only:
 
 ```bash
-docker volume create clawgate-data
+docker volume create foundrygate-data
 docker run --rm -p 8090:8090 \
   --env-file .env \
-  -e CLAWGATE_DB_PATH=/data/clawgate.db \
+  -e FOUNDRYGATE_DB_PATH=/data/foundrygate.db \
   -e PYTHONDONTWRITEBYTECODE=1 \
   -v "$PWD":/app:ro \
-  -v clawgate-data:/data \
+  -v foundrygate-data:/data \
   -w /app \
   python:3.13-slim \
-  sh -lc 'pip install --no-cache-dir -r requirements.txt && python -m uvicorn clawgate.main:app --host 0.0.0.0 --port 8090'
+  sh -lc 'pip install --no-cache-dir -r requirements.txt && python -m uvicorn foundrygate.main:app --host 0.0.0.0 --port 8090'
 ```
 
 This is meant for quick evaluation. For longer-lived deployments, build your own image around the same commands.
@@ -328,19 +328,19 @@ This is meant for quick evaluation. For longer-lived deployments, build your own
 
 The scripts in [scripts](./scripts) are optional wrappers around `systemd`, `journalctl`, and `curl`. They are most useful on Linux hosts that already use the included `systemd` unit.
 
-Running `./scripts/clawgate-install` also creates symlinks in `/usr/local/bin`.
+Running `./scripts/foundrygate-install` also creates symlinks in `/usr/local/bin`.
 
 | Script | What it does |
 | --- | --- |
-| `clawgate-install` | Installs the unit file, creates `/var/lib/clawgate`, creates helper symlinks, reloads `systemd`, and starts the service |
-| `clawgate-start` | Runs `systemctl start clawgate.service` |
-| `clawgate-stop` | Runs `systemctl stop clawgate.service` |
-| `clawgate-restart` | Runs `systemctl restart clawgate.service` |
-| `clawgate-status` | Shows service status and checks whether `127.0.0.1:8090` is listening |
-| `clawgate-logs` | Tails `journalctl -u clawgate.service` |
-| `clawgate-health` | Calls `GET /health` locally with `curl` |
-| `clawgate-update` | Fetches from Git, hard-resets to `origin/main`, cleans untracked files, reinstalls the unit, restarts, and retries health checks |
-| `clawgate-uninstall` | Stops and disables the service, removes the unit file, and removes helper symlinks |
+| `foundrygate-install` | Installs the unit file, creates `/var/lib/foundrygate`, creates helper symlinks, reloads `systemd`, and starts the service |
+| `foundrygate-start` | Runs `systemctl start foundrygate.service` |
+| `foundrygate-stop` | Runs `systemctl stop foundrygate.service` |
+| `foundrygate-restart` | Runs `systemctl restart foundrygate.service` |
+| `foundrygate-status` | Shows service status and checks whether `127.0.0.1:8090` is listening |
+| `foundrygate-logs` | Tails `journalctl -u foundrygate.service` |
+| `foundrygate-health` | Calls `GET /health` locally with `curl` |
+| `foundrygate-update` | Fetches from Git, hard-resets to `origin/main`, cleans untracked files, reinstalls the unit, restarts, and retries health checks |
+| `foundrygate-uninstall` | Stops and disables the service, removes the unit file, and removes helper symlinks |
 
 ## Repo Safety And CI
 
@@ -394,11 +394,11 @@ sudo ss -ltnp | grep ':8090'
 
 ### The database path is not writable
 
-Set `CLAWGATE_DB_PATH` to a writable path, or create the service state directory:
+Set `FOUNDRYGATE_DB_PATH` to a writable path, or create the service state directory:
 
 ```bash
-mkdir -p "$HOME/.local/state/clawgate"
-sudo install -d -o clawgate -g clawgate -m 755 /var/lib/clawgate
+mkdir -p "$HOME/.local/state/foundrygate"
+sudo install -d -o foundrygate -g foundrygate -m 755 /var/lib/foundrygate
 ```
 
 ### A provider keeps failing over
@@ -407,10 +407,10 @@ Check `/health` for `last_error`, then inspect logs:
 
 ```bash
 curl -fsS http://127.0.0.1:8090/health
-clawgate-logs
+foundrygate-logs
 ```
 
-### `clawgate-update` removed local edits
+### `foundrygate-update` removed local edits
 
 That is intentional. The helper is designed for deployment checkouts and uses `git reset --hard origin/main` plus `git clean -fd`.
 
@@ -421,7 +421,6 @@ The next product direction is tracked in [docs/FOUNDRYGATE-ROADMAP.md](./docs/FO
 Short version:
 
 - `FoundryGate` is the product name
-- current runtime compatibility names still use `clawgate`
 - the next steps focus on capability-aware routing, local worker support, client profiles, and optional context/optimization hooks
 
 ## Releases

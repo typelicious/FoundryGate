@@ -35,7 +35,7 @@ Then open GitHub Releases and publish a release for `v0.3.0`.
 ## Current Release Baseline
 
 - `v0.3.0` is the current target for the first FoundryGate-branded release.
-- Until the runtime rename is complete, release notes should call out that some technical identifiers still use `clawgate` for compatibility.
+- This release line is the baseline for the full FoundryGate technical naming adoption.
 
 ## What Belongs In Release Notes
 

@@ -11,19 +11,11 @@ FoundryGate provides:
 3. fallback and health-aware request handling,
 4. a path toward local workers, client profiles, and optional context or optimization hooks.
 
-## Current naming status
+## Naming status
 
-The product name is `FoundryGate`.
+The product and runtime use `FoundryGate` identifiers.
 
-During the transition, some technical compatibility identifiers still use `clawgate`, including:
-
-- the Python package name,
-- the `clawgate.service` unit file,
-- `CLAWGATE_DB_PATH`,
-- helper script names,
-- the current OpenClaw integration example.
-
-Do not rename compatibility identifiers casually. Keep runtime changes explicit and reviewable.
+The main remaining external mismatch is the current GitHub repository path, which is still `typelicious/ClawGate` until the repo itself is renamed on GitHub.
 
 ## Product priority
 
@@ -99,7 +91,7 @@ Defer or keep optional:
 - prefer explicit contracts over implicit behavior
 - avoid hidden routing magic
 - keep operational failure modes visible in logs and health output
-- preserve backwards compatibility when a rename or integration change is user-facing
+- preserve backwards compatibility where it is intentionally promised
 
 ## Workflow rules
 
@@ -134,7 +126,7 @@ Maintain:
 - roadmap documentation,
 - release and changelog documentation,
 - process documentation for workflow-critical conventions,
-- compatibility notes when product naming and technical identifiers differ.
+- migration notes when external names and runtime names differ.
 
 Do not document features that do not exist.
 
