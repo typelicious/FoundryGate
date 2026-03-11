@@ -2,7 +2,7 @@
 
 ## Project identity
 
-This repository hosts `FoundryGate`, a public MIT-licensed local-first AI gateway.
+This repository hosts `FoundryGate`, a public Apache-2.0-licensed local-first AI gateway.
 
 FoundryGate provides:
 
@@ -13,9 +13,7 @@ FoundryGate provides:
 
 ## Naming status
 
-The product and runtime use `FoundryGate` identifiers.
-
-The main remaining external mismatch is the current GitHub repository path, which is still `typelicious/ClawGate` until the repo itself is renamed on GitHub.
+The product, runtime, and GitHub repository use `FoundryGate` identifiers.
 
 ## Product priority
 

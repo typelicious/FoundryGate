@@ -7,5 +7,5 @@
 - [ ] Tag is pushed to GitHub
 - [ ] GitHub Release is created from the tag
 - [ ] Release notes summarize user-visible changes
-- [ ] Compatibility notes are included if `clawgate` runtime identifiers are still mentioned
+- [ ] Compatibility notes are included if older runtime identifiers are still mentioned
 - [ ] Any upgrade notes or rollback notes are included

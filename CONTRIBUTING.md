@@ -5,7 +5,7 @@ Thanks for your interest. Contributions are welcome.
 ## Development Setup
 
 ```bash
-git clone https://github.com/typelicious/ClawGate.git foundrygate
+git clone https://github.com/typelicious/FoundryGate.git foundrygate
 cd foundrygate
 python3 -m venv venv && source venv/bin/activate
 pip install -e ".[dev]"

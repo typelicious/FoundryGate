@@ -9,7 +9,7 @@ The format is intentionally lightweight and human-readable. Group entries by rel
 ### Changed
 
 - Rebranded the public documentation around the FoundryGate product name
-- Completed the technical rename from `clawgate` runtime identifiers to `foundrygate`
+- Completed the technical rename from earlier runtime identifiers to `foundrygate`
 - Added validated provider capability metadata with normalized local/cloud and streaming defaults
 - Added an optional policy layer for capability-aware provider selection on `auto` requests
 - Added an explicit `local-worker` provider contract for network-local OpenAI-compatible runtimes

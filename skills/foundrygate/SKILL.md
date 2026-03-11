@@ -1,7 +1,7 @@
 ---
 name: foundrygate
 description: FoundryGate routing stats and control. Use when the user asks about API costs, model routing, token usage, cache hit rates, provider health, or wants to test how a prompt would be routed. Commands — /foundrygate stats, /foundrygate route, /foundrygate health, /foundrygate daily.
-metadata: {"openclaw":{"requires":{"bins":["curl"]},"emoji":"🚪","homepage":"https://github.com/typelicious/ClawGate"}}
+metadata: {"openclaw":{"requires":{"bins":["curl"]},"emoji":"🚪","homepage":"https://github.com/typelicious/FoundryGate"}}
 ---
 
 # FoundryGate Skill

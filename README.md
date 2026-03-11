@@ -2,7 +2,7 @@
 
 [![repo-safety](https://github.com/typelicious/FoundryGate/actions/workflows/repo-safety.yml/badge.svg)](https://github.com/typelicious/FoundryGate/actions/workflows/repo-safety.yml)
 [![CI](https://github.com/typelicious/FoundryGate/actions/workflows/ci.yml/badge.svg)](https://github.com/typelicious/FoundryGate/actions/workflows/ci.yml)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
 [![OpenAI-compatible](https://img.shields.io/badge/OpenAI-compatible-0ea5e9.svg)](./README.md#api)
 [![OpenClaw-friendly](https://img.shields.io/badge/OpenClaw-friendly-111827.svg)](https://openclaw.ai/)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](./pyproject.toml)
@@ -24,7 +24,7 @@
 - [Troubleshooting](#troubleshooting)
 - [Releases](#releases)
 
-🦞 Local OpenAI-compatible gateway for [OpenClaw](https://openclaw.ai/).
+Local OpenAI-compatible AI gateway for 🦞 [OpenClaw](https://openclaw.ai/) and other AI-native clients.
 
 FoundryGate is a local OpenAI-compatible router/proxy for OpenClaw and other clients. Point your client at a single local endpoint, and FoundryGate routes each request to the configured upstream provider and model, applies fallbacks on failures, and exposes health and usage data for operations.
 
@@ -75,6 +75,8 @@ In another terminal:
 curl -fsS http://127.0.0.1:8090/health
 curl -fsS http://127.0.0.1:8090/v1/models
 ```
+
+If you prefer the Linux service path instead of a manual Python run, jump to [Helper Scripts](#helper-scripts) and use `./scripts/foundrygate-install`.
 
 If you install the project as a package, the `foundrygate` and `foundrygate-stats` console scripts are available.
 
@@ -602,6 +604,6 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ## License
 
-MIT. See [LICENSE](./LICENSE).
+Apache-2.0. See [LICENSE](./LICENSE).
 
 ⭐ If FoundryGate saves you time or money, feel free to star the repo. ❤️

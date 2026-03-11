@@ -231,7 +231,7 @@ The technical rename to `FoundryGate` is complete in the runtime, operational su
 The remaining rename work is release-facing:
 
 1. publish the first FoundryGate-branded release
-2. communicate migration notes for existing `clawgate` users if they are still present downstream
+2. communicate migration notes for existing downstream users if older runtime names are still present
 
 ## Phased Plan
 
