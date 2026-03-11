@@ -50,24 +50,18 @@ if daily:
 ```
 
 ### /foundrygate route <message>
-Dry-run: show which provider a message would be routed to without actually sending it. Useful for testing routing rules.
+Dry-run: show which provider a message would be routed to without actually sending it upstream. Useful for testing routing rules, client profiles, and fallback order.
 
 ```bash
-curl -s http://127.0.0.1:8090/v1/chat/completions \
+curl -s http://127.0.0.1:8090/api/route \
   -H "Content-Type: application/json" \
   -d '{
     "model": "auto",
-    "messages": [{"role": "user", "content": "USER_MESSAGE_HERE"}],
-    "max_tokens": 1
-  }' 2>&1 | head -1
+    "messages": [{"role": "user", "content": "USER_MESSAGE_HERE"}]
+  }' | python3 -m json.tool
 ```
 
-Note: This sends a real request with max_tokens=1 to see the routing decision in the X-FoundryGate-Provider response header. For zero-cost testing, check the server logs instead:
-
-```bash
-# Watch routing decisions in real-time
-journalctl -u foundrygate -f --output=cat | grep "Route:"
-```
+Show the selected provider, routing layer, rule, resolved profile, and attempt order. If relevant headers matter for routing, include them in the dry-run request.
 
 ### /foundrygate recent
 Show the last 10 requests with provider, layer, rule, tokens, cost, and status.

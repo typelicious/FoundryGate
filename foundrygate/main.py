@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
+from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
@@ -69,6 +70,65 @@ def _resolve_client_profile(
 
     hints = profiles_cfg.get("profiles", {}).get(active_profile, {})
     return active_profile, hints
+
+
+def _build_attempt_order(primary_provider: str) -> list[str]:
+    """Return the provider attempt order for one routed request."""
+    attempt_order = []
+    for provider_name in [primary_provider, *_config.fallback_chain]:
+        if provider_name in _providers and provider_name not in attempt_order:
+            attempt_order.append(provider_name)
+    return attempt_order
+
+
+def _serialize_provider(name: str) -> dict[str, Any] | None:
+    """Return one provider snapshot for API responses."""
+    provider = _providers.get(name)
+    if not provider:
+        return None
+
+    return {
+        "name": name,
+        "model": provider.model,
+        "backend": provider.backend_type,
+        "contract": provider.contract,
+        "tier": provider.tier,
+        "healthy": provider.health.healthy,
+        "capabilities": provider.capabilities,
+    }
+
+
+async def _resolve_route_preview(
+    body: dict[str, Any], headers: dict[str, str]
+) -> tuple[RoutingDecision, str, list[str], str]:
+    """Resolve one request into a routing decision without calling a provider."""
+    messages = body.get("messages", [])
+    model_requested = body.get("model", "auto")
+    tools = body.get("tools")
+
+    client_profile, profile_hints = _resolve_client_profile(_config, headers)
+
+    if model_requested != "auto" and model_requested in _providers:
+        decision = RoutingDecision(
+            provider_name=model_requested,
+            layer="direct",
+            rule_name="explicit-model",
+            confidence=1.0,
+            reason=f"Directly requested provider: {model_requested}",
+        )
+    else:
+        health_map = {name: p.health.to_dict() for name, p in _providers.items()}
+        decision = await _router.route(
+            messages,
+            model_requested=model_requested,
+            has_tools=bool(tools),
+            client_profile=client_profile,
+            profile_hints=profile_hints,
+            headers=headers,
+            provider_health=health_map,
+        )
+
+    return decision, client_profile, _build_attempt_order(decision.provider_name), model_requested
 
 
 @asynccontextmanager
@@ -188,6 +248,29 @@ async def recent(limit: int = 50):
     return {"requests": _metrics.get_recent(limit)}
 
 
+@app.post("/api/route")
+async def preview_route(request: Request):
+    """Dry-run one routing decision without sending a provider request."""
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON body"}, status_code=400)
+
+    headers = _collect_routing_headers(request)
+    decision, client_profile, attempt_order, model_requested = await _resolve_route_preview(
+        body, headers
+    )
+
+    return {
+        "requested_model": model_requested,
+        "resolved_profile": client_profile,
+        "routing_headers": headers,
+        "decision": decision.to_dict(),
+        "selected_provider": _serialize_provider(decision.provider_name),
+        "attempt_order": [_serialize_provider(name) for name in attempt_order],
+    }
+
+
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard():
     """Minimal self-contained dashboard – no build step, no deps."""
@@ -210,39 +293,16 @@ async def chat_completions(request: Request):
     except Exception:
         return JSONResponse({"error": "Invalid JSON body"}, status_code=400)
 
-    messages = body.get("messages", [])
-    model_requested = body.get("model", "auto")
     stream = body.get("stream", False)
     temperature = body.get("temperature")
     max_tokens = body.get("max_tokens")
     tools = body.get("tools")
 
     headers = _collect_routing_headers(request)
-    client_profile, profile_hints = _resolve_client_profile(_config, headers)
-
-    # ── Routing ────────────────────────────────────────────
-
-    if model_requested != "auto" and model_requested in _providers:
-        # Direct routing – skip the engine
-        decision = RoutingDecision(
-            provider_name=model_requested,
-            layer="direct",
-            rule_name="explicit-model",
-            confidence=1.0,
-            reason=f"Directly requested provider: {model_requested}",
-        )
-    else:
-        # Run the routing engine
-        health_map = {name: p.health.to_dict() for name, p in _providers.items()}
-        decision = await _router.route(
-            messages,
-            model_requested=model_requested,
-            has_tools=bool(tools),
-            client_profile=client_profile,
-            profile_hints=profile_hints,
-            headers=headers,
-            provider_health=health_map,
-        )
+    decision, client_profile, attempt_order, _model_requested = await _resolve_route_preview(
+        body, headers
+    )
+    messages = body.get("messages", [])
 
     logger.info(
         "Route: %s [%s/%s] %.1fms",
@@ -255,11 +315,6 @@ async def chat_completions(request: Request):
     # ── Execute with fallback ──────────────────────────────
 
     errors: list[str] = []
-    # Build attempt order: chosen provider first, then fallback chain
-    attempt_order = [decision.provider_name]
-    for fb in _config.fallback_chain:
-        if fb not in attempt_order and fb in _providers:
-            attempt_order.append(fb)
 
     for provider_name in attempt_order:
         provider = _providers.get(provider_name)

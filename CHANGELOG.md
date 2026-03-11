@@ -14,6 +14,7 @@ The format is intentionally lightweight and human-readable. Group entries by rel
 - Added an optional policy layer for capability-aware provider selection on `auto` requests
 - Added an explicit `local-worker` provider contract for network-local OpenAI-compatible runtimes
 - Added optional client profiles for caller-aware routing defaults based on request headers
+- Added a dry-run route introspection endpoint at `POST /api/route`
 - Added a repository `AGENTS.md` and a documented Git workflow for `main`, `feature/*`, `review/*`, and `hotfix/*`
 - Aligned release guidance around semantic-style `x.y.z` versioning with `v0.3.0` as the next target release
 

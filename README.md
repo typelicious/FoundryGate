@@ -166,14 +166,27 @@ curl -fsS http://127.0.0.1:8090/v1/chat/completions \
 
 ### Additional Stable Operational Endpoints
 
+- `POST /api/route`
 - `GET /api/stats`
 - `GET /api/recent?limit=50`
 - `GET /dashboard`
 
 ```bash
+curl -fsS http://127.0.0.1:8090/api/route \
+  -H 'Content-Type: application/json' \
+  -H 'X-FoundryGate-Profile: local-only' \
+  -d '{
+    "model": "auto",
+    "messages": [
+      {"role": "user", "content": "Route this without sending it upstream."}
+    ]
+  }'
+
 curl -fsS http://127.0.0.1:8090/api/stats
 curl -fsS 'http://127.0.0.1:8090/api/recent?limit=10'
 ```
+
+`POST /api/route` is a dry-run endpoint. It uses the same routing logic as `POST /v1/chat/completions` but does not call an upstream provider. The response includes the resolved client profile, the routing decision, and the fallback attempt order.
 
 ## Model Aliases And Routing
 
