@@ -6,7 +6,7 @@ import logging
 import sqlite3
 import time
 
-logger = logging.getLogger("clawgate.metrics")
+logger = logging.getLogger("foundrygate.metrics")
 
 
 def calc_cost(
@@ -54,7 +54,7 @@ CREATE INDEX IF NOT EXISTS idx_req_layer    ON requests(layer);
 class MetricsStore:
     """Synchronous SQLite store with cost tracking."""
 
-    def __init__(self, db_path: str = "/var/lib/clawgate/clawgate.db"):
+    def __init__(self, db_path: str = "/var/lib/foundrygate/foundrygate.db"):
         self._db_path = db_path
         self._conn: sqlite3.Connection | None = None
 

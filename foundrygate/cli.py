@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""clawgate-stats – CLI dashboard for FoundryGate metrics.
+"""foundrygate-stats – CLI dashboard for FoundryGate metrics.
 
 Usage:
-    python -m clawgate.cli              # Full overview
-    python -m clawgate.cli --recent 20  # Last 20 requests
-    python -m clawgate.cli --daily      # Daily cost breakdown
-    python -m clawgate.cli --json       # JSON output (pipe-friendly)
+    python -m foundrygate.cli              # Full overview
+    python -m foundrygate.cli --recent 20  # Last 20 requests
+    python -m foundrygate.cli --daily      # Daily cost breakdown
+    python -m foundrygate.cli --json       # JSON output (pipe-friendly)
 """
 
 # ruff: noqa: I001
@@ -18,7 +18,7 @@ import sys
 import time
 from pathlib import Path
 
-from .config import load_config
+from .config import _safe_db_path, load_config
 from .metrics import MetricsStore
 
 
@@ -113,7 +113,7 @@ def cmd_overview(metrics: MetricsStore):
 
     print()
     print(_c("  ╔══════════════════════════════════════╗", BLUE))
-    print(_c("  ║", BLUE) + _c("   CLAWGATE STATS", BOLD) + _c("            ║", BLUE))
+    print(_c("  ║", BLUE) + _c("  FOUNDRYGATE STATS", BOLD) + _c("          ║", BLUE))
     print(_c("  ╚══════════════════════════════════════╝", BLUE))
     print()
 
@@ -260,7 +260,7 @@ def cmd_daily(metrics: MetricsStore, days: int):
 
 def main():
     parser = argparse.ArgumentParser(
-        prog="clawgate-stats",
+        prog="foundrygate-stats",
         description="CLI dashboard for FoundryGate metrics",
     )
     parser.add_argument("--db", help="Path to metrics DB (default: from config)")
@@ -275,9 +275,9 @@ def main():
     if not db_path:
         try:
             cfg = load_config()
-            db_path = cfg.metrics.get("db_path", "./clawgate.db")
+            db_path = cfg.metrics.get("db_path", _safe_db_path())
         except FileNotFoundError:
-            db_path = "./clawgate.db"
+            db_path = _safe_db_path()
 
     if not Path(db_path).exists():
         print(f"Database not found: {db_path}", file=sys.stderr)

@@ -5,13 +5,13 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=clawgate
-Group=clawgate
-WorkingDirectory=/opt/clawgate
-EnvironmentFile=/opt/clawgate/.env
-Environment=CLAWGATE_DB_PATH=/var/lib/clawgate/clawgate.db
-ExecStart=/opt/clawgate/venv/bin/uvicorn \
-    clawgate.main:app \
+User=foundrygate
+Group=foundrygate
+WorkingDirectory=/opt/foundrygate
+EnvironmentFile=/opt/foundrygate/.env
+Environment=FOUNDRYGATE_DB_PATH=/var/lib/foundrygate/foundrygate.db
+ExecStart=/opt/foundrygate/venv/bin/uvicorn \
+    foundrygate.main:app \
     --host 127.0.0.1 \
     --port 8090 \
     --workers 1 \
@@ -25,7 +25,7 @@ StandardError=journal
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/var/lib/clawgate
+ReadWritePaths=/var/lib/foundrygate
 PrivateTmp=true
 
 [Install]

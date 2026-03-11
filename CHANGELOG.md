@@ -9,7 +9,7 @@ The format is intentionally lightweight and human-readable. Group entries by rel
 ### Changed
 
 - Rebranded the public documentation around the FoundryGate product name
-- Added explicit compatibility notes for the current `clawgate` runtime identifiers
+- Completed the technical rename from `clawgate` runtime identifiers to `foundrygate`
 - Added a repository `AGENTS.md` and a documented Git workflow for `main`, `feature/*`, `review/*`, and `hotfix/*`
 - Aligned release guidance around semantic-style `x.y.z` versioning with `v0.3.0` as the next target release
 

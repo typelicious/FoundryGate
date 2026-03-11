@@ -39,10 +39,8 @@ dev = [
 ]
 
 [project.scripts]
-foundrygate = "clawgate.main:main"
-foundrygate-stats = "clawgate.cli:main"
-clawgate = "clawgate.main:main"
-clawgate-stats = "clawgate.cli:main"
+foundrygate = "foundrygate.main:main"
+foundrygate-stats = "foundrygate.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/typelicious/ClawGate"
@@ -51,7 +49,7 @@ Issues = "https://github.com/typelicious/ClawGate/issues"
 Documentation = "https://github.com/typelicious/ClawGate#readme"
 
 [tool.setuptools.packages.find]
-include = ["clawgate*"]
+include = ["foundrygate*"]
 
 [tool.ruff]
 line-length = 100

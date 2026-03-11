@@ -2,7 +2,7 @@
 
 ## Status
 
-`FoundryGate` is the product name for this project direction. The current runtime package, service file, helper scripts, and some environment variables still use `clawgate` compatibility identifiers during the transition.
+`FoundryGate` is now the product and runtime name for this project direction.
 
 This document is intentionally pragmatic. It describes the target shape of the project, the boundaries that keep it maintainable, and the next concrete implementation steps.
 
@@ -226,14 +226,13 @@ Write access should come after read-heavy observability is stable.
 
 ## Rename Strategy
 
-The public rename to `FoundryGate` is underway.
+The technical rename to `FoundryGate` is complete in the runtime and operational surface.
 
-Current approach:
+The remaining rename work is external:
 
-1. keep the product and documentation under the `FoundryGate` name
-2. preserve `clawgate` runtime identifiers for compatibility until the migration is planned explicitly
-3. migrate package, service, script, and environment names only in a dedicated runtime-rename phase
-4. keep compatibility notes visible for existing users throughout the transition
+1. rename the GitHub repository if desired
+2. publish the first FoundryGate-branded release
+3. communicate migration notes for existing `clawgate` users if they are still present downstream
 
 ## Phased Plan
 
@@ -431,4 +430,4 @@ That is the right long-term shape:
 - OpenAI-compatible HTTP remains the primary interoperability surface for the near term
 - local worker support will be easiest to operationalize if the worker speaks an OpenAI-compatible or similarly simple HTTP contract
 - memory, context, and optimization will remain optional extensions rather than mandatory core behavior
-- the runtime identifier migration from `clawgate` to `foundrygate` will be handled as a dedicated follow-up, not piecemeal across unrelated feature PRs
+- the GitHub repository rename, if done, will be handled as a separate external step

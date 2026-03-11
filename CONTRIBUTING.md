@@ -5,13 +5,11 @@ Thanks for your interest. Contributions are welcome.
 ## Development Setup
 
 ```bash
-git clone https://github.com/typelicious/ClawGate.git
-cd ClawGate
+git clone https://github.com/typelicious/ClawGate.git foundrygate
+cd foundrygate
 python3 -m venv venv && source venv/bin/activate
 pip install -e ".[dev]"
 ```
-
-Compatibility note: the repo and runtime still use several `clawgate` identifiers during the transition. That is expected for now.
 
 ## Running Tests
 
@@ -20,7 +18,7 @@ python -m compileall .
 pytest tests/ -v
 ```
 
-Tests mocken `httpx` und brauchen keine API-Keys.
+Tests mock `httpx` and do not require API keys.
 
 ## Linting
 
@@ -65,4 +63,4 @@ See [docs/process/git-workflow.md](./docs/process/git-workflow.md) for the full 
 
 ## Skill Updates
 
-The skill lives in `skills/clawgate/SKILL.md`. If you update slash commands or add new endpoints, update the skill too.
+The skill lives in `skills/foundrygate/SKILL.md`. If you update slash commands or add new endpoints, update the skill too.

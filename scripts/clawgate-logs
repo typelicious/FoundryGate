@@ -1,3 +1,0 @@
-#!/usr/bin/env bash
-set -euo pipefail
-sudo journalctl -u clawgate.service -f -o cat

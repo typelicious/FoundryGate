@@ -725,11 +725,11 @@ prompt_caching:
 
 
 # ── Logging & Metriken ─────────────────────────────────────────────────────
-# DB path: resolved via CLAWGATE_DB_PATH env var (recommended: /var/lib/clawgate/clawgate.db)
-# Fallback: ~/.local/share/clawgate/clawgate.db
-# NEVER set to ./clawgate.db – repo safety guardrail rejects it.
+# DB path: resolved via FOUNDRYGATE_DB_PATH env var (recommended: /var/lib/foundrygate/foundrygate.db)
+# Fallback: ~/.local/share/foundrygate/foundrygate.db
+# NEVER set to ./foundrygate.db – repo safety guardrail rejects it.
 metrics:
   enabled: true
-  db_path: "${CLAWGATE_DB_PATH:-/var/lib/clawgate/clawgate.db}"
+  db_path: "${FOUNDRYGATE_DB_PATH:-/var/lib/foundrygate/foundrygate.db}"
   log_requests: true
   log_routing_decisions: true

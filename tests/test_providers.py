@@ -41,7 +41,7 @@ _httpx.TimeoutException = Exception
 _httpx.ConnectError = Exception
 sys.modules["httpx"] = _httpx
 
-from clawgate.providers import ProviderBackend  # noqa: E402
+from foundrygate.providers import ProviderBackend  # noqa: E402
 
 
 def _make_google_backend() -> ProviderBackend:

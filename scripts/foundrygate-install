@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+helpers=(
+  foundrygate-install
+  foundrygate-start
+  foundrygate-stop
+  foundrygate-restart
+  foundrygate-status
+  foundrygate-logs
+  foundrygate-health
+  foundrygate-update
+  foundrygate-uninstall
+)
+
+if ! id -u foundrygate >/dev/null 2>&1; then
+  sudo useradd --system --home /opt/foundrygate --shell /usr/sbin/nologin foundrygate
+fi
+
+sudo install -d -o foundrygate -g foundrygate -m 755 /var/lib/foundrygate
+sudo install -m 644 "$repo_root/foundrygate.service" /etc/systemd/system/foundrygate.service
+
+for helper in "${helpers[@]}"; do
+  sudo ln -sf "$repo_root/scripts/$helper" "/usr/local/bin/$helper"
+done
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now foundrygate.service
+sudo systemctl status foundrygate.service --no-pager -l | sed -n "1,120p"

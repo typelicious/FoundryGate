@@ -3,15 +3,15 @@ set -euo pipefail
 
 # update code from repo + restart service
 #
-# Git operations run as the clawgate service user (owner of /opt/clawgate).
+# Git operations run as the foundrygate service user (owner of /opt/foundrygate).
 # systemd operations require sudo.
 #
 # Usage:
-#   clawgate-update          # normal update from any user with sudo rights
-#   sudo -u clawgate bash -c '/opt/clawgate/scripts/clawgate-update'  # explicit
+#   foundrygate-update          # normal update from any user with sudo rights
+#   sudo -u foundrygate bash -c '/opt/foundrygate/scripts/foundrygate-update'  # explicit
 
-CLAWGATE_DIR=/opt/clawgate
-SERVICE_USER=clawgate
+FOUNDRYGATE_DIR=/opt/foundrygate
+SERVICE_USER=foundrygate
 
 # ── Git update ────────────────────────────────────────────────────────────────
 # Run as the service user so .git/ metadata stays owned correctly.
@@ -21,26 +21,26 @@ else
   GIT_CMD=""
 fi
 
-$GIT_CMD git -C "$CLAWGATE_DIR" fetch --all --prune
-$GIT_CMD git -C "$CLAWGATE_DIR" reset --hard origin/main
-$GIT_CMD git -C "$CLAWGATE_DIR" clean -fd
+$GIT_CMD git -C "$FOUNDRYGATE_DIR" fetch --all --prune
+$GIT_CMD git -C "$FOUNDRYGATE_DIR" reset --hard origin/main
+$GIT_CMD git -C "$FOUNDRYGATE_DIR" clean -fd
 
 # ── venv deps (optional) ──────────────────────────────────────────────────────
-if [ -f "$CLAWGATE_DIR/venv/bin/pip" ]; then
-  $GIT_CMD "$CLAWGATE_DIR/venv/bin/pip" install -U pip >/dev/null
-  if [ -f "$CLAWGATE_DIR/requirements.txt" ]; then
-    $GIT_CMD "$CLAWGATE_DIR/venv/bin/pip" install -r "$CLAWGATE_DIR/requirements.txt"
+if [ -f "$FOUNDRYGATE_DIR/venv/bin/pip" ]; then
+  $GIT_CMD "$FOUNDRYGATE_DIR/venv/bin/pip" install -U pip >/dev/null
+  if [ -f "$FOUNDRYGATE_DIR/requirements.txt" ]; then
+    $GIT_CMD "$FOUNDRYGATE_DIR/venv/bin/pip" install -r "$FOUNDRYGATE_DIR/requirements.txt"
   fi
 fi
 
 # ── systemd ───────────────────────────────────────────────────────────────────
-sudo install -m 644 "$CLAWGATE_DIR/clawgate.service" /etc/systemd/system/clawgate.service
+sudo install -m 644 "$FOUNDRYGATE_DIR/foundrygate.service" /etc/systemd/system/foundrygate.service
 sudo systemctl daemon-reload
-sudo systemctl restart clawgate.service
+sudo systemctl restart foundrygate.service
 
 # ── health check ──────────────────────────────────────────────────────────────
 for attempt in 1 2 3 4 5; do
-  if "$CLAWGATE_DIR/scripts/clawgate-health"; then
+  if "$FOUNDRYGATE_DIR/scripts/foundrygate-health"; then
     exit 0
   fi
   sleep 2

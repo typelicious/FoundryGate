@@ -10,7 +10,7 @@ from typing import Any
 
 import httpx
 
-logger = logging.getLogger("clawgate.providers")
+logger = logging.getLogger("foundrygate.providers")
 
 
 @dataclass
@@ -127,7 +127,7 @@ class ProviderBackend:
         }
         # OpenRouter wants extra headers
         if "openrouter" in self.base_url:
-            headers["HTTP-Referer"] = "https://clawgate.local"
+            headers["HTTP-Referer"] = "https://foundrygate.local"
             headers["X-Title"] = "FoundryGate"
 
         url = f"{self.base_url}/chat/completions"
@@ -153,7 +153,7 @@ class ProviderBackend:
             cache_miss = usage.get("prompt_cache_miss_tokens", 0)
 
             # Tag the response with routing metadata
-            data["_clawgate"] = {
+            data["_foundrygate"] = {
                 "provider": self.name,
                 "model": model,
                 "latency_ms": round(latency, 1),
@@ -262,7 +262,7 @@ class ProviderBackend:
         cached = usage_meta.get("cachedContentTokenCount", 0)
 
         return {
-            "id": f"clawgate-google-{int(time.time())}",
+            "id": f"foundrygate-google-{int(time.time())}",
             "object": "chat.completion",
             "created": int(time.time()),
             "model": model,
@@ -278,7 +278,7 @@ class ProviderBackend:
                 "completion_tokens": usage_meta.get("candidatesTokenCount", 0),
                 "total_tokens": usage_meta.get("totalTokenCount", 0),
             },
-            "_clawgate": {
+            "_foundrygate": {
                 "provider": self.name,
                 "model": model,
                 "latency_ms": round(latency, 1),

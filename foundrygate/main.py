@@ -19,7 +19,7 @@ from .metrics import MetricsStore, calc_cost
 from .providers import ProviderBackend, ProviderError
 from .router import Router, RoutingDecision
 
-logger = logging.getLogger("clawgate")
+logger = logging.getLogger("foundrygate")
 
 # ── Globals (initialized in lifespan) ──────────────────────────
 _config: Config
@@ -100,7 +100,7 @@ async def list_models():
         {
             "id": "auto",
             "object": "model",
-            "owned_by": "clawgate",
+            "owned_by": "foundrygate",
             "description": "Auto-routed to optimal provider",
         }
     )
@@ -226,7 +226,7 @@ async def chat_completions(request: Request):
             # Log metrics with cost (cache-aware)
             if _config.metrics.get("enabled") and isinstance(result, dict):
                 usage = result.get("usage", {})
-                cg = result.get("_clawgate", {})
+                cg = result.get("_foundrygate", {})
                 pt = usage.get("prompt_tokens", 0)
                 ct = usage.get("completion_tokens", 0)
                 ch = cg.get("cache_hit_tokens", 0)
@@ -251,14 +251,14 @@ async def chat_completions(request: Request):
                 return StreamingResponse(
                     result,
                     media_type="text/event-stream",
-                    headers={"X-ClawGate-Provider": provider_name},
+                    headers={"X-FoundryGate-Provider": provider_name},
                 )
 
             # Add routing info to response headers (non-streaming)
             resp = JSONResponse(result)
-            resp.headers["X-ClawGate-Provider"] = provider_name
-            resp.headers["X-ClawGate-Layer"] = decision.layer
-            resp.headers["X-ClawGate-Rule"] = decision.rule_name
+            resp.headers["X-FoundryGate-Provider"] = provider_name
+            resp.headers["X-FoundryGate-Layer"] = decision.layer
+            resp.headers["X-FoundryGate-Rule"] = decision.rule_name
             return resp
 
         except ProviderError as e:
@@ -292,12 +292,12 @@ async def chat_completions(request: Request):
 
 
 def main():
-    """Run with: python -m clawgate"""
+    """Run with: python -m foundrygate"""
     import uvicorn
 
     config = load_config()
     uvicorn.run(
-        "clawgate.main:app",
+        "foundrygate.main:app",
         host=config.server.get("host", "127.0.0.1"),
         port=config.server.get("port", 8090),
         log_level=config.server.get("log_level", "info"),

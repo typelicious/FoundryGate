@@ -1,16 +1,16 @@
 ---
-name: clawgate
-description: FoundryGate compatibility skill for routing stats and control. Use when the user asks about API costs, model routing, token usage, cache hit rates, provider health, or wants to test how a prompt would be routed. Commands — /clawgate stats, /clawgate route, /clawgate health, /clawgate daily.
+name: foundrygate
+description: FoundryGate routing stats and control. Use when the user asks about API costs, model routing, token usage, cache hit rates, provider health, or wants to test how a prompt would be routed. Commands — /foundrygate stats, /foundrygate route, /foundrygate health, /foundrygate daily.
 metadata: {"openclaw":{"requires":{"bins":["curl"]},"emoji":"🚪","homepage":"https://github.com/typelicious/ClawGate"}}
 ---
 
-# FoundryGate – Compatibility Skill
+# FoundryGate Skill
 
-FoundryGate is a local routing proxy that sits between OpenClaw and your LLM providers (DeepSeek, Gemini, OpenRouter). This skill keeps the current `/clawgate ...` command names for compatibility.
+FoundryGate is a local routing proxy that sits between OpenClaw and your LLM providers (DeepSeek, Gemini, OpenRouter).
 
 ## Available Commands
 
-### /clawgate stats
+### /foundrygate stats
 Show full routing statistics: total requests, cost, tokens, cache hit rate, per-provider breakdown.
 
 ```bash
@@ -23,7 +23,7 @@ Format the output as a clean summary table showing:
 - Per-provider: requests, tokens, cost, cache%, failures
 - Top routing rules by usage
 
-### /clawgate health
+### /foundrygate health
 Check provider health status.
 
 ```bash
@@ -32,7 +32,7 @@ curl -s http://127.0.0.1:8090/health | python3 -m json.tool
 
 Show each provider's health status, consecutive failures, and average latency. Flag any unhealthy providers.
 
-### /clawgate daily
+### /foundrygate daily
 Show daily cost breakdown with projected monthly cost.
 
 ```bash
@@ -49,7 +49,7 @@ if daily:
 "
 ```
 
-### /clawgate route <message>
+### /foundrygate route <message>
 Dry-run: show which provider a message would be routed to without actually sending it. Useful for testing routing rules.
 
 ```bash
@@ -62,14 +62,14 @@ curl -s http://127.0.0.1:8090/v1/chat/completions \
   }' 2>&1 | head -1
 ```
 
-Note: This sends a real request with max_tokens=1 to see the routing decision in the X-ClawGate-Provider response header. For zero-cost testing, check the server logs instead:
+Note: This sends a real request with max_tokens=1 to see the routing decision in the X-FoundryGate-Provider response header. For zero-cost testing, check the server logs instead:
 
 ```bash
 # Watch routing decisions in real-time
-journalctl -u clawgate -f --output=cat | grep "Route:"
+journalctl -u foundrygate -f --output=cat | grep "Route:"
 ```
 
-### /clawgate recent
+### /foundrygate recent
 Show the last 10 requests with provider, layer, rule, tokens, cost, and status.
 
 ```bash

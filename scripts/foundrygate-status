@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
 set -euo pipefail
-sudo systemctl status clawgate.service --no-pager -l
+sudo systemctl status foundrygate.service --no-pager -l
 echo
 sudo ss -ltnp | grep -E "127\\.0\\.0\\.1:8090\\b" || true

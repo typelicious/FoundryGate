@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+helpers=(
+  foundrygate-install
+  foundrygate-start
+  foundrygate-stop
+  foundrygate-restart
+  foundrygate-status
+  foundrygate-logs
+  foundrygate-health
+  foundrygate-update
+  foundrygate-uninstall
+)
+
+sudo systemctl disable --now foundrygate.service || true
+sudo rm -f /etc/systemd/system/foundrygate.service
+for helper in "${helpers[@]}"; do
+  sudo rm -f "/usr/local/bin/$helper"
+done
+sudo systemctl daemon-reload
+echo "removed: /etc/systemd/system/foundrygate.service"
+echo "removed helper links from: /usr/local/bin"

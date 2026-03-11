@@ -6,14 +6,13 @@
 // Option A: FoundryGate as your primary provider (recommended)
 // ---------------------------------------------------------
 // FoundryGate handles routing, fallback, and model selection.
-// The provider id remains "clawgate" here for compatibility with current examples.
 // OpenClaw only needs to talk to one provider entry.
 
 {
   "models": {
     "mode": "merge",
     "providers": {
-      "clawgate": {
+      "foundrygate": {
         "baseUrl": "http://127.0.0.1:8090/v1",
         "apiKey": "local",
         "auth": "api-key",
@@ -62,28 +61,28 @@
   "agents": {
     "defaults": {
       "model": {
-        "primary": "clawgate/auto",
+        "primary": "foundrygate/auto",
         "fallbacks": []
       },
       "models": {
-        "clawgate/auto": { "alias": "auto" },
-        "clawgate/deepseek-chat": { "alias": "ds" },
-        "clawgate/deepseek-reasoner": { "alias": "r1" },
-        "clawgate/gemini-flash-lite": { "alias": "lite" },
-        "clawgate/gemini-flash": { "alias": "flash" },
-        "clawgate/openrouter-fallback": { "alias": "or" }
+        "foundrygate/auto": { "alias": "auto" },
+        "foundrygate/deepseek-chat": { "alias": "ds" },
+        "foundrygate/deepseek-reasoner": { "alias": "r1" },
+        "foundrygate/gemini-flash-lite": { "alias": "lite" },
+        "foundrygate/gemini-flash": { "alias": "flash" },
+        "foundrygate/openrouter-fallback": { "alias": "or" }
       },
       "imageModel": {
-        "primary": "clawgate/gemini-flash-lite",
+        "primary": "foundrygate/gemini-flash-lite",
         "fallbacks": []
       },
       "heartbeat": {
         "every": "12h",
-        "model": "clawgate/gemini-flash-lite",
+        "model": "foundrygate/gemini-flash-lite",
         "suppressToolErrorWarnings": true
       },
       "subagents": {
-        "model": "clawgate/auto",
+        "model": "foundrygate/auto",
         "maxConcurrent": 10
       }
     }
@@ -96,8 +95,8 @@
 // available for manual overrides.
 
 // Add this to "models.providers":
-//   "clawgate": { ... same as above ... }
+//   "foundrygate": { ... same as above ... }
 //
 // Then set "agents.defaults.model":
-//   "primary": "clawgate/auto",
+//   "primary": "foundrygate/auto",
 //   "fallbacks": ["deepseek/deepseek-chat", "google/gemini-2.5-flash"]

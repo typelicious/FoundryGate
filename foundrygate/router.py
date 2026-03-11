@@ -9,7 +9,7 @@ from typing import Any
 
 from .config import Config
 
-logger = logging.getLogger("clawgate.router")
+logger = logging.getLogger("foundrygate.router")
 
 
 @dataclass
