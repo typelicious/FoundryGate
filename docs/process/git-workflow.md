@@ -44,6 +44,20 @@ Use predictable names:
 5. Open a PR from the feature branch into `main`.
 6. Merge only when CI is green and review concerns are addressed.
 
+## Review cadence
+
+Every 4 or 5 merged PRs, run a broader maintenance pass in addition to normal feature reviews.
+
+That pass should include:
+
+- unit test review
+- integration test review
+- functional test review against current user workflows
+- documentation review across README, roadmap, process docs, troubleshooting docs, and integration guides
+- cleanup of stale assumptions, outdated examples, or renamed surfaces
+
+This keeps the project understandable from the outside and prevents documentation drift after several fast feature PRs.
+
 ## Optional review branch flow
 
 Use a `review/...` branch only when a second focused pass is useful.

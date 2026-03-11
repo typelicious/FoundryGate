@@ -59,6 +59,12 @@ Important: Never score the system prompt for keywords. See ClawRouter's insight 
 4. Ensure `pytest` and `ruff check` pass
 5. Open a PR with a clear description
 
+After every 4 or 5 merged PRs, do a broader review pass:
+
+- review unit, integration, and functional test coverage
+- update every relevant doc, not only the README
+- refresh roadmap/process docs if the project direction or workflow changed
+
 See [docs/process/git-workflow.md](./docs/process/git-workflow.md) for the full branch model.
 
 ## Skill Updates

@@ -1,0 +1,85 @@
+# FoundryGate Integrations
+
+## Current integration model
+
+FoundryGate works best when clients use the same OpenAI-compatible base URL and let the gateway handle routing and failover.
+
+That keeps integrations shallow and makes routing policy reusable across tools.
+
+## OpenClaw
+
+OpenClaw is a first-class target for FoundryGate.
+
+Current coverage:
+
+- one-agent traffic through the normal OpenAI-compatible endpoint
+- many-agent or delegated traffic when `x-openclaw-source` is present
+- direct model aliases via the OpenClaw-side config
+- caller-aware defaults through the `openclaw` client preset or explicit profile rules
+
+Use:
+
+- [openclaw-integration.jsonc](../openclaw-integration.jsonc)
+- `client_profiles.presets: ["openclaw"]` for a standard starting point
+
+## n8n
+
+n8n can use FoundryGate as a stable local model gateway.
+
+Recommended pattern:
+
+- send requests to the OpenAI-compatible endpoint
+- set `X-FoundryGate-Client: n8n`
+- enable the `n8n` client preset or an explicit `n8n` profile
+
+This gives you:
+
+- cheaper default routing for workflow traffic
+- shared fallback behavior
+- route debugging through `POST /api/route`
+
+## CLI clients
+
+CLI tools should also use the same local gateway where possible.
+
+Examples:
+
+- Codex CLI
+- Claude Code wrappers
+- KiloCode CLI
+- future DeepSeek-oriented wrappers
+
+Recommended pattern:
+
+- point the client to FoundryGate
+- set `X-FoundryGate-Client: codex`, `claude`, `kilocode`, or another stable client tag
+- use the built-in `cli` preset or a tighter custom profile
+
+## Provider onboarding
+
+When onboarding a new provider:
+
+1. define the provider stanza in `config.yaml`
+2. declare the right contract and capabilities
+3. verify health and `/v1/models`
+4. test routing with `POST /api/route`
+5. then route real traffic
+
+## Client onboarding
+
+When onboarding a new client:
+
+1. keep the client on the OpenAI-compatible API if possible
+2. assign a stable client tag or header
+3. start with a built-in preset or a minimal custom profile
+4. use `/api/route` and `/api/traces` to validate behavior
+5. only add a dedicated adapter if the client cannot cleanly use the common API surface
+
+## Planned integration directions
+
+These are roadmap items, not current runtime features:
+
+- image generation routing
+- optional request hooks for context or optimization
+- richer CLI-sidecar adapters
+- provider and client onboarding helpers

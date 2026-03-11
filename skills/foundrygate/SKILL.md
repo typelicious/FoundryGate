@@ -91,11 +91,13 @@ A web dashboard is available at http://127.0.0.1:8090/dashboard — open it in a
 
 ## How Routing Works
 
-FoundryGate uses 3 layers (evaluated in order, first match wins):
+FoundryGate uses 5 routing stages (evaluated in order, first decisive match wins):
 
-1. **Static rules**: Pattern matching on model name, system prompt keywords, headers (heartbeats, explicit model requests, subagent detection)
-2. **Heuristic scoring**: Keyword-weighted classification of user messages (NOT system prompt) into reasoning/code/simple/agent categories
-3. **LLM classifier** (optional): Cheapest model classifies the task when heuristics are uncertain
+1. **Policy rules**: Governance, local/cloud constraints, and capability-aware provider selection
+2. **Static rules**: Pattern matching on model name and headers (heartbeats, explicit model requests, subagent detection)
+3. **Heuristic scoring**: Keyword-weighted classification of user messages (NOT system prompt) into reasoning/code/simple/agent categories
+4. **Client profiles**: caller-specific defaults for OpenClaw, n8n, CLI wrappers, or local-only traffic
+5. **LLM classifier** (optional): Cheapest model classifies the task when heuristics are uncertain
 
 Key insight: Only user messages are scored, never the system prompt. OpenClaw's system prompt is large and keyword-rich — scoring it would route everything to the expensive reasoning tier.
 

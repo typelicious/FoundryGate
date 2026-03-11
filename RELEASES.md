@@ -12,6 +12,7 @@ This repo does not require a heavy release process. Use lightweight tags plus Gi
 4. Push the tag to GitHub.
 5. Create a GitHub Release from that tag.
 6. Use the changelog entry as the release notes, then add any short upgrade notes if needed.
+7. Confirm that README plus the relevant docs pages still match the shipped runtime behavior.
 
 ## Example
 

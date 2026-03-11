@@ -97,6 +97,14 @@ Work in small coherent steps.
 Prefer commit-sized implementation blocks.
 Stop after each major block and summarize what changed, what remains, and what is intentionally deferred.
 
+After every 4 or 5 merged PRs, do a full review pass that includes:
+
+- unit test coverage review
+- integration test coverage review
+- functional test review against real workflows where possible
+- documentation review and update across every relevant Markdown file
+- roadmap and process review if the project direction changed
+
 Follow the branch workflow defined in:
 
 - `docs/process/git-workflow.md`
@@ -122,6 +130,7 @@ Maintain:
 
 - the README as the primary public landing page,
 - roadmap documentation,
+- architecture, integration, onboarding, and troubleshooting docs for external users,
 - release and changelog documentation,
 - process documentation for workflow-critical conventions,
 - migration notes when external names and runtime names differ.

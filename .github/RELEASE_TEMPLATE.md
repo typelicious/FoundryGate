@@ -7,5 +7,6 @@
 - [ ] Tag is pushed to GitHub
 - [ ] GitHub Release is created from the tag
 - [ ] Release notes summarize user-visible changes
+- [ ] README and relevant docs pages match the shipped behavior
 - [ ] Compatibility notes are included if older runtime identifiers are still mentioned
 - [ ] Any upgrade notes or rollback notes are included

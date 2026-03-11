@@ -10,6 +10,7 @@
 ## Quick Navigation
 
 - [Quickstart](#quickstart)
+- [Docs](#docs)
 - [How It Works](#how-it-works)
 - [API](#api)
 - [Model Aliases And Routing](#model-aliases-and-routing)
@@ -82,6 +83,14 @@ If you install the project as a package, the `foundrygate` and `foundrygate-stat
 
 If every configured provider API key is empty, FoundryGate still starts, but it skips those providers at startup and `v1/models` will only expose the virtual `auto` model.
 
+## Docs
+
+- [Architecture](./docs/ARCHITECTURE.md)
+- [Integrations](./docs/INTEGRATIONS.md)
+- [Onboarding](./docs/ONBOARDING.md)
+- [Troubleshooting](./docs/TROUBLESHOOTING.md)
+- [Roadmap](./docs/FOUNDRYGATE-ROADMAP.md)
+
 ## How It Works
 
 ```text
@@ -93,7 +102,8 @@ http://127.0.0.1:8090/v1
   +--> Layer 0: optional policy rules
   +--> Layer 1: static rules
   +--> Layer 2: heuristic rules
-  +--> Layer 3: optional LLM classifier
+  +--> Layer 3: optional client profile defaults
+  +--> Layer 4: optional LLM classifier
   |
   +--> chosen provider
          |- deepseek-chat
@@ -108,9 +118,12 @@ Routing decisions happen in order:
 1. Optional policy rules for client-specific, governance, or local/cloud constraints
 2. Static rules for known patterns such as heartbeat, explicit model hints, and sub-agent traffic
 3. Heuristic rules for user-message content, tools, and rough token size
-4. An optional LLM classifier if you enable it in `config.yaml`
+4. Optional client profile defaults for callers such as OpenClaw, n8n, or CLI wrappers
+5. An optional LLM classifier if you enable it in `config.yaml`
 
 Important implementation detail: heuristic keyword scoring only evaluates user messages, not the system prompt. This avoids over-routing to expensive tiers because of long system prompts.
+
+For OpenClaw specifically, both one-agent and many-agent traffic use the same OpenAI-compatible endpoint. The built-in rules and presets can distinguish sub-agent traffic through `x-openclaw-source` when that header is present.
 
 ## API
 
@@ -543,6 +556,8 @@ The detailed workflow is documented in [docs/process/git-workflow.md](./docs/pro
 
 ## Troubleshooting
 
+The full operator guide lives in [docs/TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md).
+
 ### `GET /health` fails
 
 Check whether the service is running and listening:
@@ -595,7 +610,8 @@ The next product direction is tracked in [docs/FOUNDRYGATE-ROADMAP.md](./docs/FO
 Short version:
 
 - `FoundryGate` is the product name
-- the next steps focus on capability-aware routing, local worker support, client profiles, and optional context/optimization hooks
+- the completed foundation already covers capability-aware routing, local worker support, client profiles, route introspection, route traces, and local worker probing
+- the next steps focus on optional request hooks, multi-dimensional routing, modality expansion, onboarding, and operations polish
 
 ## Releases
 
