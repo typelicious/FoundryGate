@@ -656,6 +656,7 @@ routing_policies:
 client_profiles:
   enabled: false
   default: generic
+  presets: []   # Built-ins: ["openclaw", "n8n", "cli"]
   profiles:
     generic: {}
     openclaw:
