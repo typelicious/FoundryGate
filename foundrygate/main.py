@@ -87,7 +87,15 @@ app = FastAPI(
 async def health():
     return {
         "status": "ok",
-        "providers": {name: p.health.to_dict() for name, p in _providers.items()},
+        "providers": {
+            name: {
+                **p.health.to_dict(),
+                "backend": p.backend_type,
+                "tier": p.tier,
+                "capabilities": p.capabilities,
+            }
+            for name, p in _providers.items()
+        },
     }
 
 
@@ -111,6 +119,7 @@ async def list_models():
                 "object": "model",
                 "owned_by": p.backend_type,
                 "description": f"{p.model} ({p.tier})",
+                "capabilities": p.capabilities,
             }
         )
     return {"object": "list", "data": models}

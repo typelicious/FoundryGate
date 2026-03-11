@@ -21,6 +21,18 @@ server:
 #   model        : upstream model id
 #   max_tokens   : default max output tokens
 #   tier         : default | reasoning | cheap | mid | fallback | local
+#   capabilities : optional provider metadata for future policy-aware routing
+#     chat            : must stay true in the current runtime
+#     reasoning       : provider is suitable for deeper reasoning tasks
+#     vision          : multimodal vision is supported end-to-end
+#     tools           : tool definitions are forwarded end-to-end
+#     long_context    : tuned for large context windows
+#     streaming       : streaming is supported end-to-end
+#     local / cloud   : explicit network placement metadata
+#     cost_tier       : free-form label such as budget | standard | premium
+#     latency_tier    : free-form label such as low | standard | high
+#     network_zone    : free-form zone label, defaults to local/public
+#     compliance_scope: free-form label for policy and governance
 #   timeout      : per-provider timeouts in seconds (optional)
 #     connect_s  : connection timeout  (default: 10)
 #     read_s     : read/response timeout (default: 120)

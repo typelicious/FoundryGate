@@ -226,13 +226,12 @@ Write access should come after read-heavy observability is stable.
 
 ## Rename Strategy
 
-The technical rename to `FoundryGate` is complete in the runtime and operational surface.
+The technical rename to `FoundryGate` is complete in the runtime, operational surface, and GitHub repository name.
 
-The remaining rename work is external:
+The remaining rename work is release-facing:
 
-1. rename the GitHub repository if desired
-2. publish the first FoundryGate-branded release
-3. communicate migration notes for existing `clawgate` users if they are still present downstream
+1. publish the first FoundryGate-branded release
+2. communicate migration notes for existing `clawgate` users if they are still present downstream
 
 ## Phased Plan
 

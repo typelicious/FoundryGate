@@ -43,10 +43,10 @@ foundrygate = "foundrygate.main:main"
 foundrygate-stats = "foundrygate.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/typelicious/ClawGate"
-Repository = "https://github.com/typelicious/ClawGate"
-Issues = "https://github.com/typelicious/ClawGate/issues"
-Documentation = "https://github.com/typelicious/ClawGate#readme"
+Homepage = "https://github.com/typelicious/FoundryGate"
+Repository = "https://github.com/typelicious/FoundryGate"
+Issues = "https://github.com/typelicious/FoundryGate/issues"
+Documentation = "https://github.com/typelicious/FoundryGate#readme"
 
 [tool.setuptools.packages.find]
 include = ["foundrygate*"]
