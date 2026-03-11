@@ -171,6 +171,7 @@ curl -fsS http://127.0.0.1:8090/v1/chat/completions \
 - `POST /api/route`
 - `GET /api/stats`
 - `GET /api/recent?limit=50`
+- `GET /api/traces?limit=50`
 - `GET /dashboard`
 
 ```bash
@@ -186,9 +187,12 @@ curl -fsS http://127.0.0.1:8090/api/route \
 
 curl -fsS http://127.0.0.1:8090/api/stats
 curl -fsS 'http://127.0.0.1:8090/api/recent?limit=10'
+curl -fsS 'http://127.0.0.1:8090/api/traces?limit=10'
 ```
 
 `POST /api/route` is a dry-run endpoint. It uses the same routing logic as `POST /v1/chat/completions` but does not call an upstream provider. The response includes the resolved client profile, the routing decision, and the fallback attempt order.
+
+`GET /api/traces` returns recent enriched routing records from the metrics store, including requested model, resolved client profile, client tag, decision reason, confidence, and attempt order.
 
 ## Model Aliases And Routing
 
@@ -504,6 +508,8 @@ Running `./scripts/foundrygate-install` also creates symlinks in `/usr/local/bin
 | `foundrygate-health` | Calls `GET /health` locally with `curl` |
 | `foundrygate-update` | Fetches from Git, hard-resets to `origin/main`, cleans untracked files, reinstalls the unit, restarts, and retries health checks |
 | `foundrygate-uninstall` | Stops and disables the service, removes the unit file, and removes helper symlinks |
+
+`foundrygate-stats --json` now also includes client/profile breakdowns alongside provider and routing summaries.
 
 ## Repo Safety And CI
 

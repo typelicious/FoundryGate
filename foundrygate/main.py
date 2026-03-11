@@ -72,6 +72,15 @@ def _resolve_client_profile(
     return active_profile, hints
 
 
+def _resolve_client_tag(headers: dict[str, str], client_profile: str) -> str:
+    """Return a stable client tag for metrics and trace grouping."""
+    if headers.get("x-foundrygate-client"):
+        return headers["x-foundrygate-client"].strip().lower()
+    if headers.get("x-openclaw-source"):
+        return "openclaw"
+    return client_profile
+
+
 def _build_attempt_order(primary_provider: str) -> list[str]:
     """Return the provider attempt order for one routed request."""
     attempt_order = []
@@ -100,13 +109,14 @@ def _serialize_provider(name: str) -> dict[str, Any] | None:
 
 async def _resolve_route_preview(
     body: dict[str, Any], headers: dict[str, str]
-) -> tuple[RoutingDecision, str, list[str], str]:
+) -> tuple[RoutingDecision, str, str, list[str], str]:
     """Resolve one request into a routing decision without calling a provider."""
     messages = body.get("messages", [])
     model_requested = body.get("model", "auto")
     tools = body.get("tools")
 
     client_profile, profile_hints = _resolve_client_profile(_config, headers)
+    client_tag = _resolve_client_tag(headers, client_profile)
 
     if model_requested != "auto" and model_requested in _providers:
         decision = RoutingDecision(
@@ -128,7 +138,13 @@ async def _resolve_route_preview(
             provider_health=health_map,
         )
 
-    return decision, client_profile, _build_attempt_order(decision.provider_name), model_requested
+    return (
+        decision,
+        client_profile,
+        client_tag,
+        _build_attempt_order(decision.provider_name),
+        model_requested,
+    )
 
 
 @asynccontextmanager
@@ -237,6 +253,7 @@ async def stats():
         "totals": _metrics.get_totals(),
         "providers": _metrics.get_provider_summary(),
         "routing": _metrics.get_routing_breakdown(),
+        "clients": _metrics.get_client_breakdown(),
         "hourly": _metrics.get_hourly_series(24),
         "daily": _metrics.get_daily_totals(30),
     }
@@ -248,6 +265,12 @@ async def recent(limit: int = 50):
     return {"requests": _metrics.get_recent(limit)}
 
 
+@app.get("/api/traces")
+async def traces(limit: int = 50):
+    """Recent enriched route traces for debugging and policy tuning."""
+    return {"traces": _metrics.get_recent(limit)}
+
+
 @app.post("/api/route")
 async def preview_route(request: Request):
     """Dry-run one routing decision without sending a provider request."""
@@ -257,13 +280,18 @@ async def preview_route(request: Request):
         return JSONResponse({"error": "Invalid JSON body"}, status_code=400)
 
     headers = _collect_routing_headers(request)
-    decision, client_profile, attempt_order, model_requested = await _resolve_route_preview(
-        body, headers
-    )
+    (
+        decision,
+        client_profile,
+        client_tag,
+        attempt_order,
+        model_requested,
+    ) = await _resolve_route_preview(body, headers)
 
     return {
         "requested_model": model_requested,
         "resolved_profile": client_profile,
+        "client_tag": client_tag,
         "routing_headers": headers,
         "decision": decision.to_dict(),
         "selected_provider": _serialize_provider(decision.provider_name),
@@ -299,9 +327,13 @@ async def chat_completions(request: Request):
     tools = body.get("tools")
 
     headers = _collect_routing_headers(request)
-    decision, client_profile, attempt_order, _model_requested = await _resolve_route_preview(
-        body, headers
-    )
+    (
+        decision,
+        client_profile,
+        client_tag,
+        attempt_order,
+        model_requested,
+    ) = await _resolve_route_preview(body, headers)
     messages = body.get("messages", [])
 
     logger.info(
@@ -354,6 +386,12 @@ async def chat_completions(request: Request):
                     cache_miss=cm,
                     cost_usd=cost,
                     latency_ms=cg.get("latency_ms", 0),
+                    requested_model=model_requested,
+                    client_profile=client_profile,
+                    client_tag=client_tag,
+                    decision_reason=decision.reason,
+                    confidence=decision.confidence,
+                    attempt_order=attempt_order,
                 )
 
             if stream:
@@ -385,6 +423,12 @@ async def chat_completions(request: Request):
                     rule_name=decision.rule_name,
                     success=False,
                     error=e.detail[:500],
+                    requested_model=model_requested,
+                    client_profile=client_profile,
+                    client_tag=client_tag,
+                    decision_reason=decision.reason,
+                    confidence=decision.confidence,
+                    attempt_order=attempt_order,
                 )
             continue
 

@@ -150,7 +150,13 @@ metrics:
 class TestRoutePreview:
     @pytest.mark.asyncio
     async def test_preview_resolves_profile_and_attempt_order(self, preview_config):
-        decision, profile_name, attempt_order, model_requested = await _resolve_route_preview(
+        (
+            decision,
+            profile_name,
+            client_tag,
+            attempt_order,
+            model_requested,
+        ) = await _resolve_route_preview(
             {
                 "model": "auto",
                 "messages": [{"role": "user", "content": "hello from local-only traffic"}],
@@ -160,13 +166,20 @@ class TestRoutePreview:
 
         assert model_requested == "auto"
         assert profile_name == "local-only"
+        assert client_tag == "local-only"
         assert decision.layer == "profile"
         assert decision.provider_name == "local-worker"
         assert attempt_order == ["local-worker", "cloud-default"]
 
     @pytest.mark.asyncio
     async def test_preview_direct_model_keeps_explicit_provider_first(self, preview_config):
-        decision, profile_name, attempt_order, model_requested = await _resolve_route_preview(
+        (
+            decision,
+            profile_name,
+            client_tag,
+            attempt_order,
+            model_requested,
+        ) = await _resolve_route_preview(
             {
                 "model": "cloud-default",
                 "messages": [{"role": "user", "content": "use the explicit provider"}],
@@ -176,6 +189,7 @@ class TestRoutePreview:
 
         assert model_requested == "cloud-default"
         assert profile_name == "generic"
+        assert client_tag == "generic"
         assert decision.layer == "direct"
         assert decision.provider_name == "cloud-default"
         assert attempt_order == ["cloud-default"]
