@@ -17,6 +17,7 @@
 - [Deployment](#deployment)
 - [Helper Scripts](#helper-scripts)
 - [Repo Safety And CI](#repo-safety-and-ci)
+- [Roadmap](#roadmap)
 - [Troubleshooting](#troubleshooting)
 - [Releases](#releases)
 
@@ -396,6 +397,16 @@ clawgate-logs
 ### `clawgate-update` removed local edits
 
 That is intentional. The helper is designed for deployment checkouts and uses `git reset --hard origin/main` plus `git clean -fd`.
+
+## Roadmap
+
+The next product direction is tracked in [docs/FOUNDRYGATE-ROADMAP.md](./docs/FOUNDRYGATE-ROADMAP.md).
+
+Short version:
+
+- `ClawGate` is the current codebase
+- `FoundryGate` is the working name for the broader gateway direction
+- the next steps focus on capability-aware routing, local worker support, client profiles, and optional context/optimization hooks
 
 ## Releases
 
