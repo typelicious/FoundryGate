@@ -145,3 +145,61 @@ def test_capabilities_reject_google_streaming_enablement(tmp_path):
 
     with pytest.raises(ConfigError, match="google-genai"):
         load_config(path)
+
+
+def test_local_worker_contract_defaults_tier_and_local_capabilities(tmp_path):
+    path = _write_config(
+        tmp_path,
+        (
+            "  local-worker:\n"
+            "    contract: local-worker\n"
+            "    backend: openai-compat\n"
+            '    base_url: "http://127.0.0.1:11434/v1"\n'
+            '    api_key: "local"\n'
+            '    model: "llama3"\n'
+        ),
+    )
+
+    cfg = load_config(path)
+    provider = cfg.provider("local-worker")
+    caps = provider["capabilities"]
+
+    assert provider["contract"] == "local-worker"
+    assert provider["tier"] == "local"
+    assert caps["local"] is True
+    assert caps["cloud"] is False
+    assert caps["network_zone"] == "local"
+
+
+def test_local_worker_contract_rejects_non_local_base_url(tmp_path):
+    path = _write_config(
+        tmp_path,
+        (
+            "  local-worker:\n"
+            "    contract: local-worker\n"
+            "    backend: openai-compat\n"
+            '    base_url: "https://api.example.com/v1"\n'
+            '    api_key: "secret"\n'
+            '    model: "llama3"\n'
+        ),
+    )
+
+    with pytest.raises(ConfigError, match="local/private base_url"):
+        load_config(path)
+
+
+def test_local_worker_contract_rejects_non_openai_backend(tmp_path):
+    path = _write_config(
+        tmp_path,
+        (
+            "  local-worker:\n"
+            "    contract: local-worker\n"
+            "    backend: google-genai\n"
+            '    base_url: "http://127.0.0.1:11434/v1"\n'
+            '    api_key: "secret"\n'
+            '    model: "llama3"\n'
+        ),
+    )
+
+    with pytest.raises(ConfigError, match="requires backend 'openai-compat'"):
+        load_config(path)

@@ -15,6 +15,7 @@ server:
 # ── Provider Definitions ───────────────────────────────────────────────────
 #
 # Fields:
+#   contract     : generic | local-worker
 #   backend      : openai-compat | google-genai | anthropic-compat
 #   base_url     : API endpoint (supports ${VAR:-default} expansion)
 #   api_key      : ${ENV_VAR} – leave blank to skip provider at startup
@@ -46,6 +47,15 @@ server:
 #                             commented out if no key is set
 # C. CUSTOM / PROXY         – providers via models.providers in OpenClaw
 # D. LOCAL RUNTIMES         – Ollama, vLLM, LM Studio, LiteLLM
+#
+# local-worker contract
+# ─────────────────────
+# Use `contract: local-worker` for network-local OpenAI-compatible workers.
+# The current runtime validates:
+#   - backend must be openai-compat
+#   - base_url must point to localhost or private network space
+#   - tier defaults to local
+#   - capabilities are forced to local=true, cloud=false, network_zone=local
 
 providers:
 
@@ -521,6 +531,26 @@ providers:
   # Auth: optional (set VLLM_API_KEY to enable)
   # Default: http://127.0.0.1:8000/v1
   # Docs: https://docs.openclaw.ai/providers/vllm
+  #local-worker-example:
+  #  contract: local-worker
+  #  backend: openai-compat
+  #  base_url: "${LOCAL_WORKER_BASE_URL:-http://127.0.0.1:11434/v1}"
+  #  api_key: "${LOCAL_WORKER_API_KEY:-local}"
+  #  model: "your-local-model"
+  #  max_tokens: 8000
+  #  capabilities:
+  #    tools: true
+  #    cost_tier: budget
+  #    latency_tier: low
+  #    compliance_scope: private
+  #  timeout:
+  #    connect_s: 5
+  #    read_s: 120
+  #  pricing:
+  #    input: 0.00
+  #    output: 0.00
+  #
+  # Provider-specific local runtime examples:
   #vllm-local:
   #  backend: openai-compat
   #  base_url: "${VLLM_BASE_URL:-http://127.0.0.1:8000/v1}"

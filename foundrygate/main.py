@@ -90,6 +90,7 @@ async def health():
         "providers": {
             name: {
                 **p.health.to_dict(),
+                "contract": p.contract,
                 "backend": p.backend_type,
                 "tier": p.tier,
                 "capabilities": p.capabilities,
@@ -119,6 +120,7 @@ async def list_models():
                 "object": "model",
                 "owned_by": p.backend_type,
                 "description": f"{p.model} ({p.tier})",
+                "contract": p.contract,
                 "capabilities": p.capabilities,
             }
         )

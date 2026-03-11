@@ -29,6 +29,7 @@ import yaml
 from dotenv import load_dotenv
 
 _SUPPORTED_BACKENDS = {"openai-compat", "google-genai", "anthropic-compat"}
+_SUPPORTED_PROVIDER_CONTRACTS = {"generic", "local-worker"}
 _BOOL_CAPABILITY_FIELDS = {
     "chat",
     "reasoning",
@@ -210,6 +211,40 @@ def _normalize_provider(name: str, cfg: Any) -> dict[str, Any]:
         value = normalized.get(field, "")
         if not isinstance(value, str) or not value.strip():
             raise ConfigError(f"Provider '{name}' must define a non-empty '{field}'")
+
+    contract = normalized.get("contract", "generic")
+    if not isinstance(contract, str) or not contract.strip():
+        raise ConfigError(f"Provider '{name}' contract must be a non-empty string")
+    contract = contract.strip()
+    if contract not in _SUPPORTED_PROVIDER_CONTRACTS:
+        supported = ", ".join(sorted(_SUPPORTED_PROVIDER_CONTRACTS))
+        raise ConfigError(
+            f"Provider '{name}' uses unsupported contract '{contract}' (supported: {supported})"
+        )
+    normalized["contract"] = contract
+
+    if contract == "local-worker":
+        if backend != "openai-compat":
+            raise ConfigError(
+                f"Provider '{name}' contract 'local-worker' requires backend 'openai-compat'"
+            )
+        if not _looks_local_base_url(str(normalized.get("base_url", ""))):
+            raise ConfigError(
+                f"Provider '{name}' contract 'local-worker' requires a local/private base_url"
+            )
+        normalized.setdefault("tier", "local")
+
+        raw_capabilities = normalized.get("capabilities")
+        if raw_capabilities is None:
+            raw_capabilities = {}
+        if not isinstance(raw_capabilities, dict):
+            raise ConfigError(f"Provider '{name}' capabilities must be a mapping")
+        normalized["capabilities"] = {
+            **raw_capabilities,
+            "local": True,
+            "cloud": False,
+            "network_zone": "local",
+        }
 
     normalized["capabilities"] = _normalize_provider_capabilities(name, normalized)
     return normalized

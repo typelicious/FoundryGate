@@ -63,6 +63,7 @@ class ProviderBackend:
 
     def __init__(self, name: str, cfg: dict):
         self.name = name
+        self.contract = cfg.get("contract", "generic")
         self.backend_type = cfg.get("backend", "openai-compat")
         self.base_url = cfg["base_url"].rstrip("/")
         self.api_key = cfg.get("api_key", "")

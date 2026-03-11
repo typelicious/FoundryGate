@@ -121,6 +121,7 @@ Returns overall service status plus one object per loaded provider. Each provide
 - `consecutive_failures`
 - `avg_latency_ms`
 - `last_error`
+- `contract`
 - `backend`
 - `tier`
 - `capabilities`
@@ -299,6 +300,33 @@ providers:
     api_key: "local"
     model: "llama3"
     tier: local
+    capabilities:
+      tools: true
+      cost_tier: budget
+      latency_tier: low
+```
+
+### Local Worker Contract
+
+FoundryGate also supports an explicit `contract: local-worker` on provider definitions. Use this for network-local OpenAI-compatible workers such as Ollama, vLLM, LM Studio, LiteLLM, or a dedicated LAN worker.
+
+What the current runtime guarantees for `local-worker`:
+
+- backend must be `openai-compat`
+- `base_url` must point to localhost or private network space
+- `tier` defaults to `local`
+- capability metadata is normalized to `local: true`, `cloud: false`, `network_zone: local`
+
+Example:
+
+```yaml
+providers:
+  local-worker:
+    contract: local-worker
+    backend: openai-compat
+    base_url: "http://127.0.0.1:11434/v1"
+    api_key: "local"
+    model: "your-local-model"
     capabilities:
       tools: true
       cost_tier: budget
