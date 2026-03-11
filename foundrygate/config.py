@@ -46,6 +46,14 @@ _STRING_CAPABILITY_FIELDS = {
     "compliance_scope",
 }
 _ALL_CAPABILITY_FIELDS = _BOOL_CAPABILITY_FIELDS | _STRING_CAPABILITY_FIELDS
+_POLICY_SELECT_KEYS = {
+    "allow_providers",
+    "deny_providers",
+    "prefer_providers",
+    "prefer_tiers",
+    "require_capabilities",
+    "capability_values",
+}
 
 
 class ConfigError(ValueError):
@@ -220,6 +228,169 @@ def _normalize_providers(data: dict[str, Any]) -> dict[str, Any]:
     return normalized
 
 
+def _normalize_string_list(
+    value: Any, *, field_name: str, rule_name: str, allow_empty: bool = False
+) -> list[str]:
+    """Normalize a config field to a list of non-empty strings."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        items = [value]
+    elif isinstance(value, list):
+        items = value
+    else:
+        raise ConfigError(f"Policy '{rule_name}' field '{field_name}' must be a string or list")
+
+    normalized = []
+    for item in items:
+        if not isinstance(item, str) or not item.strip():
+            raise ConfigError(
+                f"Policy '{rule_name}' field '{field_name}' must contain non-empty strings"
+            )
+        normalized.append(item.strip())
+
+    if not allow_empty and not normalized:
+        raise ConfigError(f"Policy '{rule_name}' field '{field_name}' must not be empty")
+    return normalized
+
+
+def _normalize_policy_match(name: str, match: Any) -> dict[str, Any]:
+    """Validate a policy match block."""
+    if not isinstance(match, dict):
+        raise ConfigError(f"Policy '{name}' match must be a mapping")
+    return match
+
+
+def _normalize_policy_select(name: str, select: Any, providers: dict[str, Any]) -> dict[str, Any]:
+    """Validate a policy select block."""
+    if not isinstance(select, dict):
+        raise ConfigError(f"Policy '{name}' select must be a mapping")
+
+    unknown = sorted(set(select) - _POLICY_SELECT_KEYS)
+    if unknown:
+        unknown_list = ", ".join(unknown)
+        raise ConfigError(f"Policy '{name}' has unknown select keys: {unknown_list}")
+
+    normalized = dict(select)
+    provider_names = set(providers)
+
+    for field_name in ("allow_providers", "deny_providers", "prefer_providers"):
+        values = _normalize_string_list(
+            normalized.get(field_name, []),
+            field_name=field_name,
+            rule_name=name,
+            allow_empty=True,
+        )
+        unknown_providers = sorted(value for value in values if value not in provider_names)
+        if unknown_providers:
+            unknown_list = ", ".join(unknown_providers)
+            raise ConfigError(
+                f"Policy '{name}' field '{field_name}' references unknown providers: {unknown_list}"
+            )
+        normalized[field_name] = values
+
+    normalized["prefer_tiers"] = _normalize_string_list(
+        normalized.get("prefer_tiers", []),
+        field_name="prefer_tiers",
+        rule_name=name,
+        allow_empty=True,
+    )
+
+    required_caps = _normalize_string_list(
+        normalized.get("require_capabilities", []),
+        field_name="require_capabilities",
+        rule_name=name,
+        allow_empty=True,
+    )
+    unknown_caps = sorted(cap for cap in required_caps if cap not in _ALL_CAPABILITY_FIELDS)
+    if unknown_caps:
+        unknown_list = ", ".join(unknown_caps)
+        raise ConfigError(
+            f"Policy '{name}' require_capabilities has unknown capability names: {unknown_list}"
+        )
+    normalized["require_capabilities"] = required_caps
+
+    cap_values = normalized.get("capability_values", {})
+    if cap_values is None:
+        cap_values = {}
+    if not isinstance(cap_values, dict):
+        raise ConfigError(f"Policy '{name}' capability_values must be a mapping")
+
+    normalized_cap_values: dict[str, list[Any]] = {}
+    for cap_name, raw_values in cap_values.items():
+        if cap_name not in _ALL_CAPABILITY_FIELDS:
+            raise ConfigError(
+                f"Policy '{name}' capability_values references unknown capability '{cap_name}'"
+            )
+        values = raw_values if isinstance(raw_values, list) else [raw_values]
+        if not values:
+            raise ConfigError(
+                f"Policy '{name}' capability_values '{cap_name}' must not be an empty list"
+            )
+        normalized_values = []
+        for value in values:
+            if cap_name in _BOOL_CAPABILITY_FIELDS and not isinstance(value, bool):
+                raise ConfigError(
+                    f"Policy '{name}' capability_values '{cap_name}' must use boolean values"
+                )
+            if cap_name in _STRING_CAPABILITY_FIELDS:
+                if not isinstance(value, str) or not value.strip():
+                    raise ConfigError(
+                        f"Policy '{name}' capability_values '{cap_name}' must use non-empty strings"
+                    )
+                value = value.strip()
+            normalized_values.append(value)
+        normalized_cap_values[cap_name] = normalized_values
+    normalized["capability_values"] = normalized_cap_values
+
+    if normalized["allow_providers"] and normalized["deny_providers"]:
+        overlap = sorted(set(normalized["allow_providers"]) & set(normalized["deny_providers"]))
+        if overlap:
+            overlap_list = ", ".join(overlap)
+            raise ConfigError(
+                f"Policy '{name}' cannot allow and deny the same provider(s): {overlap_list}"
+            )
+
+    return normalized
+
+
+def _normalize_routing_policies(data: dict[str, Any]) -> dict[str, Any]:
+    """Validate the optional routing policy layer."""
+    raw = data.get("routing_policies", {"enabled": False, "rules": []})
+    if not isinstance(raw, dict):
+        raise ConfigError("'routing_policies' must be a mapping")
+
+    enabled = raw.get("enabled", False)
+    if not isinstance(enabled, bool):
+        raise ConfigError("'routing_policies.enabled' must be a boolean")
+
+    rules = raw.get("rules", [])
+    if rules is None:
+        rules = []
+    if not isinstance(rules, list):
+        raise ConfigError("'routing_policies.rules' must be a list")
+
+    providers = data.get("providers", {})
+    normalized_rules = []
+    for idx, rule in enumerate(rules, start=1):
+        if not isinstance(rule, dict):
+            raise ConfigError(f"Policy rule #{idx} must be a mapping")
+        name = rule.get("name", "").strip()
+        if not name:
+            raise ConfigError(f"Policy rule #{idx} must define a non-empty 'name'")
+        normalized_rules.append(
+            {
+                "name": name,
+                "match": _normalize_policy_match(name, rule.get("match", {})),
+                "select": _normalize_policy_select(name, rule.get("select", {}), providers),
+            }
+        )
+
+    normalized = dict(data)
+    normalized["routing_policies"] = {"enabled": enabled, "rules": normalized_rules}
+    return normalized
+
+
 class Config:
     """Holds the parsed and expanded configuration."""
 
@@ -247,6 +418,10 @@ class Config:
     @property
     def heuristic_rules(self) -> dict:
         return self._data.get("heuristic_rules", {"enabled": False, "rules": []})
+
+    @property
+    def routing_policies(self) -> dict:
+        return self._data.get("routing_policies", {"enabled": False, "rules": []})
 
     @property
     def llm_classifier(self) -> dict:
@@ -291,5 +466,5 @@ def load_config(path: str | Path | None = None) -> Config:
     with path.open() as f:
         raw = yaml.safe_load(f)
 
-    expanded = _normalize_providers(_walk_expand(raw))
+    expanded = _normalize_routing_policies(_normalize_providers(_walk_expand(raw)))
     return Config(expanded)

@@ -17,7 +17,7 @@ class RoutingDecision:
     """Result of the routing process."""
 
     provider_name: str
-    layer: str  # "static", "heuristic", "llm-classify", "fallback"
+    layer: str  # "policy", "static", "heuristic", "llm-classify", "fallback"
     rule_name: str  # Which rule matched
     confidence: float  # 0.0–1.0
     reason: str  # Human-readable explanation
@@ -96,7 +96,14 @@ class Router:
             has_tools=has_tools,
             headers=headers or {},
             provider_health=provider_health or {},
+            providers=self.config.providers,
         )
+
+        # Layer 0: Policy rules
+        decision = self._layer_policy(ctx)
+        if decision:
+            decision.elapsed_ms = (time.time() - t0) * 1000
+            return self._validate_health(decision, ctx)
 
         # Layer 1: Static rules
         decision = self._layer_static(ctx)
@@ -128,6 +135,118 @@ class Router:
             reason="No routing layer matched, using first fallback",
             elapsed_ms=elapsed,
         )
+
+    # ── Layer 0: Policy Rules ──────────────────────────────────
+
+    def _layer_policy(self, ctx: _RoutingContext) -> RoutingDecision | None:
+        cfg = self.config.routing_policies
+        if not cfg.get("enabled"):
+            return None
+
+        for rule in cfg.get("rules", []):
+            match = rule.get("match", {})
+            if not self._match_policy(match, ctx):
+                continue
+
+            provider_name = self._select_policy_provider(rule.get("select", {}), ctx)
+            if not provider_name:
+                logger.debug("Policy rule matched but no provider was eligible: %s", rule["name"])
+                continue
+
+            logger.debug("Policy rule matched: %s → %s", rule["name"], provider_name)
+            return RoutingDecision(
+                provider_name=provider_name,
+                layer="policy",
+                rule_name=rule["name"],
+                confidence=0.95,
+                reason=f"Policy rule '{rule['name']}' matched",
+            )
+
+        return None
+
+    def _match_policy(self, match: dict, ctx: _RoutingContext) -> bool:
+        """Evaluate a policy match block using the existing static/heuristic primitives."""
+        if not match:
+            return True
+
+        if "all" in match:
+            return all(self._match_policy(sub, ctx) for sub in match["all"])
+        if "any" in match:
+            return any(self._match_policy(sub, ctx) for sub in match["any"])
+
+        static_keys = {"model_requested", "system_prompt_contains", "header_contains", "any"}
+        heuristic_keys = {"has_tools", "estimated_tokens", "message_keywords", "fallthrough"}
+
+        static_match = {k: match[k] for k in static_keys if k in match}
+        heuristic_match = {k: match[k] for k in heuristic_keys if k in match}
+
+        if static_match and not self._match_static(static_match, ctx):
+            return False
+        if heuristic_match and not self._match_heuristic(heuristic_match, ctx):
+            return False
+
+        return bool(static_match or heuristic_match)
+
+    def _select_policy_provider(self, select: dict, ctx: _RoutingContext) -> str | None:
+        """Choose a provider from the current config based on a policy rule."""
+        candidates = [
+            name
+            for name, provider in ctx.providers.items()
+            if self._provider_matches_policy(provider, name, select)
+        ]
+        if not candidates:
+            return None
+
+        ranked = self._rank_policy_candidates(candidates, select)
+        for provider_name in ranked:
+            if ctx.provider_health.get(provider_name, {}).get("healthy", True):
+                return provider_name
+        return ranked[0] if ranked else None
+
+    def _provider_matches_policy(self, provider: dict, name: str, select: dict) -> bool:
+        """Return whether a provider is eligible for a policy rule."""
+        capabilities = provider.get("capabilities", {})
+        allow = select.get("allow_providers", [])
+        deny = set(select.get("deny_providers", []))
+
+        if allow and name not in allow:
+            return False
+        if name in deny:
+            return False
+
+        for capability in select.get("require_capabilities", []):
+            if not capabilities.get(capability):
+                return False
+
+        for capability, expected_values in select.get("capability_values", {}).items():
+            if capabilities.get(capability) not in expected_values:
+                return False
+
+        return True
+
+    def _rank_policy_candidates(self, candidates: list[str], select: dict) -> list[str]:
+        """Rank eligible policy candidates by explicit preference, then provider order."""
+        preferred = []
+        prefer_providers = select.get("prefer_providers", [])
+        prefer_tiers = set(select.get("prefer_tiers", []))
+
+        def _append(name: str) -> None:
+            if name in candidates and name not in preferred:
+                preferred.append(name)
+
+        for name in prefer_providers:
+            _append(name)
+
+        if prefer_tiers:
+            for name in candidates:
+                provider = self.config.provider(name) or {}
+                if provider.get("tier") in prefer_tiers:
+                    _append(name)
+
+        for name in candidates:
+            _append(name)
+
+        return preferred
 
     # ── Layer 1: Static Rules ──────────────────────────────────
 
@@ -310,6 +429,7 @@ class _RoutingContext:
         "has_tools",
         "headers",
         "provider_health",
+        "providers",
         "_classify_fn",
     )
 

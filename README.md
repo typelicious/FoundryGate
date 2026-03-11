@@ -13,6 +13,7 @@
 - [How It Works](#how-it-works)
 - [API](#api)
 - [Model Aliases And Routing](#model-aliases-and-routing)
+- [Policy Routing](#policy-routing)
 - [Configuration](#configuration)
 - [Deployment](#deployment)
 - [Helper Scripts](#helper-scripts)
@@ -86,6 +87,7 @@ Client (OpenClaw or any OpenAI-style client)
   v
 http://127.0.0.1:8090/v1
   |
+  +--> Layer 0: optional policy rules
   +--> Layer 1: static rules
   +--> Layer 2: heuristic rules
   +--> Layer 3: optional LLM classifier
@@ -100,9 +102,10 @@ http://127.0.0.1:8090/v1
 
 Routing decisions happen in order:
 
-1. Static rules for known patterns such as heartbeat, explicit model hints, and sub-agent traffic
-2. Heuristic rules for user-message content, tools, and rough token size
-3. An optional LLM classifier if you enable it in `config.yaml`
+1. Optional policy rules for client-specific, governance, or local/cloud constraints
+2. Static rules for known patterns such as heartbeat, explicit model hints, and sub-agent traffic
+3. Heuristic rules for user-message content, tools, and rough token size
+4. An optional LLM classifier if you enable it in `config.yaml`
 
 Important implementation detail: heuristic keyword scoring only evaluates user messages, not the system prompt. This avoids over-routing to expensive tiers because of long system prompts.
 
@@ -194,6 +197,36 @@ If you use OpenClaw, the recommended client-side aliases live in [openclaw-integ
 
 Those aliases are defined on the OpenClaw side. FoundryGate only sees the resulting `model` value and routes accordingly.
 
+## Policy Routing
+
+FoundryGate now supports an optional `routing_policies` layer for `auto` requests. This sits in front of the existing static and heuristic rules and is meant for constraints that are broader than a single keyword rule, for example:
+
+- prefer local providers for private or LAN-only traffic
+- keep a client or workflow on a subset of allowed providers
+- require capabilities such as `tools` before a request is sent
+- prefer one provider order while still falling through to another eligible provider
+
+Each rule has:
+
+- `match`: request conditions such as `header_contains`, `model_requested`, `has_tools`, `estimated_tokens`, or `message_keywords`
+- `select`: provider filters and preference order via `allow_providers`, `deny_providers`, `prefer_providers`, `prefer_tiers`, `require_capabilities`, and `capability_values`
+
+Minimal example:
+
+```yaml
+routing_policies:
+  enabled: true
+  rules:
+    - name: local-only-profile
+      match:
+        header_contains:
+          x-foundrygate-profile: ["local-only"]
+      select:
+        capability_values:
+          local: true
+        prefer_tiers: ["local"]
+```
+
 ## Configuration
 
 FoundryGate loads configuration from:
@@ -271,6 +304,19 @@ providers:
       cost_tier: budget
       latency_tier: low
 ```
+
+### Routing Policy Schema
+
+The optional `routing_policies` block is validated at startup. FoundryGate rejects unknown provider references, unknown capability names, and unsupported select keys before the service comes up.
+
+Supported `select` keys today:
+
+- `allow_providers`
+- `deny_providers`
+- `prefer_providers`
+- `prefer_tiers`
+- `require_capabilities`
+- `capability_values`
 
 ### Configuration Examples
 

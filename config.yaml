@@ -582,6 +582,32 @@ fallback_chain:
   - openrouter-fallback
 
 
+# ── Layer 0: Policy-Auswahl (optional) ────────────────────────────────────
+# Diese Schicht läuft vor den statischen und heuristischen Regeln.
+# Gedacht für client-, governance- oder netzwerkbezogene Auswahl, ohne
+# bestehende explizite Provider-Pins im API-Layer zu brechen.
+#
+# select:
+#   allow_providers      : nur diese Provider dürfen gewählt werden
+#   deny_providers       : diese Provider werden ausgeschlossen
+#   prefer_providers     : bevorzugte Reihenfolge innerhalb der Kandidaten
+#   prefer_tiers         : bevorzugte tier-Werte innerhalb der Kandidaten
+#   require_capabilities : boolesche Capability-Namen, die true sein müssen
+#   capability_values    : exakte Capability-Werte, z. B. local=true
+routing_policies:
+  enabled: false
+  rules:
+    # Beispiel: lokalen Worker für interne/local-only Requests bevorzugen
+    # - name: prefer-local-worker
+    #   match:
+    #     header_contains:
+    #       x-foundrygate-profile: ["local-only", "private"]
+    #   select:
+    #     capability_values:
+    #       local: true
+    #     prefer_tiers: ["local"]
+
+
 # ── Layer 1: Statische Regeln ──────────────────────────────────────────────
 # Schnellste Schicht – Pattern-Matching auf bekannte Muster
 static_rules:
