@@ -91,6 +91,7 @@ Request hooks sit beside these caller-aware signals as a narrow extension seam. 
 The main operational endpoints are:
 
 - `GET /health`
+- `GET /api/providers`
 - `GET /v1/models`
 - `POST /v1/chat/completions`
 - `POST /v1/images/generations`
@@ -100,6 +101,10 @@ The main operational endpoints are:
 - `GET /api/recent`
 - `GET /api/traces`
 - `GET /dashboard`
+
+`/health` now exposes both provider-level health and top-level capability coverage, so operators can quickly see whether the gateway currently has healthy support for `chat`, `image_generation`, `image_editing`, or other boolean capabilities exposed by loaded providers.
+
+`/api/providers` exposes the normalized provider inventory with optional `capability` and `healthy` filters. This is the inventory surface the dashboard should use when it needs provider metadata beyond raw request metrics.
 
 `/api/stats`, `/api/recent`, and `/api/traces` can now be filtered by provider, client profile, client tag, layer, and success state. The dashboard is a thin UI over those same filtered endpoints and persists its active filters in the URL so operators can share one filtered view.
 

@@ -46,7 +46,9 @@ from foundrygate.main import (
     _refresh_local_worker_probes,
     _resolve_image_route_preview,
     _resolve_route_preview,
+    health,
     preview_image_route,
+    provider_inventory,
 )
 from foundrygate.router import Router
 
@@ -98,6 +100,7 @@ class _ProviderStub:
         tier: str = "default",
         healthy: bool = True,
         capabilities: dict | None = None,
+        image: dict | None = None,
     ):
         self.name = name
         self.model = model
@@ -108,6 +111,7 @@ class _ProviderStub:
         self.context_window = 0
         self.limits = {}
         self.cache = {"mode": "none", "read_discount": False}
+        self.image = image or {}
         self.health = types.SimpleNamespace(
             healthy=healthy,
             last_check=0.0,
@@ -227,6 +231,11 @@ metrics:
                     "image_generation": True,
                     "image_editing": True,
                 },
+                image={
+                    "max_outputs": 1,
+                    "max_side_px": 1024,
+                    "supported_sizes": ["1024x1024"],
+                },
             ),
             "image-large": _ProviderStub(
                 name="image-large",
@@ -239,6 +248,11 @@ metrics:
                     "network_zone": "public",
                     "image_generation": True,
                     "image_editing": True,
+                },
+                image={
+                    "max_outputs": 4,
+                    "max_side_px": 2048,
+                    "supported_sizes": ["1024x1024", "2048x2048"],
                 },
             ),
         },
@@ -433,3 +447,28 @@ class TestLocalWorkerProbeRefresh:
 
         assert local_worker.probe_calls == 1
         assert cloud_default.probe_calls == 0
+
+
+class TestProviderCoverage:
+    @pytest.mark.asyncio
+    async def test_health_reports_capability_coverage(self, preview_config):
+        response = await health()
+
+        assert response["summary"]["providers_total"] == 4
+        assert response["summary"]["providers_healthy"] == 4
+        assert response["coverage"]["image_generation"]["total"] == 2
+        assert response["coverage"]["image_generation"]["healthy"] == 2
+        assert response["coverage"]["image_editing"]["providers"] == [
+            "image-cloud",
+            "image-large",
+        ]
+        assert response["providers"]["image-cloud"]["image"]["max_outputs"] == 1
+
+    @pytest.mark.asyncio
+    async def test_provider_inventory_filters_by_capability(self, preview_config):
+        response = await provider_inventory(capability="image_editing")
+
+        provider_names = [provider["name"] for provider in response["providers"]]
+        assert provider_names == ["image-cloud", "image-large"]
+        assert response["coverage"]["image_editing"]["total"] == 2
+        assert response["providers"][0]["contract"] == "image-provider"

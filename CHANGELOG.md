@@ -11,6 +11,7 @@ The format is intentionally lightweight and human-readable. Group entries by rel
 - Added modality-aware metrics and filters so stats, traces, recent requests, and the dashboard can distinguish `chat`, `image_generation`, and `image_editing`
 - Added `POST /api/route/image` for dry-run preview of image-generation and image-editing routing decisions
 - Added optional `image` provider metadata (`max_outputs`, `max_side_px`, `supported_sizes`) so image-capable providers can be ranked against `n` and `size`
+- Added top-level capability coverage to `GET /health` plus `GET /api/providers` for filtered provider inventory and dashboard coverage views
 
 ## v0.5.0 - 2026-03-12
 

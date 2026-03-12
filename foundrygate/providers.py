@@ -74,6 +74,7 @@ class ProviderBackend:
         self.context_window = cfg.get("context_window")
         self.limits = dict(cfg.get("limits", {}))
         self.cache = dict(cfg.get("cache", {}))
+        self.image = dict(cfg.get("image", {}))
         self.health = ProviderHealth(name=name)
 
         self._client = httpx.AsyncClient(

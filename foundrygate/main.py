@@ -178,7 +178,67 @@ def _serialize_provider(name: str) -> dict[str, Any] | None:
         "context_window": provider.context_window,
         "limits": provider.limits,
         "cache": provider.cache,
+        "image": getattr(provider, "image", {}),
     }
+
+
+def _build_provider_inventory(
+    *,
+    capability: str | None = None,
+    healthy: bool | None = None,
+) -> list[dict[str, Any]]:
+    """Return a normalized provider inventory with optional filters."""
+    rows: list[dict[str, Any]] = []
+    for name, provider in _providers.items():
+        if capability and not provider.capabilities.get(capability):
+            continue
+        if healthy is not None and bool(provider.health.healthy) != bool(healthy):
+            continue
+
+        rows.append(
+            {
+                "name": name,
+                "model": provider.model,
+                "backend": provider.backend_type,
+                "contract": provider.contract,
+                "tier": provider.tier,
+                "healthy": provider.health.healthy,
+                "capabilities": provider.capabilities,
+                "context_window": provider.context_window,
+                "limits": provider.limits,
+                "cache": provider.cache,
+                "image": getattr(provider, "image", {}),
+                "last_error": getattr(provider.health, "last_error", ""),
+                "avg_latency_ms": getattr(provider.health, "avg_latency_ms", 0.0),
+            }
+        )
+
+    return sorted(rows, key=lambda row: (row["healthy"] is False, row["name"]))
+
+
+def _build_capability_coverage() -> dict[str, dict[str, Any]]:
+    """Return operator-facing capability coverage across loaded providers."""
+    coverage: dict[str, dict[str, Any]] = {}
+    for name, provider in _providers.items():
+        for capability, value in provider.capabilities.items():
+            if value is not True:
+                continue
+            bucket = coverage.setdefault(
+                capability,
+                {
+                    "total": 0,
+                    "healthy": 0,
+                    "providers": [],
+                    "healthy_providers": [],
+                },
+            )
+            bucket["total"] += 1
+            bucket["providers"].append(name)
+            if provider.health.healthy:
+                bucket["healthy"] += 1
+                bucket["healthy_providers"].append(name)
+
+    return dict(sorted(coverage.items()))
 
 
 def _estimate_request_dimensions(body: dict[str, Any]) -> dict[str, int | str]:
@@ -511,21 +571,45 @@ app = FastAPI(
 @app.get("/health")
 async def health():
     await _refresh_local_worker_probes()
+    providers = {
+        name: {
+            **p.health.to_dict(),
+            "contract": p.contract,
+            "backend": p.backend_type,
+            "tier": p.tier,
+            "capabilities": p.capabilities,
+            "context_window": p.context_window,
+            "limits": p.limits,
+            "cache": p.cache,
+            "image": getattr(p, "image", {}),
+        }
+        for name, p in _providers.items()
+    }
     return {
         "status": "ok",
-        "providers": {
-            name: {
-                **p.health.to_dict(),
-                "contract": p.contract,
-                "backend": p.backend_type,
-                "tier": p.tier,
-                "capabilities": p.capabilities,
-                "context_window": p.context_window,
-                "limits": p.limits,
-                "cache": p.cache,
-            }
-            for name, p in _providers.items()
+        "summary": {
+            "providers_total": len(providers),
+            "providers_healthy": sum(1 for provider in providers.values() if provider["healthy"]),
+            "providers_unhealthy": sum(
+                1 for provider in providers.values() if not provider["healthy"]
+            ),
         },
+        "coverage": _build_capability_coverage(),
+        "providers": providers,
+    }
+
+
+@app.get("/api/providers")
+async def provider_inventory(
+    capability: str | None = None,
+    healthy: bool | None = None,
+):
+    """Return the loaded provider inventory with optional capability/health filters."""
+    await _refresh_local_worker_probes()
+    rows = _build_provider_inventory(capability=capability, healthy=healthy)
+    return {
+        "providers": rows,
+        "coverage": _build_capability_coverage(),
     }
 
 
@@ -1235,7 +1319,14 @@ tr:hover td{background:#1a1a2a}
 <div class="sect">
   <h2>Provider Health</h2>
   <table id="health"><thead><tr>
-    <th>Provider</th><th>Status</th><th>Contract</th><th>Tier</th><th>Context</th><th>Limits</th><th>Cache</th><th>Latency</th><th>Last Error</th>
+    <th>Provider</th><th>Status</th><th>Contract</th><th>Tier</th><th>Capabilities</th><th>Context</th><th>Limits</th><th>Cache</th><th>Latency</th><th>Last Error</th>
+  </tr></thead><tbody></tbody></table>
+</div>
+
+<div class="sect">
+  <h2>Capability Coverage</h2>
+  <table id="coverage"><thead><tr>
+    <th>Capability</th><th>Healthy</th><th>Total</th><th>Healthy Providers</th><th>All Providers</th>
   </tr></thead><tbody></tbody></table>
 </div>
 
@@ -1349,26 +1440,36 @@ function formatLimits(provider){
   return parts.length ? esc(parts.join(' / ')) : '—';
 }
 
+function formatCapabilities(provider){
+  const capabilities = Object.entries(provider?.capabilities || {})
+    .filter(([, value]) => value === true)
+    .map(([name]) => `<span class="pill">${esc(name)}</span>`);
+  return capabilities.length ? capabilities.join(' ') : '—';
+}
+
 async function load(){
   try{
     const query = currentFilters();
     persistFilters(query);
     const queryStr = query.toString();
     const suffix = queryStr ? `?${queryStr}` : '';
-    const [health, stats, traces, rec, update] = await Promise.all([
+    const [health, stats, traces, rec, update, inventory] = await Promise.all([
       fetch('/health').then(r=>r.json()),
       fetch(`/api/stats${suffix}`).then(r=>r.json()),
       fetch(`/api/traces${suffix}${suffix ? '&' : '?'}limit=20`).then(r=>r.json()),
       fetch(`/api/recent${suffix}${suffix ? '&' : '?'}limit=20`).then(r=>r.json()),
-      fetch('/api/update').then(r=>r.json()).catch(() => ({enabled:false,status:'unavailable'}))
+      fetch('/api/update').then(r=>r.json()).catch(() => ({enabled:false,status:'unavailable'})),
+      fetch('/api/providers').then(r=>r.json()),
     ]);
 
     const totals = stats.totals || {};
-    const providers = Object.values(health.providers || {});
-    const healthyProviders = providers.filter(provider => provider.healthy).length;
-    const unhealthyProviders = providers.length - healthyProviders;
+    const providers = inventory.providers || Object.values(health.providers || {});
+    const healthyProviders = (health.summary && health.summary.providers_healthy) || providers.filter(provider => provider.healthy).length;
+    const unhealthyProviders = (health.summary && health.summary.providers_unhealthy) || (providers.length - healthyProviders);
     const modalityRows = stats.modalities || [];
     const topModality = modalityRows.length ? modalityRows[0].modality : '—';
+    const capabilityCoverage = inventory.coverage || health.coverage || {};
+    const coverageEntries = Object.entries(capabilityCoverage);
     $('#status').style.background = '#5e5';
     $('#ago').textContent = ago(totals.last_request);
 
@@ -1380,22 +1481,33 @@ async function load(){
       <div class="card"><div class="label">Cache Hit Rate</div><div class="value cost">${fmt(totals.cache_hit_pct || 0,1)}%</div><div class="detail">${fmtTok(totals.total_cache_hit || 0)} hit / ${fmtTok(totals.total_cache_miss || 0)} miss</div></div>
       <div class="card"><div class="label">Failures</div><div class="value ${(totals.total_failures||0)>0?'err':''}">${totals.total_failures || 0}</div></div>
       <div class="card"><div class="label">Healthy Providers</div><div class="value">${healthyProviders}/${providers.length}</div><div class="detail">${unhealthyProviders} unhealthy</div></div>
+      <div class="card"><div class="label">Capability Coverage</div><div class="value">${coverageEntries.length}</div><div class="detail">${coverageEntries.map(([name]) => name).slice(0,3).join(', ') || 'none'}</div></div>
       <div class="card"><div class="label">Top Modality</div><div class="value">${esc(topModality)}</div><div class="detail">${modalityRows.length} modality groups</div></div>
       <div class="card"><div class="label">Release Status</div><div class="value ${update.update_available ? 'cost' : ''}">${esc(update.latest_version || update.current_version || 'n/a')}</div><div class="detail">${update.enabled ? (update.update_available ? 'Update available' : update.status === 'ok' ? 'Up to date' : 'Update check unavailable') : 'Update checks disabled'}</div></div>
     `;
 
-    const providerRows = Object.entries(health.providers || {}).map(([name, provider]) => `<tr>
-      <td><strong>${esc(name)}</strong></td>
+    const providerRows = providers.map(provider => `<tr>
+      <td><strong>${esc(provider.name)}</strong></td>
       <td>${statusTag(provider.healthy)}</td>
       <td>${esc(provider.contract || 'generic')}</td>
       <td>${esc(provider.tier || 'default')}</td>
+      <td>${formatCapabilities(provider)}</td>
       <td class="mono">${provider.context_window ? fmtTok(provider.context_window) : '—'}</td>
       <td class="mono">${formatLimits(provider)}</td>
       <td><span class="pill">${esc((provider.cache && provider.cache.mode) || 'none')}</span></td>
       <td class="mono">${fmtMs(provider.avg_latency_ms)}</td>
       <td class="mono">${esc(provider.last_error || '—')}</td>
     </tr>`);
-    $('#health tbody').innerHTML = providerRows.length ? providerRows.join('') : emptyRow(9, 'No provider health data');
+    $('#health tbody').innerHTML = providerRows.length ? providerRows.join('') : emptyRow(10, 'No provider health data');
+
+    const coverageRows = coverageEntries.map(([capability, data]) => `<tr>
+      <td><span class="pill">${esc(capability)}</span></td>
+      <td>${data.healthy || 0}</td>
+      <td>${data.total || 0}</td>
+      <td class="mono">${esc((data.healthy_providers || []).join(', ') || '—')}</td>
+      <td class="mono">${esc((data.providers || []).join(', ') || '—')}</td>
+    </tr>`);
+    $('#coverage tbody').innerHTML = coverageRows.length ? coverageRows.join('') : emptyRow(5, 'No capability coverage data');
 
     const clientRows = (stats.clients || []).map(row => `<tr>
       <td><span class="pill">${esc(row.modality || 'chat')}</span></td>

@@ -15,7 +15,7 @@ The foundation that used to be the near-term buildout is largely in place:
 - route introspection
 - routing traces and client/profile metrics
 - local worker probing
-- a hardened simple dashboard with filtered traces, client/provider views, URL-persisted filters, and operator summary cards
+- a hardened simple dashboard with filtered traces, client/provider views, URL-persisted filters, operator summary cards, and modality/capability coverage
 
 This roadmap now shifts from "rename and foundation" to "deepen the gateway plane without bloating it".
 
@@ -195,7 +195,7 @@ Primary goals:
 - add modality-aware provider contracts, starting with image generation
 - extend that contract toward image editing where the provider surface supports it
 - keep chat and image paths explicit instead of mixing modality-specific behavior into one opaque route
-- expose modality-aware health and routing visibility in the dashboard and operational endpoints
+- expose modality-aware health, provider inventory, and routing visibility in the dashboard and operational endpoints
 
 This should borrow the useful parts of image-router patterns without copying another gateway's product shape.
 

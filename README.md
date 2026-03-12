@@ -46,7 +46,7 @@ FoundryGate is a local OpenAI-compatible router/proxy for OpenClaw and other cli
 - Multi-provider routing: use `auto` for routing or target a provider directly by model id.
 - Multi-dimensional routing: score providers across locality, context headroom, token limits, cache metadata, latency, and recent failure state during provider selection.
 - Robust fallback behavior: provider errors, timeouts, and connection failures fall through the configured fallback chain.
-- Useful observability: `/health` reports provider status, consecutive failures, last error, and average latency.
+- Useful observability: `/health` reports provider status, capability coverage, consecutive failures, last error, and average latency.
 - Hardened extension seam: request hooks are sanitized, can fail closed, and expose hook errors in dry-run and completion responses.
 - Safe database path handling: metrics use `FOUNDRYGATE_DB_PATH`, so the SQLite database does not need to live in the repo checkout.
 
@@ -153,7 +153,7 @@ These endpoints are implemented today in [foundrygate/main.py](./foundrygate/mai
 
 ### `GET /health`
 
-Returns overall service status plus one object per loaded provider. Each provider entry includes:
+Returns overall service status, provider summary, capability coverage, and one object per loaded provider. Each provider entry includes:
 
 - `healthy`
 - `consecutive_failures`
@@ -163,9 +163,21 @@ Returns overall service status plus one object per loaded provider. Each provide
 - `backend`
 - `tier`
 - `capabilities`
+- `image`
 
 ```bash
 curl -fsS http://127.0.0.1:8090/health
+```
+
+### `GET /api/providers`
+
+Returns the loaded provider inventory plus the same capability-coverage summary used by the dashboard.
+
+- optional `capability=<name>` filter
+- optional `healthy=true|false` filter
+
+```bash
+curl -fsS 'http://127.0.0.1:8090/api/providers?capability=image_generation'
 ```
 
 ### `GET /v1/models`
@@ -240,6 +252,7 @@ curl -fsS http://127.0.0.1:8090/v1/images/edits \
 
 - `POST /api/route`
 - `POST /api/route/image`
+- `GET /api/providers`
 - `GET /api/update`
 - `GET /api/stats`
 - `GET /api/recent?limit=50`
@@ -267,6 +280,7 @@ curl -fsS http://127.0.0.1:8090/api/route/image \
 
 curl -fsS http://127.0.0.1:8090/api/stats
 curl -fsS http://127.0.0.1:8090/api/update
+curl -fsS 'http://127.0.0.1:8090/api/providers?healthy=true'
 curl -fsS 'http://127.0.0.1:8090/api/recent?limit=10'
 curl -fsS 'http://127.0.0.1:8090/api/traces?limit=10'
 curl -fsS 'http://127.0.0.1:8090/api/stats?provider=local-worker&client_tag=codex&modality=chat'
@@ -277,6 +291,8 @@ curl -fsS 'http://127.0.0.1:8090/api/stats?provider=local-worker&client_tag=code
 `POST /api/route/image` is the matching dry-run endpoint for image-generation and image-editing requests. Use `capability: "image_generation"` or `capability: "image_editing"` to preview modality-specific routing without calling an upstream image provider.
 
 If request hooks are enabled, `POST /api/route` also shows the applied hook names and the effective request metadata after hook processing.
+
+`GET /api/providers` returns the current provider inventory, including capability flags and optional image metadata such as `max_outputs`, `max_side_px`, and `supported_sizes`.
 
 `GET /api/stats`, `GET /api/recent`, and `GET /api/traces` also accept optional `provider`, `modality`, `client_profile`, `client_tag`, `layer`, and `success` filters. The built-in dashboard uses the same filtered endpoints.
 
