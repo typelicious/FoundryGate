@@ -92,6 +92,7 @@ If you want the fastest local bootstrap, use the generic helpers first:
 ./scripts/foundrygate-bootstrap
 $EDITOR .env
 ./scripts/foundrygate-doctor
+./scripts/foundrygate-onboarding-report
 ```
 
 If you prefer the Linux service path instead of a manual Python run, jump to [Helper Scripts](#helper-scripts) and use `./scripts/foundrygate-install`.
@@ -836,6 +837,7 @@ Running `./scripts/foundrygate-install` also creates symlinks in `/usr/local/bin
 | --- | --- |
 | `foundrygate-bootstrap` | Creates `.env` from `.env.example` if needed, creates a local state dir, and appends a safe local `FOUNDRYGATE_DB_PATH` if none is set |
 | `foundrygate-doctor` | Checks for config/env presence, writable DB path, at least one configured provider key, and optional local health endpoints |
+| `foundrygate-onboarding-report` | Summarizes provider readiness, client-profile coverage, routing layers, and onboarding suggestions for many-provider and many-client setups |
 | `foundrygate-install` | Installs the unit file, creates `/var/lib/foundrygate`, creates helper symlinks, reloads `systemd`, and starts the service |
 | `foundrygate-start` | Runs `systemctl start foundrygate.service` |
 | `foundrygate-stop` | Runs `systemctl stop foundrygate.service` |

@@ -23,6 +23,7 @@ Run the generic helpers before changing config:
 ./scripts/foundrygate-bootstrap
 $EDITOR .env
 ./scripts/foundrygate-doctor
+./scripts/foundrygate-onboarding-report
 ```
 
 ### 1. Add one provider
@@ -46,6 +47,13 @@ $EDITOR .env
 ### 4. Only then add another provider
 
 Repeat the same path before introducing more routing complexity.
+
+For many-provider rollouts, run the onboarding report after every provider change:
+
+```bash
+./scripts/foundrygate-onboarding-report
+./scripts/foundrygate-onboarding-report --json
+```
 
 ## Client onboarding sequence
 

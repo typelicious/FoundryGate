@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+config_file="${FOUNDRYGATE_CONFIG_FILE:-$repo_root/config.yaml}"
+env_file="${FOUNDRYGATE_ENV_FILE:-$repo_root/.env}"
+mode="${1:-text}"
+
+export FOUNDRYGATE_ONBOARDING_CONFIG="$config_file"
+export FOUNDRYGATE_ONBOARDING_ENV="$env_file"
+export FOUNDRYGATE_ONBOARDING_MODE="$mode"
+
+python3 - <<'PY'
+import json
+import os
+
+from foundrygate.onboarding import build_onboarding_report, render_onboarding_report
+
+report = build_onboarding_report(
+    config_path=os.environ["FOUNDRYGATE_ONBOARDING_CONFIG"],
+    env_file=os.environ["FOUNDRYGATE_ONBOARDING_ENV"],
+)
+
+if os.environ["FOUNDRYGATE_ONBOARDING_MODE"] == "--json":
+    print(json.dumps(report, indent=2, sort_keys=True))
+else:
+    print(render_onboarding_report(report), end="")
+PY
