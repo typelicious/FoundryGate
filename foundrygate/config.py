@@ -347,6 +347,24 @@ def _normalize_provider_image(name: str, cfg: dict[str, Any]) -> dict[str, Any]:
     if normalized_sizes:
         image["supported_sizes"] = normalized_sizes
 
+    policy_tags = raw.get("policy_tags", [])
+    if policy_tags in (None, ""):
+        policy_tags = []
+    if isinstance(policy_tags, str):
+        policy_tags = [policy_tags]
+    if not isinstance(policy_tags, list):
+        raise ConfigError(f"Provider '{name}' field 'image.policy_tags' must be a list")
+
+    normalized_tags = []
+    for value in policy_tags:
+        if not isinstance(value, str) or not value.strip():
+            raise ConfigError(
+                f"Provider '{name}' field 'image.policy_tags' must contain non-empty strings"
+            )
+        normalized_tags.append(value.strip().lower())
+    if normalized_tags:
+        image["policy_tags"] = normalized_tags
+
     return image
 
 

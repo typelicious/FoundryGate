@@ -197,6 +197,7 @@ class Router:
             requested_image_outputs=1,
             requested_image_side_px=0,
             requested_image_size="",
+            requested_image_policy="",
             required_capability="",
             cache_preference=(headers or {}).get("x-foundrygate-cache", "").strip().lower(),
             model_requested=model_requested.lower().strip(),
@@ -289,6 +290,9 @@ class Router:
             requested_image_outputs=requested_outputs or 1,
             requested_image_side_px=_parse_image_size_max_side(requested_size),
             requested_image_size=requested_size.strip().lower() if requested_size else "",
+            requested_image_policy=(
+                (headers or {}).get("x-foundrygate-image-policy", "").strip().lower()
+            ),
             required_capability=capability,
             cache_preference=(headers or {}).get("x-foundrygate-cache", "").strip().lower(),
             model_requested=model_requested.lower().strip(),
@@ -662,9 +666,12 @@ class Router:
             )
 
         image_score = 0
+        image_policy_score = 0
         image_outputs_fit = True
         image_size_fit = True
         image_supported_size = True
+        image_policy_match = not bool(ctx.requested_image_policy)
+        image_policy_tags = image_cfg.get("policy_tags", [])
         if ctx.required_capability in {"image_generation", "image_editing"}:
             max_outputs = int(image_cfg.get("max_outputs") or 0)
             max_side_px = int(image_cfg.get("max_side_px") or 0)
@@ -694,6 +701,12 @@ class Router:
             elif ctx.requested_image_size:
                 image_score += 1
 
+            if ctx.requested_image_policy:
+                image_policy_match = ctx.requested_image_policy in image_policy_tags
+                image_policy_score = 12 if image_policy_match else 0
+            elif image_policy_tags:
+                image_policy_score = 1
+
         fit = self._provider_fits_request_dimensions(name, provider, ctx)
         score_total = (
             health_score
@@ -705,6 +718,7 @@ class Router:
             + input_score
             + output_score
             + image_score
+            + image_policy_score
         )
         return {
             "fit": fit,
@@ -718,6 +732,7 @@ class Router:
             "input_score": input_score,
             "output_score": output_score,
             "image_score": image_score,
+            "image_policy_score": image_policy_score,
             "headroom": headroom,
             "context_ratio": round(context_ratio, 3),
             "input_ratio": round(input_ratio, 3),
@@ -725,6 +740,9 @@ class Router:
             "image_outputs_fit": image_outputs_fit,
             "image_size_fit": image_size_fit,
             "image_supported_size": image_supported_size,
+            "image_policy_match": image_policy_match,
+            "requested_image_policy": ctx.requested_image_policy,
+            "image_policy_tags": image_policy_tags,
             "requested_image_outputs": ctx.requested_image_outputs,
             "requested_image_size": ctx.requested_image_size,
             "max_image_outputs": image_cfg.get("max_outputs"),
@@ -1015,6 +1033,7 @@ class _RoutingContext:
         "requested_image_outputs",
         "requested_image_side_px",
         "requested_image_size",
+        "requested_image_policy",
         "required_capability",
         "cache_preference",
         "model_requested",

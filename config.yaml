@@ -46,6 +46,11 @@ server:
 #     read_s     : read/response timeout (default: 120)
 #   pricing      : USD per 1 000 000 tokens (input / output / cache_read)
 #                  Used for cost tracking only – not enforced.
+#   image        : optional image-routing metadata for `contract: image-provider`
+#     max_outputs    : maximum supported `n`
+#     max_side_px    : largest supported edge size
+#     supported_sizes: optional exact allowed size strings such as 1024x1024
+#     policy_tags    : optional routing tags such as quality | cost | balanced
 #
 # Sections
 # ─────────
@@ -190,6 +195,11 @@ providers:
   #  capabilities:
   #    # image_generation is enabled automatically by the contract
   #    image_editing: true
+  #  image:
+  #    max_outputs: 4
+  #    max_side_px: 2048
+  #    supported_sizes: ["1024x1024", "2048x2048"]
+  #    policy_tags: ["quality", "editing", "batch"]
 
   # ── Anthropic ───────────────────────────────────────────────────────────
   # Auth: ANTHROPIC_API_KEY (or setup-token)

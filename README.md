@@ -220,6 +220,7 @@ OpenAI-compatible image generation endpoint.
 - `model: "auto"` selects the best loaded provider with `capabilities.image_generation: true`
 - `model: "<provider-id>"` routes directly to a loaded image-capable provider
 - validates `prompt`, `n`, and `size` before any provider call
+- optional image-policy hints can be passed via `metadata.image_policy` or `X-FoundryGate-Image-Policy`
 
 ```bash
 curl -fsS http://127.0.0.1:8090/v1/images/generations \
@@ -240,6 +241,7 @@ OpenAI-compatible image editing endpoint.
 - `model: "auto"` selects the best loaded provider with `capabilities.image_editing: true`
 - `model: "<provider-id>"` routes directly to a loaded image-edit-capable provider
 - validates scalar fields such as `prompt`, `n`, and `size` before any provider call
+- optional image-policy hints can be passed via form field `image_policy`, `metadata.image_policy`, or `X-FoundryGate-Image-Policy`
 
 ```bash
 curl -fsS http://127.0.0.1:8090/v1/images/edits \
@@ -295,6 +297,8 @@ curl -fsS 'http://127.0.0.1:8090/api/stats?provider=local-worker&client_tag=code
 If request hooks are enabled, `POST /api/route` also shows the applied hook names and the effective request metadata after hook processing.
 
 `GET /api/providers` returns the current provider inventory, including capability flags and optional image metadata such as `max_outputs`, `max_side_px`, and `supported_sizes`.
+
+For image-capable providers, `image.policy_tags` can be used as lightweight presets such as `quality`, `cost`, `balanced`, `batch`, or `editing`. When a request carries `metadata.image_policy` or `X-FoundryGate-Image-Policy`, routing prefers providers whose `image.policy_tags` match that hint.
 
 `GET /api/stats`, `GET /api/recent`, and `GET /api/traces` also accept optional `provider`, `modality`, `client_profile`, `client_tag`, `layer`, and `success` filters. The built-in dashboard uses the same filtered endpoints.
 

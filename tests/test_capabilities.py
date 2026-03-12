@@ -241,3 +241,24 @@ def test_image_provider_contract_rejects_non_openai_backend(tmp_path):
 
     with pytest.raises(ConfigError, match="image-provider"):
         load_config(path)
+
+
+def test_image_provider_policy_tags_are_normalized(tmp_path):
+    path = _write_config(
+        tmp_path,
+        (
+            "  image-cloud:\n"
+            "    contract: image-provider\n"
+            "    backend: openai-compat\n"
+            '    base_url: "https://api.example.com/v1"\n'
+            '    api_key: "secret"\n'
+            '    model: "gpt-image-1"\n'
+            "    image:\n"
+            '      policy_tags: ["Quality", " editing "]\n'
+        ),
+    )
+
+    cfg = load_config(path)
+    provider = cfg.provider("image-cloud")
+
+    assert provider["image"]["policy_tags"] == ["quality", "editing"]

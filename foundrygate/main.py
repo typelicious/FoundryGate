@@ -276,6 +276,7 @@ def _estimate_image_request_dimensions(body: dict[str, Any], *, capability: str)
         "prompt_chars": len(str(body.get("prompt") or "")),
         "requested_size": body.get("size") or "",
         "requested_outputs": body.get("n") if isinstance(body.get("n"), int) else 1,
+        "image_policy": _collect_request_image_policy(body),
         "capability": capability,
     }
 
@@ -288,12 +289,25 @@ def _collect_request_cache_preference(body: dict[str, Any]) -> str:
     return ""
 
 
+def _collect_request_image_policy(body: dict[str, Any]) -> str:
+    """Return one optional image-policy hint from request data."""
+    if isinstance(body.get("image_policy"), str) and body["image_policy"].strip():
+        return body["image_policy"].strip().lower()
+    metadata = body.get("metadata") if isinstance(body.get("metadata"), dict) else {}
+    if isinstance(metadata.get("image_policy"), str) and metadata["image_policy"].strip():
+        return metadata["image_policy"].strip().lower()
+    return ""
+
+
 def _merge_routing_context_headers(headers: dict[str, str], body: dict[str, Any]) -> dict[str, str]:
     """Return routing headers plus request-body dimension hints."""
     merged = dict(headers)
     cache_preference = _collect_request_cache_preference(body)
-    if cache_preference:
+    if cache_preference and "x-foundrygate-cache" not in merged:
         merged["x-foundrygate-cache"] = cache_preference
+    image_policy = _collect_request_image_policy(body)
+    if image_policy and "x-foundrygate-image-policy" not in merged:
+        merged["x-foundrygate-image-policy"] = image_policy
     return merged
 
 
@@ -464,7 +478,17 @@ def _normalize_image_request_body(body: dict[str, Any], *, capability: str) -> d
     if metadata is not None:
         if not isinstance(metadata, dict):
             raise ValueError("Field 'metadata' must be an object when provided")
-        normalized["metadata"] = metadata
+        normalized["metadata"] = dict(metadata)
+
+    image_policy = body.get("image_policy")
+    if image_policy in (None, "") and isinstance(normalized.get("metadata"), dict):
+        image_policy = normalized["metadata"].get("image_policy")
+    if image_policy not in (None, ""):
+        if not isinstance(image_policy, str) or not image_policy.strip():
+            raise ValueError("Field 'image_policy' must be a non-empty string when provided")
+        cleaned_policy = image_policy.strip().lower()
+        normalized["image_policy"] = cleaned_policy
+        normalized.setdefault("metadata", {})["image_policy"] = cleaned_policy
 
     return normalized
 
@@ -503,6 +527,7 @@ async def _resolve_image_route_preview(
     """Resolve one image-generation request without calling a provider."""
     body, hook_state = await _apply_request_hooks(body, headers)
     body = _normalize_image_request_body(body, capability=capability)
+    headers = _merge_routing_context_headers(headers, body)
     prompt = body["prompt"]
 
     model_requested = str(body.get("model", "auto"))
