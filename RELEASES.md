@@ -14,6 +14,7 @@ This repo does not require a heavy release process. Use lightweight tags plus Gi
 6. Create a GitHub Release from that tag.
 7. Use the changelog entry as the release notes, then add any short upgrade notes if needed.
 8. Confirm that README plus the relevant docs pages still match the shipped runtime behavior.
+9. If packaging or Docker changed shortly before the release, run the publish dry run first.
 
 ## Example
 
@@ -33,6 +34,12 @@ Tagged releases now trigger [release-artifacts](./.github/workflows/release-arti
 - always build `sdist` and `wheel`
 - push the container image to GHCR
 - publish to PyPI only when `PYPI_PUBLISH=true` is set and GitHub trusted publishing is configured for the `pypi` environment
+
+The repo also includes [publish-dry-run](./.github/workflows/publish-dry-run.yml):
+
+- build Python distributions without publishing them
+- run `twine check`
+- build the GHCR image without pushing it
 
 ## Versioning Guidance
 

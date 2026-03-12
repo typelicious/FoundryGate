@@ -3,6 +3,8 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 helpers=(
+  foundrygate-bootstrap
+  foundrygate-doctor
   foundrygate-install
   foundrygate-start
   foundrygate-stop

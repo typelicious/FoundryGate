@@ -1,0 +1,55 @@
+name: Publish Dry Run
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - "pyproject.toml"
+      - "README.md"
+      - "RELEASES.md"
+      - ".github/workflows/publish-dry-run.yml"
+      - ".github/workflows/release-artifacts.yml"
+
+jobs:
+  python-publish-dry-run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build distributions
+        run: |
+          python -m pip install --upgrade pip build twine
+          python -m build
+      - name: Validate Python distributions
+        run: python -m twine check dist/*
+      - name: Upload dry-run Python artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-publish-dry-run
+          path: dist/*
+
+  ghcr-publish-dry-run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=dry-run
+            type=sha
+      - name: Build container image without pushing
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

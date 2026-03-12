@@ -9,6 +9,7 @@
 [![OpenClaw-friendly](https://img.shields.io/badge/OpenClaw-friendly-111827.svg)](https://openclaw.ai/)
 [![Docker](https://img.shields.io/badge/docker-ready-2496ED?logo=docker&logoColor=white)](./Dockerfile)
 [![PyPI](https://img.shields.io/badge/pypi-workflow%20ready-3775A9?logo=pypi&logoColor=white)](./RELEASES.md)
+[![Publish Dry Run](https://github.com/typelicious/FoundryGate/actions/workflows/publish-dry-run.yml/badge.svg)](https://github.com/typelicious/FoundryGate/actions/workflows/publish-dry-run.yml)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](./pyproject.toml)
 
 ## Quick Navigation
@@ -24,6 +25,7 @@
 - [Configuration](#configuration)
 - [Deployment](#deployment)
 - [Helper Scripts](#helper-scripts)
+- [Publishing](#publishing)
 - [Community And Security](#community-and-security)
 - [Repo Safety And CI](#repo-safety-and-ci)
 - [Workflow](#workflow)
@@ -83,6 +85,14 @@ curl -fsS http://127.0.0.1:8090/health
 curl -fsS http://127.0.0.1:8090/v1/models
 ```
 
+If you want the fastest local bootstrap, use the generic helpers first:
+
+```bash
+./scripts/foundrygate-bootstrap
+$EDITOR .env
+./scripts/foundrygate-doctor
+```
+
 If you prefer the Linux service path instead of a manual Python run, jump to [Helper Scripts](#helper-scripts) and use `./scripts/foundrygate-install`.
 
 If you install the project as a package, the `foundrygate` and `foundrygate-stats` console scripts are available.
@@ -94,6 +104,7 @@ If every configured provider API key is empty, FoundryGate still starts, but it 
 - [Architecture](./docs/ARCHITECTURE.md)
 - [Integrations](./docs/INTEGRATIONS.md)
 - [Onboarding](./docs/ONBOARDING.md)
+- [Publishing](./docs/PUBLISHING.md)
 - [Troubleshooting](./docs/TROUBLESHOOTING.md)
 - [Roadmap](./docs/FOUNDRYGATE-ROADMAP.md)
 
@@ -641,14 +652,36 @@ python -m build
 
 Tagged releases always build Python artifacts. PyPI publishing is wired behind the repository variable `PYPI_PUBLISH=true` plus GitHub trusted publishing for the `pypi` environment.
 
+## Publishing
+
+FoundryGate now has a real publish dry-run path for both Python artifacts and the container image.
+
+GitHub workflow:
+
+- [publish-dry-run](./.github/workflows/publish-dry-run.yml) builds the wheel and sdist, runs `twine check`, and builds the GHCR image without pushing it
+- [release-artifacts](./.github/workflows/release-artifacts.yml) is still the tag-driven publish path for real releases
+
+Local dry-run commands:
+
+```bash
+python -m pip install --upgrade build twine
+python -m build
+python -m twine check dist/*
+docker build -t foundrygate:dry-run .
+```
+
+Use the dry run before cutting a release when Docker, packaging metadata, or release automation changed.
+
 ## Helper Scripts
 
-The scripts in [scripts](./scripts) are optional wrappers around `systemd`, `journalctl`, and `curl`. They are most useful on Linux hosts that already use the included `systemd` unit.
+The scripts in [scripts](./scripts) are optional wrappers around onboarding, `systemd`, `journalctl`, and `curl`.
 
 Running `./scripts/foundrygate-install` also creates symlinks in `/usr/local/bin`.
 
 | Script | What it does |
 | --- | --- |
+| `foundrygate-bootstrap` | Creates `.env` from `.env.example` if needed, creates a local state dir, and appends a safe local `FOUNDRYGATE_DB_PATH` if none is set |
+| `foundrygate-doctor` | Checks for config/env presence, writable DB path, at least one configured provider key, and optional local health endpoints |
 | `foundrygate-install` | Installs the unit file, creates `/var/lib/foundrygate`, creates helper symlinks, reloads `systemd`, and starts the service |
 | `foundrygate-start` | Runs `systemctl start foundrygate.service` |
 | `foundrygate-stop` | Runs `systemctl stop foundrygate.service` |
@@ -683,6 +716,7 @@ Security automation and review baseline:
 FoundryGate includes two GitHub Actions workflows:
 
 - [CI](./.github/workflows/ci.yml): runs Ruff plus the test matrix on Python 3.10 through 3.13
+- [publish-dry-run](./.github/workflows/publish-dry-run.yml): validates Python distributions and the container build without publishing them
 - [release-artifacts](./.github/workflows/release-artifacts.yml): builds Python distributions on tags, pushes container images to GHCR, and can publish to PyPI when trusted publishing is configured
 - [repo-safety](./.github/workflows/repo-safety.yml): rejects accidental artifacts and secrets-like files
 - [CodeQL](./.github/workflows/codeql.yml): performs repository code scanning for Python

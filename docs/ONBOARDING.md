@@ -8,12 +8,22 @@ The safest onboarding order is:
 
 1. one provider
 2. one client
-3. observability
+3. bootstrap + diagnostics
 4. second provider
 5. client-specific defaults
 6. policy constraints
 
 ## Provider onboarding sequence
+
+### 0. Bootstrap the local checkout
+
+Run the generic helpers before changing config:
+
+```bash
+./scripts/foundrygate-bootstrap
+$EDITOR .env
+./scripts/foundrygate-doctor
+```
 
 ### 1. Add one provider
 
@@ -93,6 +103,7 @@ Current state:
 
 - manual updates via Git or `foundrygate-update`
 - tag-driven release artifacts for Python distributions and container images
+- publish dry-run workflow for Python packaging and GHCR container builds
 
 Planned state:
 

@@ -182,6 +182,7 @@ Primary goals:
 - publish an official Docker release path
 - publish FoundryGate to PyPI
 - add provider and client onboarding helpers for many-provider and many-client deployments
+- add a publish dry-run path for Python package and GHCR validation before real release tags
 - add validation workflows so operators can catch config mistakes before rollout
 - complete the public community-health baseline and security-overview baseline for the repo
 

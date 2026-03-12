@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+env_file="${FOUNDRYGATE_ENV_FILE:-$repo_root/.env}"
+config_file="${FOUNDRYGATE_CONFIG_FILE:-$repo_root/config.yaml}"
+status=0
+
+ok() {
+  printf '[ok] %s\n' "$1"
+}
+
+warn() {
+  printf '[warn] %s\n' "$1"
+}
+
+fail() {
+  printf '[fail] %s\n' "$1" >&2
+  status=1
+}
+
+if [ -f "$config_file" ]; then
+  ok "config present: $config_file"
+else
+  fail "missing config file: $config_file"
+fi
+
+if [ -f "$env_file" ]; then
+  ok "env file present: $env_file"
+else
+  fail "missing env file: $env_file"
+fi
+
+db_path="/var/lib/foundrygate/foundrygate.db"
+if [ -f "$env_file" ]; then
+  env_db_path="$(awk -F= '/^[[:space:]]*FOUNDRYGATE_DB_PATH=/{sub(/^[[:space:]]+/, "", $2); print $2}' "$env_file" | tail -n1)"
+  if [ -n "$env_db_path" ]; then
+    db_path="$env_db_path"
+  fi
+fi
+
+db_dir="$(dirname "$db_path")"
+if [ -d "$db_dir" ] && [ -w "$db_dir" ]; then
+  ok "db directory is writable: $db_dir"
+elif [ -d "$db_dir" ]; then
+  warn "db directory exists but is not writable by $(id -un): $db_dir"
+else
+  warn "db directory does not exist yet: $db_dir"
+fi
+
+if [ -f "$env_file" ] && grep -Eq '^(DEEPSEEK_API_KEY|GEMINI_API_KEY|OPENROUTER_API_KEY|OPENAI_API_KEY|ANTHROPIC_API_KEY|OPENCODE_API_KEY)=[^[:space:]#]+' "$env_file"; then
+  ok "at least one provider API key is configured"
+else
+  warn "no provider API key detected in $env_file"
+fi
+
+if command -v curl >/dev/null 2>&1; then
+  if curl -fsS -m 2 http://127.0.0.1:8090/health >/dev/null 2>&1; then
+    ok "local /health endpoint is reachable"
+  else
+    warn "local /health endpoint is not reachable on 127.0.0.1:8090"
+  fi
+
+  if curl -fsS -m 2 http://127.0.0.1:8090/v1/models >/dev/null 2>&1; then
+    ok "local /v1/models endpoint is reachable"
+  else
+    warn "local /v1/models endpoint is not reachable on 127.0.0.1:8090"
+  fi
+else
+  warn "curl is not available; skipping local endpoint checks"
+fi
+
+exit "$status"

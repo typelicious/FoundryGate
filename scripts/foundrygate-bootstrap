@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+env_file="${1:-$repo_root/.env}"
+state_dir="${FOUNDRYGATE_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/foundrygate}"
+db_path="${FOUNDRYGATE_DB_PATH:-$state_dir/foundrygate.db}"
+
+mkdir -p "$state_dir"
+
+if [ ! -f "$env_file" ]; then
+  cp "$repo_root/.env.example" "$env_file"
+  created_env=yes
+else
+  created_env=no
+fi
+
+if ! grep -Eq '^[[:space:]]*FOUNDRYGATE_DB_PATH=' "$env_file"; then
+  printf '\nFOUNDRYGATE_DB_PATH=%s\n' "$db_path" >> "$env_file"
+  added_db_path=yes
+else
+  added_db_path=no
+fi
+
+cat <<EOF
+FoundryGate bootstrap complete.
+
+- env file: $env_file
+- state dir: $state_dir
+- db path : $db_path
+- .env created: $created_env
+- FOUNDRYGATE_DB_PATH added: $added_db_path
+
+Next steps:
+1. Edit $env_file and set at least one provider API key.
+2. Run ./scripts/foundrygate-doctor to verify the local setup.
+3. Start FoundryGate with python -m foundrygate or use the systemd helper flow.
+EOF
