@@ -65,6 +65,23 @@ The repo also includes [publish-dry-run](./.github/workflows/publish-dry-run.yml
 
 The npm or TypeScript package should stay separate from the Python gateway core. It is meant for CLI-facing integrations, not for rewriting the service runtime.
 
+## Scheduled Deployment Examples
+
+FoundryGate now includes a conservative helper-driven update path for controlled environments. The recommended examples live in:
+
+- [docs/examples/foundrygate-auto-update.service](./docs/examples/foundrygate-auto-update.service)
+- [docs/examples/foundrygate-auto-update.timer](./docs/examples/foundrygate-auto-update.timer)
+- [docs/examples/foundrygate-auto-update.cron](./docs/examples/foundrygate-auto-update.cron)
+
+Use these only after you have already validated the manual path:
+
+```bash
+./scripts/foundrygate-update-check
+./scripts/foundrygate-auto-update
+```
+
+Keep `allow_major: false` unless you are intentionally allowing major-version rollouts through the scheduled helper.
+
 ## What Belongs In Release Notes
 
 - New providers or routing behavior changes

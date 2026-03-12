@@ -1,0 +1,18 @@
+[Unit]
+Description=Apply eligible FoundryGate updates
+Documentation=https://github.com/typelicious/FoundryGate
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=foundrygate
+Group=foundrygate
+WorkingDirectory=/opt/foundrygate
+EnvironmentFile=/opt/foundrygate/.env
+ExecStart=/usr/local/bin/foundrygate-auto-update --apply
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/foundrygate /opt/foundrygate
+PrivateTmp=true

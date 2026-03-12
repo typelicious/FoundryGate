@@ -1,0 +1,12 @@
+[Unit]
+Description=Run the FoundryGate auto-update helper on a schedule
+Documentation=https://github.com/typelicious/FoundryGate
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+RandomizedDelaySec=15m
+Persistent=true
+Unit=foundrygate-auto-update.service
+
+[Install]
+WantedBy=timers.target

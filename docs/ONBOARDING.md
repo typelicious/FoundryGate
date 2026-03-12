@@ -112,3 +112,31 @@ Planned state:
 - scheduled use of `foundrygate-auto-update --apply` in controlled environments
 
 This remains opt-in. FoundryGate does not self-schedule or mutate the checkout over HTTP.
+
+### Controlled scheduling examples
+
+Use scheduling only after you are comfortable with the manual path:
+
+```bash
+./scripts/foundrygate-update-check
+./scripts/foundrygate-auto-update
+```
+
+Recommended `systemd` path:
+
+1. review [examples/foundrygate-auto-update.service](./examples/foundrygate-auto-update.service)
+2. review [examples/foundrygate-auto-update.timer](./examples/foundrygate-auto-update.timer)
+3. install them under `/etc/systemd/system/`
+4. enable the timer only after `auto_update.enabled: true` is set deliberately
+
+Minimal flow:
+
+```bash
+sudo install -m 644 docs/examples/foundrygate-auto-update.service /etc/systemd/system/foundrygate-auto-update.service
+sudo install -m 644 docs/examples/foundrygate-auto-update.timer /etc/systemd/system/foundrygate-auto-update.timer
+sudo systemctl daemon-reload
+sudo systemctl enable --now foundrygate-auto-update.timer
+sudo systemctl list-timers foundrygate-auto-update.timer
+```
+
+Cron remains possible for simpler hosts. The example is in [examples/foundrygate-auto-update.cron](./examples/foundrygate-auto-update.cron), but `systemd` timers are usually the safer default because they provide visibility and persistence.

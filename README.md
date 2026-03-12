@@ -839,6 +839,12 @@ curl -fsS http://127.0.0.1:8090/api/update
 ./scripts/foundrygate-auto-update --apply
 ```
 
+For controlled schedules, use the reviewed examples in:
+
+- [docs/examples/foundrygate-auto-update.service](./docs/examples/foundrygate-auto-update.service)
+- [docs/examples/foundrygate-auto-update.timer](./docs/examples/foundrygate-auto-update.timer)
+- [docs/examples/foundrygate-auto-update.cron](./docs/examples/foundrygate-auto-update.cron)
+
 ## Community And Security
 
 FoundryGate now includes the core public community-health files expected for a public open-source repo:

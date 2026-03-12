@@ -51,3 +51,18 @@ The real publish flow stays tag-driven through [release-artifacts](../.github/wo
 - Dry-run workflows should never require production credentials.
 - Real release publication should use GitHub environments and trusted publishing instead of long-lived secrets where possible.
 - PyPI publication should remain opt-in until the package workflow is stable across several releases.
+
+## Controlled Update Scheduling
+
+Release publishing and deployment updates should stay separate concerns.
+
+Publishing creates a tagged release. Applying that release on a host should remain a deliberate operator action or a tightly controlled scheduled helper.
+
+If you want scheduled update application:
+
+- keep `auto_update.enabled: true` explicit in `config.yaml`
+- keep `allow_major: false` unless you are ready to absorb breaking changes automatically
+- prefer the reviewed examples in [examples/foundrygate-auto-update.service](./examples/foundrygate-auto-update.service) and [examples/foundrygate-auto-update.timer](./examples/foundrygate-auto-update.timer)
+- use the cron example in [examples/foundrygate-auto-update.cron](./examples/foundrygate-auto-update.cron) only when `systemd` timers are not practical
+
+The helper still calls the normal update command. It does not bypass your service restart, health checks, or update guardrails.
