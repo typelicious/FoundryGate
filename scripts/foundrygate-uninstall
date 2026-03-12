@@ -3,6 +3,7 @@ set -euo pipefail
 helpers=(
   foundrygate-install
   foundrygate-onboarding-report
+  foundrygate-onboarding-validate
   foundrygate-start
   foundrygate-stop
   foundrygate-restart

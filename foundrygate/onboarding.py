@@ -17,12 +17,22 @@ def _env_path(env_file: str | Path | None = None) -> Path:
     return Path.cwd() / ".env"
 
 
+def _is_unresolved_env(value: str) -> bool:
+    """Return whether a config value still looks like an unresolved env placeholder."""
+    stripped = value.strip()
+    return stripped.startswith("${") and stripped.endswith("}")
+
+
 def _provider_ready(provider: dict[str, Any]) -> tuple[bool, str]:
     """Return whether one provider looks ready for onboarding."""
     contract = provider.get("contract", "generic")
     backend = provider.get("backend", "openai-compat")
     api_key = str(provider.get("api_key", "") or "").strip()
     base_url = str(provider.get("base_url", "") or "").strip()
+    if _is_unresolved_env(api_key):
+        api_key = ""
+    if _is_unresolved_env(base_url):
+        base_url = ""
 
     if contract == "local-worker":
         if not base_url:
@@ -140,6 +150,46 @@ def build_onboarding_report(
     }
 
 
+def build_onboarding_validation(report: dict[str, Any]) -> dict[str, Any]:
+    """Return onboarding blockers and warnings for one report."""
+    providers = report["providers"]
+    clients = report["clients"]
+    routing = report["routing"]
+    env = report["env"]
+
+    blockers: list[str] = []
+    warnings: list[str] = []
+
+    if not env.get("exists", False):
+        blockers.append("Environment file is missing.")
+    if providers["total"] == 0:
+        blockers.append("No providers are configured.")
+    elif providers["ready"] == 0:
+        blockers.append("No configured provider is ready.")
+
+    if providers["total"] > 1 and not routing["fallback_chain"]:
+        blockers.append("Fallback chain is empty for a multi-provider setup.")
+
+    if providers["not_ready"] > 0:
+        warnings.append(
+            f"{providers['not_ready']} provider(s) are not ready: "
+            + ", ".join(item["name"] for item in providers["items"] if not item["ready"])
+        )
+
+    if not clients["profiles_enabled"]:
+        warnings.append("Client profiles are disabled.")
+    if clients["profiles_enabled"] and not clients["presets"]:
+        warnings.append("No built-in client presets are enabled.")
+    if routing["request_hooks_enabled"] and routing["request_hook_count"] == 0:
+        warnings.append("Request hooks are enabled but no hooks are configured.")
+
+    return {
+        "ok": not blockers,
+        "blockers": blockers,
+        "warnings": warnings,
+    }
+
+
 def render_onboarding_report(report: dict[str, Any]) -> str:
     """Render the onboarding report as plain text."""
     provider_block = report["providers"]
@@ -205,4 +255,20 @@ def render_onboarding_report(report: dict[str, Any]) -> str:
         lines.extend(["", "Suggestions"])
         lines.extend(f"- {item}" for item in report["suggestions"])
 
+    return "\n".join(lines) + "\n"
+
+
+def render_onboarding_validation(validation: dict[str, Any]) -> str:
+    """Render onboarding validation results as plain text."""
+    lines = [
+        "FoundryGate onboarding validation",
+        "",
+        f"Status: {'ok' if validation['ok'] else 'blocked'}",
+    ]
+    if validation["blockers"]:
+        lines.extend(["", "Blockers"])
+        lines.extend(f"- {item}" for item in validation["blockers"])
+    if validation["warnings"]:
+        lines.extend(["", "Warnings"])
+        lines.extend(f"- {item}" for item in validation["warnings"])
     return "\n".join(lines) + "\n"
