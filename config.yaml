@@ -893,6 +893,12 @@ auto_update:
   require_healthy_providers: true
   max_unhealthy_providers: 0
   min_release_age_hours: 0
+  maintenance_window:
+    enabled: false
+    timezone: "UTC"
+    days: ["sat", "sun"]
+    start_hour: 2
+    end_hour: 5
   apply_command: "foundrygate-update"
 
 

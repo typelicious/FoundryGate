@@ -11,6 +11,7 @@ from foundrygate.updates import (
     alert_level_for_update,
     allowed_update_types_for_ring,
     apply_auto_update_guardrails,
+    apply_maintenance_window_guardrail,
     apply_release_age_guardrail,
     classify_update,
     is_update_available,
@@ -152,6 +153,116 @@ def test_auto_update_guardrails_block_when_no_provider_is_healthy():
 
     assert guarded["eligible"] is False
     assert guarded["blocked_reason"] == "No healthy providers available"
+
+
+def test_maintenance_window_guardrail_allows_updates_when_window_is_disabled():
+    guarded = apply_maintenance_window_guardrail(
+        {
+            "enabled": True,
+            "eligible": True,
+            "blocked_reason": "",
+            "maintenance_window": {
+                "enabled": False,
+                "timezone": "UTC",
+                "days": [],
+                "start_hour": 0,
+                "end_hour": 24,
+            },
+        },
+        now=datetime(2026, 3, 12, 12, 0, tzinfo=UTC),
+    )
+
+    assert guarded["eligible"] is True
+    assert guarded["maintenance_window"]["open"] is True
+
+
+def test_maintenance_window_guardrail_blocks_outside_allowed_days():
+    guarded = apply_maintenance_window_guardrail(
+        {
+            "enabled": True,
+            "eligible": True,
+            "blocked_reason": "",
+            "maintenance_window": {
+                "enabled": True,
+                "timezone": "UTC",
+                "days": ["sat", "sun"],
+                "start_hour": 0,
+                "end_hour": 24,
+            },
+        },
+        now=datetime(2026, 3, 12, 12, 0, tzinfo=UTC),
+    )
+
+    assert guarded["eligible"] is False
+    assert guarded["maintenance_window"]["open"] is False
+    assert guarded["blocked_reason"] == "Outside maintenance days (thu)"
+
+
+def test_maintenance_window_guardrail_blocks_outside_allowed_hours():
+    guarded = apply_maintenance_window_guardrail(
+        {
+            "enabled": True,
+            "eligible": True,
+            "blocked_reason": "",
+            "maintenance_window": {
+                "enabled": True,
+                "timezone": "UTC",
+                "days": [],
+                "start_hour": 2,
+                "end_hour": 5,
+            },
+        },
+        now=datetime(2026, 3, 12, 12, 0, tzinfo=UTC),
+    )
+
+    assert guarded["eligible"] is False
+    assert guarded["maintenance_window"]["open"] is False
+    assert guarded["blocked_reason"] == "Outside maintenance window (02:00-05:00 UTC)"
+
+
+def test_maintenance_window_guardrail_allows_inside_matching_window():
+    guarded = apply_maintenance_window_guardrail(
+        {
+            "enabled": True,
+            "eligible": True,
+            "blocked_reason": "",
+            "maintenance_window": {
+                "enabled": True,
+                "timezone": "UTC",
+                "days": ["thu"],
+                "start_hour": 10,
+                "end_hour": 14,
+            },
+        },
+        now=datetime(2026, 3, 12, 12, 0, tzinfo=UTC),
+    )
+
+    assert guarded["eligible"] is True
+    assert guarded["maintenance_window"]["open"] is True
+    assert guarded["maintenance_window"]["current_day"] == "thu"
+    assert guarded["maintenance_window"]["current_hour"] == 12
+
+
+def test_maintenance_window_guardrail_blocks_unknown_timezone():
+    guarded = apply_maintenance_window_guardrail(
+        {
+            "enabled": True,
+            "eligible": True,
+            "blocked_reason": "",
+            "maintenance_window": {
+                "enabled": True,
+                "timezone": "Mars/Olympus",
+                "days": [],
+                "start_hour": 0,
+                "end_hour": 24,
+            },
+        },
+        now=datetime(2026, 3, 12, 12, 0, tzinfo=UTC),
+    )
+
+    assert guarded["eligible"] is False
+    assert guarded["maintenance_window"]["open"] is False
+    assert guarded["blocked_reason"] == "Unknown maintenance-window timezone 'Mars/Olympus'"
 
 
 @pytest.mark.asyncio

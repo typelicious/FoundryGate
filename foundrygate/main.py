@@ -23,7 +23,11 @@ from .hooks import AppliedHooks, HookExecutionError, RequestHookContext, apply_r
 from .metrics import MetricsStore, calc_cost
 from .providers import ProviderBackend, ProviderError
 from .router import Router, RoutingDecision
-from .updates import UpdateChecker, apply_auto_update_guardrails
+from .updates import (
+    UpdateChecker,
+    apply_auto_update_guardrails,
+    apply_maintenance_window_guardrail,
+)
 
 logger = logging.getLogger("foundrygate")
 
@@ -832,6 +836,7 @@ async def update_status(request: Request, force: bool = False):
         providers_healthy=_health_summary()["providers_healthy"],
         providers_unhealthy=_health_summary()["providers_unhealthy"],
     )
+    status.auto_update = apply_maintenance_window_guardrail(status.auto_update or {})
     operator_action, client_tag = _collect_operator_context(headers)
     auto_update = status.auto_update or {}
     _metrics.log_operator_event(

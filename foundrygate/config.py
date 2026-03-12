@@ -63,6 +63,7 @@ _POLICY_SELECT_KEYS = {
 _CLIENT_PROFILE_MATCH_KEYS = {"header_contains", "header_present", "any", "all"}
 _SUPPORTED_CLIENT_PROFILE_PRESETS = {"openclaw", "n8n", "cli"}
 _SUPPORTED_REQUEST_HOOKS = set(get_registered_request_hooks())
+_SUPPORTED_WINDOW_DAYS = {"mon", "tue", "wed", "thu", "fri", "sat", "sun"}
 
 _CLIENT_PROFILE_PRESET_SPECS: dict[str, dict[str, Any]] = {
     "openclaw": {
@@ -917,6 +918,45 @@ def _normalize_auto_update(data: dict[str, Any]) -> dict[str, Any]:
     if min_release_age_hours < 0:
         raise ConfigError("'auto_update.min_release_age_hours' must be non-negative")
 
+    maintenance_window = raw.get("maintenance_window", {})
+    if maintenance_window is None:
+        maintenance_window = {}
+    if not isinstance(maintenance_window, dict):
+        raise ConfigError("'auto_update.maintenance_window' must be a mapping")
+
+    window_enabled = maintenance_window.get("enabled", False)
+    if not isinstance(window_enabled, bool):
+        raise ConfigError("'auto_update.maintenance_window.enabled' must be a boolean")
+
+    timezone = maintenance_window.get("timezone", "UTC")
+    if not isinstance(timezone, str) or not timezone.strip():
+        raise ConfigError("'auto_update.maintenance_window.timezone' must be a non-empty string")
+
+    days = _normalize_string_list(
+        maintenance_window.get("days", []),
+        field_name="days",
+        rule_name="auto_update.maintenance_window",
+        allow_empty=True,
+    )
+    unknown_days = sorted(set(days) - _SUPPORTED_WINDOW_DAYS)
+    if unknown_days:
+        raise ConfigError(
+            "'auto_update.maintenance_window.days' has unknown weekday values: "
+            + ", ".join(unknown_days)
+        )
+
+    start_hour = maintenance_window.get("start_hour", 0)
+    end_hour = maintenance_window.get("end_hour", 24)
+    for key, value in {"start_hour": start_hour, "end_hour": end_hour}.items():
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise ConfigError(f"'auto_update.maintenance_window.{key}' must be an integer")
+    if not 0 <= start_hour <= 23:
+        raise ConfigError("'auto_update.maintenance_window.start_hour' must be between 0 and 23")
+    if not 1 <= end_hour <= 24:
+        raise ConfigError("'auto_update.maintenance_window.end_hour' must be between 1 and 24")
+    if start_hour == end_hour:
+        raise ConfigError("'auto_update.maintenance_window' must not use the same start/end hour")
+
     apply_command = raw.get("apply_command", "foundrygate-update")
     if not isinstance(apply_command, str) or not apply_command.strip():
         raise ConfigError("'auto_update.apply_command' must be a non-empty string")
@@ -929,6 +969,13 @@ def _normalize_auto_update(data: dict[str, Any]) -> dict[str, Any]:
         "require_healthy_providers": require_healthy_providers,
         "max_unhealthy_providers": max_unhealthy_providers,
         "min_release_age_hours": min_release_age_hours,
+        "maintenance_window": {
+            "enabled": window_enabled,
+            "timezone": timezone.strip(),
+            "days": days,
+            "start_hour": start_hour,
+            "end_hour": end_hour,
+        },
         "apply_command": apply_command.strip(),
     }
     return normalized
@@ -1023,6 +1070,13 @@ class Config:
                 "require_healthy_providers": True,
                 "max_unhealthy_providers": 0,
                 "min_release_age_hours": 0,
+                "maintenance_window": {
+                    "enabled": False,
+                    "timezone": "UTC",
+                    "days": [],
+                    "start_hour": 0,
+                    "end_hour": 24,
+                },
                 "apply_command": "foundrygate-update",
             },
         )
