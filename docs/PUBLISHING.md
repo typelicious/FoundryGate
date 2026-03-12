@@ -67,6 +67,7 @@ If you want scheduled update application:
 - keep `require_healthy_providers: true` unless you are intentionally allowing rollouts while the gateway is degraded
 - set `min_release_age_hours` above `0` if you want scheduled rollouts to wait before applying newly published releases
 - use `provider_scope.allow_providers` / `deny_providers` if rollout health should only consider a subset of providers
+- enable `verification` if helper-driven updates must pass a post-update health or smoke check before the rollout is considered clean
 - add `maintenance_window` if scheduled updates should only run in explicit local maintenance hours
 - prefer the reviewed examples in [examples/foundrygate-auto-update.service](./examples/foundrygate-auto-update.service) and [examples/foundrygate-auto-update.timer](./examples/foundrygate-auto-update.timer)
 - use the cron example in [examples/foundrygate-auto-update.cron](./examples/foundrygate-auto-update.cron) only when `systemd` timers are not practical

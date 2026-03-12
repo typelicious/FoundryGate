@@ -298,6 +298,12 @@ async def test_update_checker_reports_latest_release():
             "enabled": True,
             "allow_major": False,
             "provider_scope": {"allow_providers": ["deepseek-chat"], "deny_providers": []},
+            "verification": {
+                "enabled": True,
+                "command": "foundrygate-health",
+                "timeout_seconds": 30,
+                "rollback_command": "sudo systemctl restart foundrygate.service",
+            },
         },
     )
     checker._client = _FakeClient(
@@ -325,6 +331,12 @@ async def test_update_checker_reports_latest_release():
     assert status.auto_update["provider_scope"] == {
         "allow_providers": ["deepseek-chat"],
         "deny_providers": [],
+    }
+    assert status.auto_update["verification"] == {
+        "enabled": True,
+        "command": "foundrygate-health",
+        "timeout_seconds": 30,
+        "rollback_command": "sudo systemctl restart foundrygate.service",
     }
     assert status.release_url.endswith("/v0.5.0")
 

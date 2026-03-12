@@ -896,6 +896,11 @@ auto_update:
   provider_scope:
     allow_providers: []
     deny_providers: ["openrouter-fallback"]
+  verification:
+    enabled: false
+    command: "foundrygate-health"
+    timeout_seconds: 30
+    rollback_command: ""
   maintenance_window:
     enabled: false
     timezone: "UTC"

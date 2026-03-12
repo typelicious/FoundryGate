@@ -956,6 +956,32 @@ def _normalize_auto_update(data: dict[str, Any]) -> dict[str, Any]:
             + ", ".join(overlap)
         )
 
+    verification = raw.get("verification", {})
+    if verification is None:
+        verification = {}
+    if not isinstance(verification, dict):
+        raise ConfigError("'auto_update.verification' must be a mapping")
+
+    verification_enabled = verification.get("enabled", False)
+    if not isinstance(verification_enabled, bool):
+        raise ConfigError("'auto_update.verification.enabled' must be a boolean")
+
+    verification_command = verification.get("command", "foundrygate-health")
+    if not isinstance(verification_command, str) or not verification_command.strip():
+        raise ConfigError("'auto_update.verification.command' must be a non-empty string")
+
+    verification_timeout_seconds = verification.get("timeout_seconds", 30)
+    if isinstance(verification_timeout_seconds, bool) or not isinstance(
+        verification_timeout_seconds, int
+    ):
+        raise ConfigError("'auto_update.verification.timeout_seconds' must be an integer")
+    if verification_timeout_seconds <= 0:
+        raise ConfigError("'auto_update.verification.timeout_seconds' must be positive")
+
+    rollback_command = verification.get("rollback_command", "")
+    if not isinstance(rollback_command, str):
+        raise ConfigError("'auto_update.verification.rollback_command' must be a string")
+
     maintenance_window = raw.get("maintenance_window", {})
     if maintenance_window is None:
         maintenance_window = {}
@@ -1010,6 +1036,12 @@ def _normalize_auto_update(data: dict[str, Any]) -> dict[str, Any]:
         "provider_scope": {
             "allow_providers": allow_providers,
             "deny_providers": deny_providers,
+        },
+        "verification": {
+            "enabled": verification_enabled,
+            "command": verification_command.strip(),
+            "timeout_seconds": verification_timeout_seconds,
+            "rollback_command": rollback_command.strip(),
         },
         "maintenance_window": {
             "enabled": window_enabled,
@@ -1115,6 +1147,12 @@ class Config:
                 "provider_scope": {
                     "allow_providers": [],
                     "deny_providers": [],
+                },
+                "verification": {
+                    "enabled": False,
+                    "command": "foundrygate-health",
+                    "timeout_seconds": 30,
+                    "rollback_command": "",
                 },
                 "maintenance_window": {
                     "enabled": False,

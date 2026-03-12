@@ -550,6 +550,7 @@ Supported fields in `auto_update`:
 - `max_unhealthy_providers`
 - `min_release_age_hours`
 - `provider_scope`
+- `verification`
 - `maintenance_window`
 - `apply_command`
 
@@ -566,6 +567,11 @@ auto_update:
   provider_scope:
     allow_providers: ["local-worker", "deepseek-chat"]
     deny_providers: ["openrouter-fallback"]
+  verification:
+    enabled: true
+    command: "foundrygate-health"
+    timeout_seconds: 30
+    rollback_command: "sudo systemctl restart foundrygate.service"
   maintenance_window:
     enabled: true
     timezone: "Europe/Berlin"
@@ -582,6 +588,7 @@ What the current runtime does with it:
 - lets `foundrygate-auto-update --apply` run only when the current release state is eligible
 - can block helper-driven rollout when provider health is already degraded
 - can scope rollout-health checks to a specific provider subset instead of the whole runtime
+- can require a post-update verification command and emit a rollback hint when that verification fails
 - lets operators separate `stable` vs `preview` release checks and `stable` / `early` / `canary` rollout rings
 - can require that a release has aged for a minimum number of hours before helper-driven rollout
 - can restrict helper-driven rollout to explicit local maintenance windows

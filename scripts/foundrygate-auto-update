@@ -47,6 +47,10 @@ for value in (
     "true" if eligible else "false",
     blocked,
     apply_command,
+    "true" if bool((auto.get("verification") or {}).get("enabled")) else "false",
+    ((auto.get("verification") or {}).get("command") or "foundrygate-health"),
+    str((auto.get("verification") or {}).get("timeout_seconds") or 30),
+    ((auto.get("verification") or {}).get("rollback_command") or ""),
 ):
     print(value)
 PY
@@ -60,6 +64,10 @@ auto_enabled="${parsed[5]}"
 auto_eligible="${parsed[6]}"
 auto_blocked_reason="${parsed[7]}"
 apply_command="${parsed[8]}"
+verify_enabled="${parsed[9]}"
+verify_command="${parsed[10]}"
+verify_timeout="${parsed[11]}"
+rollback_command="${parsed[12]}"
 
 if [ "$mode" = "--apply" ]; then
   if [ "$auto_enabled" != "true" ]; then
@@ -72,7 +80,31 @@ if [ "$mode" = "--apply" ]; then
   fi
 
   echo "Applying ${update_type} update to ${latest} via: ${apply_command}"
-  exec /bin/sh -lc "$apply_command"
+  /bin/sh -lc "$apply_command"
+
+  if [ "$verify_enabled" = "true" ]; then
+    echo "Running post-update verification via: ${verify_command}"
+    export FOUNDRYGATE_VERIFY_COMMAND="$verify_command"
+    export FOUNDRYGATE_VERIFY_TIMEOUT="$verify_timeout"
+    if ! python3 - <<'PY'
+import os
+import subprocess
+import sys
+
+command = os.environ["FOUNDRYGATE_VERIFY_COMMAND"]
+timeout = int(os.environ["FOUNDRYGATE_VERIFY_TIMEOUT"])
+completed = subprocess.run(command, shell=True, timeout=timeout)
+sys.exit(completed.returncode)
+PY
+    then
+      echo "post-update verification failed" >&2
+      if [ -n "$rollback_command" ]; then
+        echo "rollback suggested: ${rollback_command}" >&2
+      fi
+      exit 1
+    fi
+  fi
+  exit 0
 fi
 
 printf 'Current: %s\nLatest: %s\nStatus: %s\nUpdate type: %s\nAction: %s\n' \
@@ -83,6 +115,12 @@ if [ "$auto_enabled" = "true" ]; then
     printf 'Auto-update: eligible via %s\n' "$apply_command"
   else
     printf 'Auto-update: blocked (%s)\n' "${auto_blocked_reason:-blocked}"
+  fi
+  if [ "$verify_enabled" = "true" ]; then
+    printf 'Post-update verification: %s (timeout %ss)\n' "$verify_command" "$verify_timeout"
+    if [ -n "$rollback_command" ]; then
+      printf 'Rollback hint: %s\n' "$rollback_command"
+    fi
   fi
 else
   printf 'Auto-update: disabled\n'

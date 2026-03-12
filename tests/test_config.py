@@ -95,6 +95,12 @@ def test_auto_update_defaults_are_exposed():
         "allow_providers": [],
         "deny_providers": ["openrouter-fallback"],
     }
+    assert cfg.auto_update["verification"] == {
+        "enabled": False,
+        "command": "foundrygate-health",
+        "timeout_seconds": 30,
+        "rollback_command": "",
+    }
     assert cfg.auto_update["maintenance_window"]["enabled"] is False
     assert cfg.auto_update["maintenance_window"]["timezone"] == "UTC"
     assert cfg.auto_update["maintenance_window"]["days"] == ["sat", "sun"]

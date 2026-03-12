@@ -311,6 +311,7 @@ class UpdateChecker:
             "max_unhealthy_providers": int((auto_update or {}).get("max_unhealthy_providers", 0)),
             "min_release_age_hours": int((auto_update or {}).get("min_release_age_hours", 0)),
             "provider_scope": dict((auto_update or {}).get("provider_scope") or {}),
+            "verification": dict((auto_update or {}).get("verification") or {}),
             "maintenance_window": dict((auto_update or {}).get("maintenance_window") or {}),
             "apply_command": str((auto_update or {}).get("apply_command", "foundrygate-update")),
         }
@@ -373,6 +374,7 @@ class UpdateChecker:
             "max_unhealthy_providers": int(self.auto_update.get("max_unhealthy_providers", 0)),
             "min_release_age_hours": int(self.auto_update.get("min_release_age_hours", 0)),
             "provider_scope": dict(self.auto_update.get("provider_scope") or {}),
+            "verification": dict(self.auto_update.get("verification") or {}),
             "maintenance_window": dict(self.auto_update.get("maintenance_window") or {}),
             "eligible": eligible,
             "blocked_reason": blocked_reason,

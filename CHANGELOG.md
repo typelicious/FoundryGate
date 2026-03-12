@@ -17,6 +17,7 @@ The format is intentionally lightweight and human-readable. Group entries by rel
 - Added `auto_update.min_release_age_hours` so helper-driven auto-updates can wait for a release to age before becoming eligible
 - Added `auto_update.maintenance_window` so helper-driven auto-updates can stay inside explicit local maintenance hours
 - Added `auto_update.provider_scope` so rollout-health guardrails can evaluate only a selected provider subset
+- Added `auto_update.verification` so helper-driven auto-updates can run a post-update check and emit a rollback hint on failure
 
 ## v0.6.0 - 2026-03-12
 
