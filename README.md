@@ -548,6 +548,7 @@ Supported fields in `auto_update`:
 - `rollout_ring`
 - `require_healthy_providers`
 - `max_unhealthy_providers`
+- `min_release_age_hours`
 - `apply_command`
 
 Example:
@@ -559,6 +560,7 @@ auto_update:
   rollout_ring: "early"
   require_healthy_providers: true
   max_unhealthy_providers: 0
+  min_release_age_hours: 24
   apply_command: "foundrygate-update"
 ```
 
@@ -569,6 +571,7 @@ What the current runtime does with it:
 - lets `foundrygate-auto-update --apply` run only when the current release state is eligible
 - can block helper-driven rollout when provider health is already degraded
 - lets operators separate `stable` vs `preview` release checks and `stable` / `early` / `canary` rollout rings
+- can require that a release has aged for a minimum number of hours before helper-driven rollout
 
 What it still does not do:
 

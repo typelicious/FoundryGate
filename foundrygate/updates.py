@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -102,6 +103,18 @@ def select_release_payload(payload: Any, *, release_channel: str) -> dict[str, A
     return {}
 
 
+def release_age_hours(published_at: str, *, now: datetime | None = None) -> float | None:
+    """Return the age of one release in hours from the GitHub published timestamp."""
+    if not published_at:
+        return None
+    try:
+        published = datetime.fromisoformat(published_at.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    current = now or datetime.now(UTC)
+    return max(0.0, (current - published).total_seconds() / 3600)
+
+
 def apply_auto_update_guardrails(
     auto_update: dict[str, Any],
     *,
@@ -134,6 +147,34 @@ def apply_auto_update_guardrails(
     return result
 
 
+def apply_release_age_guardrail(
+    auto_update: dict[str, Any],
+    *,
+    published_at: str,
+) -> dict[str, Any]:
+    """Apply a minimum release-age guardrail to one auto-update eligibility result."""
+    result = dict(auto_update or {})
+    if not result.get("enabled") or not result.get("eligible"):
+        return result
+
+    min_release_age_hours = int(result.get("min_release_age_hours", 0))
+    if min_release_age_hours <= 0:
+        return result
+
+    age_hours = release_age_hours(published_at)
+    result["release_age_hours"] = age_hours
+    if age_hours is None:
+        result["eligible"] = False
+        result["blocked_reason"] = "Release age is unknown"
+        return result
+    if age_hours < min_release_age_hours:
+        result["eligible"] = False
+        result["blocked_reason"] = (
+            f"Release is too new ({age_hours:.1f}h < {min_release_age_hours}h)"
+        )
+    return result
+
+
 @dataclass
 class UpdateStatus:
     """Structured update-check result."""
@@ -144,6 +185,7 @@ class UpdateStatus:
     update_available: bool = False
     repository: str = ""
     release_url: str = ""
+    published_at: str = ""
     checked_at: float = 0.0
     status: str = "disabled"
     release_channel: str = "stable"
@@ -161,6 +203,7 @@ class UpdateStatus:
             "update_available": self.update_available,
             "repository": self.repository,
             "release_url": self.release_url,
+            "published_at": self.published_at,
             "checked_at": self.checked_at,
             "status": self.status,
             "release_channel": self.release_channel,
@@ -202,6 +245,7 @@ class UpdateChecker:
                 (auto_update or {}).get("require_healthy_providers", True)
             ),
             "max_unhealthy_providers": int((auto_update or {}).get("max_unhealthy_providers", 0)),
+            "min_release_age_hours": int((auto_update or {}).get("min_release_age_hours", 0)),
             "apply_command": str((auto_update or {}).get("apply_command", "foundrygate-update")),
         }
         self._cached = UpdateStatus(
@@ -261,6 +305,7 @@ class UpdateChecker:
                 self.auto_update.get("require_healthy_providers", True)
             ),
             "max_unhealthy_providers": int(self.auto_update.get("max_unhealthy_providers", 0)),
+            "min_release_age_hours": int(self.auto_update.get("min_release_age_hours", 0)),
             "eligible": eligible,
             "blocked_reason": blocked_reason,
             "apply_command": apply_command,
@@ -327,6 +372,7 @@ class UpdateChecker:
             payload = select_release_payload(response.json(), release_channel=self.release_channel)
             latest_version = str(payload.get("tag_name") or "").strip()
             release_url = str(payload.get("html_url") or "").strip()
+            published_at = str(payload.get("published_at") or "").strip()
             if not latest_version:
                 self._cached = UpdateStatus(
                     enabled=True,
@@ -360,6 +406,7 @@ class UpdateChecker:
                 update_available=update_available,
                 repository=self.repository,
                 release_url=release_url,
+                published_at=published_at,
                 checked_at=now,
                 status="ok",
                 release_channel=self.release_channel,
@@ -368,11 +415,14 @@ class UpdateChecker:
                 recommended_action=(
                     "Upgrade to the latest release" if update_available else "No action needed"
                 ),
-                auto_update=self._auto_update_status(
-                    status="ok",
-                    update_available=update_available,
-                    update_type=update_type,
-                    latest_version=latest_version,
+                auto_update=apply_release_age_guardrail(
+                    self._auto_update_status(
+                        status="ok",
+                        update_available=update_available,
+                        update_type=update_type,
+                        latest_version=latest_version,
+                    ),
+                    published_at=published_at,
                 ),
             )
             return self._cached

@@ -911,6 +911,12 @@ def _normalize_auto_update(data: dict[str, Any]) -> dict[str, Any]:
     if max_unhealthy_providers < 0:
         raise ConfigError("'auto_update.max_unhealthy_providers' must be non-negative")
 
+    min_release_age_hours = raw.get("min_release_age_hours", 0)
+    if isinstance(min_release_age_hours, bool) or not isinstance(min_release_age_hours, int):
+        raise ConfigError("'auto_update.min_release_age_hours' must be a non-negative integer")
+    if min_release_age_hours < 0:
+        raise ConfigError("'auto_update.min_release_age_hours' must be non-negative")
+
     apply_command = raw.get("apply_command", "foundrygate-update")
     if not isinstance(apply_command, str) or not apply_command.strip():
         raise ConfigError("'auto_update.apply_command' must be a non-empty string")
@@ -922,6 +928,7 @@ def _normalize_auto_update(data: dict[str, Any]) -> dict[str, Any]:
         "rollout_ring": rollout_ring,
         "require_healthy_providers": require_healthy_providers,
         "max_unhealthy_providers": max_unhealthy_providers,
+        "min_release_age_hours": min_release_age_hours,
         "apply_command": apply_command.strip(),
     }
     return normalized
@@ -1015,6 +1022,7 @@ class Config:
                 "rollout_ring": "early",
                 "require_healthy_providers": True,
                 "max_unhealthy_providers": 0,
+                "min_release_age_hours": 0,
                 "apply_command": "foundrygate-update",
             },
         )

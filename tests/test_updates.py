@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
 
 from foundrygate.updates import (
@@ -9,8 +11,10 @@ from foundrygate.updates import (
     alert_level_for_update,
     allowed_update_types_for_ring,
     apply_auto_update_guardrails,
+    apply_release_age_guardrail,
     classify_update,
     is_update_available,
+    release_age_hours,
     select_release_payload,
 )
 
@@ -78,6 +82,26 @@ def test_select_release_payload_uses_first_preview_release():
     ]
     chosen = select_release_payload(payload, release_channel="preview")
     assert chosen["tag_name"] == "v0.8.0-rc1"
+
+
+def test_release_age_hours_reports_elapsed_time():
+    now = datetime(2026, 3, 12, 18, 0, tzinfo=UTC)
+    published = (now - timedelta(hours=6)).isoformat().replace("+00:00", "Z")
+    assert release_age_hours(published, now=now) == 6.0
+
+
+def test_release_age_guardrail_blocks_new_releases():
+    guarded = apply_release_age_guardrail(
+        {
+            "enabled": True,
+            "eligible": True,
+            "min_release_age_hours": 24,
+            "blocked_reason": "",
+        },
+        published_at=(datetime.now(UTC) - timedelta(hours=2)).isoformat().replace("+00:00", "Z"),
+    )
+    assert guarded["eligible"] is False
+    assert guarded["blocked_reason"].startswith("Release is too new")
 
 
 def test_auto_update_guardrails_block_when_too_many_providers_are_unhealthy():
@@ -294,6 +318,40 @@ async def test_preview_release_channel_reads_latest_preview_release():
 
     assert status.release_channel == "preview"
     assert status.latest_version == "v0.7.0-rc1"
+
+
+@pytest.mark.asyncio
+async def test_min_release_age_blocks_auto_update_until_release_has_aged():
+    checker = UpdateChecker(
+        current_version="0.6.0",
+        enabled=True,
+        repository="typelicious/FoundryGate",
+        auto_update={
+            "enabled": True,
+            "rollout_ring": "early",
+            "allow_major": False,
+            "min_release_age_hours": 24,
+        },
+    )
+    checker._client = _FakeClient(
+        _FakeResponse(
+            200,
+            {
+                "tag_name": "v0.6.1",
+                "html_url": "https://github.com/typelicious/FoundryGate/releases/tag/v0.6.1",
+                "published_at": (datetime.now(UTC) - timedelta(hours=1))
+                .isoformat()
+                .replace("+00:00", "Z"),
+            },
+        )
+    )
+
+    status = await checker.get_status(force=True)
+
+    assert status.update_type == "patch"
+    assert status.auto_update["eligible"] is False
+    assert status.auto_update["min_release_age_hours"] == 24
+    assert status.auto_update["blocked_reason"].startswith("Release is too new")
 
 
 @pytest.mark.asyncio

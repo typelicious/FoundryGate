@@ -90,6 +90,7 @@ def test_auto_update_defaults_are_exposed():
     assert cfg.auto_update["rollout_ring"] == "early"
     assert cfg.auto_update["require_healthy_providers"] is True
     assert cfg.auto_update["max_unhealthy_providers"] == 0
+    assert cfg.auto_update["min_release_age_hours"] == 0
     assert cfg.auto_update["apply_command"] == "foundrygate-update"
 
 
