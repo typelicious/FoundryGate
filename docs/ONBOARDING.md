@@ -102,12 +102,13 @@ Recommended rollout:
 Current state:
 
 - manual updates via Git or `foundrygate-update`
+- cached release update checks via `GET /api/update` and `foundrygate-update-check`
 - tag-driven release artifacts for Python distributions and container images
 - publish dry-run workflow for Python packaging and GHCR container builds
 
 Planned state:
 
-- update alerts
+- stronger update alerts
 - optional auto-update enablers for controlled environments
 
 These are roadmap items. They are not implemented as automatic runtime behavior today.

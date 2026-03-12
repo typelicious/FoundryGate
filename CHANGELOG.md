@@ -12,6 +12,7 @@ The format is intentionally lightweight and human-readable. Group entries by rel
 - Added a shipped Dockerfile and tag-driven release-artifacts workflow for Python distributions, GHCR images, and optional PyPI publishing
 - Added public community-health and security baseline files: Code of Conduct, Security Policy, issue templates, PR template, Dependabot, and CodeQL
 - Added generic onboarding helpers (`foundrygate-bootstrap`, `foundrygate-doctor`) and a publish-dry-run workflow for GHCR and Python package validation
+- Added cached release update checks via `GET /api/update`, the dashboard, and `foundrygate-update-check`
 
 ## v0.4.0 - 2026-03-12
 

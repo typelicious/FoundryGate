@@ -864,6 +864,15 @@ health:
   recovery_check_interval_seconds: 60
 
 
+# ── Release Update Checks ───────────────────────────────────────────────────
+update_check:
+  enabled: true
+  repository: "typelicious/FoundryGate"
+  api_base: "https://api.github.com"
+  timeout_seconds: 5
+  check_interval_seconds: 21600
+
+
 # ── Prompt Caching ─────────────────────────────────────────────────────────
 # DeepSeek: Automatisch server-seitig (prefix-basiert, 64-token Granularität)
 #   - Cache Hit: $0.014/M tokens (10x billiger als Input $0.14/M)

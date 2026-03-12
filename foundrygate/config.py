@@ -770,6 +770,49 @@ def _normalize_request_hooks(data: dict[str, Any]) -> dict[str, Any]:
     return normalized
 
 
+def _normalize_update_check(data: dict[str, Any]) -> dict[str, Any]:
+    """Validate optional update-check configuration."""
+    raw = data.get("update_check", {})
+    if raw is None:
+        raw = {}
+    if not isinstance(raw, dict):
+        raise ConfigError("'update_check' must be a mapping")
+
+    enabled = raw.get("enabled", True)
+    if not isinstance(enabled, bool):
+        raise ConfigError("'update_check.enabled' must be a boolean")
+
+    repository = raw.get("repository", "typelicious/FoundryGate")
+    if not isinstance(repository, str) or "/" not in repository or not repository.strip():
+        raise ConfigError("'update_check.repository' must be an owner/repo string")
+
+    api_base = raw.get("api_base", "https://api.github.com")
+    if not isinstance(api_base, str) or not api_base.strip():
+        raise ConfigError("'update_check.api_base' must be a non-empty string")
+
+    timeout_seconds = raw.get("timeout_seconds", 5)
+    if isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, (int, float)):
+        raise ConfigError("'update_check.timeout_seconds' must be a positive number")
+    if timeout_seconds <= 0:
+        raise ConfigError("'update_check.timeout_seconds' must be positive")
+
+    check_interval_seconds = raw.get("check_interval_seconds", 21600)
+    if isinstance(check_interval_seconds, bool) or not isinstance(check_interval_seconds, int):
+        raise ConfigError("'update_check.check_interval_seconds' must be a positive integer")
+    if check_interval_seconds <= 0:
+        raise ConfigError("'update_check.check_interval_seconds' must be positive")
+
+    normalized = dict(data)
+    normalized["update_check"] = {
+        "enabled": enabled,
+        "repository": repository.strip(),
+        "api_base": api_base.strip().rstrip("/"),
+        "timeout_seconds": float(timeout_seconds),
+        "check_interval_seconds": check_interval_seconds,
+    }
+    return normalized
+
+
 class Config:
     """Holds the parsed and expanded configuration."""
 
@@ -834,6 +877,19 @@ class Config:
             return {**raw, "db_path": safe}
         return {"enabled": False, "db_path": safe}
 
+    @property
+    def update_check(self) -> dict:
+        return self._data.get(
+            "update_check",
+            {
+                "enabled": True,
+                "repository": "typelicious/FoundryGate",
+                "api_base": "https://api.github.com",
+                "timeout_seconds": 5.0,
+                "check_interval_seconds": 21600,
+            },
+        )
+
     def provider(self, name: str) -> dict | None:
         return self.providers.get(name)
 
@@ -859,9 +915,11 @@ def load_config(path: str | Path | None = None) -> Config:
     with path.open() as f:
         raw = yaml.safe_load(f)
 
-    expanded = _normalize_request_hooks(
-        _normalize_client_profiles(
-            _normalize_routing_policies(_normalize_providers(_walk_expand(raw)))
+    expanded = _normalize_update_check(
+        _normalize_request_hooks(
+            _normalize_client_profiles(
+                _normalize_routing_policies(_normalize_providers(_walk_expand(raw)))
+            )
         )
     )
     return Config(expanded)

@@ -203,7 +203,7 @@ This should borrow the useful parts of image-router patterns without copying ano
 
 Primary goals:
 
-- add update alerts so operators can see when a newer release is available
+- expand the release-check baseline into stronger update alerts so operators can see when a newer release is available
 - add an optional automatic update enabler for controlled deployments
 - improve route traces, metrics, and dashboard filters for providers, clients, and profiles
 - keep the dashboard simple, read-heavy, and operationally safe
@@ -345,7 +345,13 @@ Why:
 
 - operators need a safer path than only ad hoc manual updates
 
-This should remain opt-in and operationally conservative.
+Current baseline:
+
+- cached release checks via `GET /api/update`
+- dashboard visibility for current vs latest known release
+- local helper access via `foundrygate-update-check`
+
+This should remain opt-in and operationally conservative as it expands toward stronger alerts and optional controlled auto-update flows.
 
 ### 7. Distribution channels
 

@@ -25,6 +25,7 @@
 - [Configuration](#configuration)
 - [Deployment](#deployment)
 - [Helper Scripts](#helper-scripts)
+- [Update Checks](#update-checks)
 - [Publishing](#publishing)
 - [Community And Security](#community-and-security)
 - [Repo Safety And CI](#repo-safety-and-ci)
@@ -238,6 +239,7 @@ curl -fsS http://127.0.0.1:8090/v1/images/edits \
 ### Additional Stable Operational Endpoints
 
 - `POST /api/route`
+- `GET /api/update`
 - `GET /api/stats`
 - `GET /api/recent?limit=50`
 - `GET /api/traces?limit=50`
@@ -255,6 +257,7 @@ curl -fsS http://127.0.0.1:8090/api/route \
   }'
 
 curl -fsS http://127.0.0.1:8090/api/stats
+curl -fsS http://127.0.0.1:8090/api/update
 curl -fsS 'http://127.0.0.1:8090/api/recent?limit=10'
 curl -fsS 'http://127.0.0.1:8090/api/traces?limit=10'
 curl -fsS 'http://127.0.0.1:8090/api/stats?provider=local-worker&client_tag=codex'
@@ -267,6 +270,8 @@ If request hooks are enabled, `POST /api/route` also shows the applied hook name
 `GET /api/stats`, `GET /api/recent`, and `GET /api/traces` also accept optional `provider`, `client_profile`, `client_tag`, `layer`, and `success` filters. The built-in dashboard uses the same filtered endpoints.
 
 `GET /api/traces` returns recent enriched routing records from the metrics store, including requested model, resolved client profile, client tag, decision reason, confidence, and attempt order.
+
+`GET /api/update` returns the cached release-check result for the running service, including the current version, latest known tag, update availability, and the release URL when GitHub lookups succeed.
 
 ## Model Aliases And Routing
 
@@ -468,6 +473,31 @@ The stock `config.yaml` includes per-provider `timeout` stanzas for documentatio
 - read/response timeout: `120s`
 
 Timeouts and connection errors still participate in fallback behavior and health tracking.
+
+### Update Check Settings
+
+FoundryGate can also cache release-update metadata for operators. This is read-only runtime behavior; it does not perform automatic upgrades.
+
+Supported fields in `update_check`:
+
+- `enabled`
+- `repository`
+- `api_base`
+- `timeout_seconds`
+- `check_interval_seconds`
+
+Example:
+
+```yaml
+update_check:
+  enabled: true
+  repository: "typelicious/FoundryGate"
+  api_base: "https://api.github.com"
+  timeout_seconds: 5
+  check_interval_seconds: 21600
+```
+
+The status is exposed through `GET /api/update`, the dashboard, and the helper script `foundrygate-update-check`.
 
 ### Provider Capability Schema
 
@@ -708,10 +738,35 @@ Running `./scripts/foundrygate-install` also creates symlinks in `/usr/local/bin
 | `foundrygate-status` | Shows service status and checks whether `127.0.0.1:8090` is listening |
 | `foundrygate-logs` | Tails `journalctl -u foundrygate.service` |
 | `foundrygate-health` | Calls `GET /health` locally with `curl` |
+| `foundrygate-update-check` | Calls `GET /api/update` locally and prints the cached release-check status |
 | `foundrygate-update` | Fetches from Git, hard-resets to `origin/main`, cleans untracked files, reinstalls the unit, restarts, and retries health checks |
 | `foundrygate-uninstall` | Stops and disables the service, removes the unit file, and removes helper symlinks |
 
 `foundrygate-stats --json` now also includes client/profile breakdowns alongside provider and routing summaries.
+
+## Update Checks
+
+FoundryGate now includes a lightweight operator-facing release check.
+
+What it does:
+
+- queries the latest GitHub Release tag for the configured repository
+- caches the result for `update_check.check_interval_seconds`
+- exposes the cached status in `GET /api/update`
+- surfaces the same status in the dashboard and `foundrygate-update-check`
+
+What it does not do:
+
+- it does not download releases
+- it does not modify the checkout
+- it does not auto-update the service
+
+Manual check:
+
+```bash
+curl -fsS http://127.0.0.1:8090/api/update
+./scripts/foundrygate-update-check
+```
 
 ## Community And Security
 

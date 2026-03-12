@@ -141,3 +141,36 @@ foundrygate-health
 ```
 
 If you use `foundrygate-update`, remember that it is meant for deployment checkouts and removes local untracked changes.
+
+## Update checks fail or show unavailable
+
+Check the cached runtime view first:
+
+```bash
+curl -fsS http://127.0.0.1:8090/api/update
+./scripts/foundrygate-update-check
+```
+
+Common causes:
+
+- outbound GitHub API access is blocked
+- `update_check.repository` is wrong
+- `update_check.api_base` points to the wrong host
+- the runtime hit a temporary network or TLS error
+
+If needed, reduce the problem to config:
+
+```yaml
+update_check:
+  enabled: true
+  repository: "typelicious/FoundryGate"
+  api_base: "https://api.github.com"
+  timeout_seconds: 5
+  check_interval_seconds: 21600
+```
+
+Use `force=true` when you need an immediate refresh instead of the cached result:
+
+```bash
+curl -fsS 'http://127.0.0.1:8090/api/update?force=true'
+```

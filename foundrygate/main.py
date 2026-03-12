@@ -17,11 +17,13 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from starlette.datastructures import UploadFile
 
+from . import __version__
 from .config import Config, load_config
 from .hooks import AppliedHooks, HookExecutionError, RequestHookContext, apply_request_hooks
 from .metrics import MetricsStore, calc_cost
 from .providers import ProviderBackend, ProviderError
 from .router import Router, RoutingDecision
+from .updates import UpdateChecker
 
 logger = logging.getLogger("foundrygate")
 
@@ -30,6 +32,7 @@ _config: Config
 _providers: dict[str, ProviderBackend] = {}
 _router: Router
 _metrics: MetricsStore
+_update_checker: UpdateChecker
 
 
 def _client_error_response(message: str, *, error_type: str, status_code: int) -> JSONResponse:
@@ -431,7 +434,7 @@ async def _resolve_image_route_preview(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup / shutdown lifecycle."""
-    global _config, _providers, _router, _metrics
+    global _config, _providers, _router, _metrics, _update_checker
 
     logging.basicConfig(
         level=logging.INFO,
@@ -452,6 +455,14 @@ async def lifespan(app: FastAPI):
 
     _router = Router(_config)
     await _refresh_local_worker_probes(force=True)
+    _update_checker = UpdateChecker(
+        current_version=__version__,
+        enabled=bool(_config.update_check.get("enabled", True)),
+        repository=str(_config.update_check.get("repository", "typelicious/FoundryGate")),
+        api_base=str(_config.update_check.get("api_base", "https://api.github.com")),
+        check_interval_seconds=int(_config.update_check.get("check_interval_seconds", 21600)),
+        timeout_seconds=float(_config.update_check.get("timeout_seconds", 5.0)),
+    )
 
     # Metrics
     _metrics = MetricsStore(db_path=_config.metrics["db_path"])
@@ -469,6 +480,7 @@ async def lifespan(app: FastAPI):
     # Shutdown
     for p in _providers.values():
         await p.close()
+    await _update_checker.close()
     _metrics.close()
     logger.info("FoundryGate shut down")
 
@@ -603,6 +615,13 @@ async def traces(
             success=success,
         )
     }
+
+
+@app.get("/api/update")
+async def update_status(force: bool = False):
+    """Return cached or fresh release update metadata."""
+    status = await _update_checker.get_status(force=force)
+    return status.to_dict()
 
 
 @app.post("/api/route")
@@ -1241,11 +1260,12 @@ async function load(){
     persistFilters(query);
     const queryStr = query.toString();
     const suffix = queryStr ? `?${queryStr}` : '';
-    const [health, stats, traces, rec] = await Promise.all([
+    const [health, stats, traces, rec, update] = await Promise.all([
       fetch('/health').then(r=>r.json()),
       fetch(`/api/stats${suffix}`).then(r=>r.json()),
       fetch(`/api/traces${suffix}${suffix ? '&' : '?'}limit=20`).then(r=>r.json()),
-      fetch(`/api/recent${suffix}${suffix ? '&' : '?'}limit=20`).then(r=>r.json())
+      fetch(`/api/recent${suffix}${suffix ? '&' : '?'}limit=20`).then(r=>r.json()),
+      fetch('/api/update').then(r=>r.json()).catch(() => ({enabled:false,status:'unavailable'}))
     ]);
 
     const totals = stats.totals || {};
@@ -1263,6 +1283,7 @@ async function load(){
       <div class="card"><div class="label">Cache Hit Rate</div><div class="value cost">${fmt(totals.cache_hit_pct || 0,1)}%</div><div class="detail">${fmtTok(totals.total_cache_hit || 0)} hit / ${fmtTok(totals.total_cache_miss || 0)} miss</div></div>
       <div class="card"><div class="label">Failures</div><div class="value ${(totals.total_failures||0)>0?'err':''}">${totals.total_failures || 0}</div></div>
       <div class="card"><div class="label">Healthy Providers</div><div class="value">${healthyProviders}/${providers.length}</div><div class="detail">${unhealthyProviders} unhealthy</div></div>
+      <div class="card"><div class="label">Release Status</div><div class="value ${update.update_available ? 'cost' : ''}">${esc(update.latest_version || update.current_version || 'n/a')}</div><div class="detail">${update.enabled ? (update.update_available ? 'Update available' : update.status === 'ok' ? 'Up to date' : 'Update check unavailable') : 'Update checks disabled'}</div></div>
     `;
 
     const providerRows = Object.entries(health.providers || {}).map(([name, provider]) => `<tr>
