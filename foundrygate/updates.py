@@ -74,6 +74,38 @@ def alert_level_for_update(update_type: str, *, available: bool, status: str) ->
     return "warning"
 
 
+def apply_auto_update_guardrails(
+    auto_update: dict[str, Any],
+    *,
+    providers_healthy: int,
+    providers_unhealthy: int,
+) -> dict[str, Any]:
+    """Apply provider-health guardrails to one auto-update eligibility result."""
+    result = dict(auto_update or {})
+    if not result.get("enabled") or not result.get("eligible"):
+        return result
+
+    require_healthy_providers = bool(result.get("require_healthy_providers", True))
+    max_unhealthy_providers = int(result.get("max_unhealthy_providers", 0))
+
+    if not require_healthy_providers:
+        return result
+
+    if providers_healthy <= 0:
+        result["eligible"] = False
+        result["blocked_reason"] = "No healthy providers available"
+        return result
+
+    if providers_unhealthy > max_unhealthy_providers:
+        result["eligible"] = False
+        result["blocked_reason"] = (
+            f"Too many unhealthy providers ({providers_unhealthy} > {max_unhealthy_providers})"
+        )
+        return result
+
+    return result
+
+
 @dataclass
 class UpdateStatus:
     """Structured update-check result."""
@@ -133,6 +165,10 @@ class UpdateChecker:
         self.auto_update = {
             "enabled": bool((auto_update or {}).get("enabled", False)),
             "allow_major": bool((auto_update or {}).get("allow_major", False)),
+            "require_healthy_providers": bool(
+                (auto_update or {}).get("require_healthy_providers", True)
+            ),
+            "max_unhealthy_providers": int((auto_update or {}).get("max_unhealthy_providers", 0)),
             "apply_command": str((auto_update or {}).get("apply_command", "foundrygate-update")),
         }
         self._cached = UpdateStatus(
@@ -187,6 +223,10 @@ class UpdateChecker:
             "strategy": "script",
             "allowed_update_types": allowed_types,
             "allow_major": allow_major,
+            "require_healthy_providers": bool(
+                self.auto_update.get("require_healthy_providers", True)
+            ),
+            "max_unhealthy_providers": int(self.auto_update.get("max_unhealthy_providers", 0)),
             "eligible": eligible,
             "blocked_reason": blocked_reason,
             "apply_command": apply_command,

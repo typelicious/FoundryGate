@@ -87,4 +87,6 @@ def test_auto_update_defaults_are_exposed():
     cfg = load_config(Path(__file__).parent.parent / "config.yaml")
     assert cfg.auto_update["enabled"] is False
     assert cfg.auto_update["allow_major"] is False
+    assert cfg.auto_update["require_healthy_providers"] is True
+    assert cfg.auto_update["max_unhealthy_providers"] == 0
     assert cfg.auto_update["apply_command"] == "foundrygate-update"

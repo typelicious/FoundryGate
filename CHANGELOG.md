@@ -12,6 +12,7 @@ The format is intentionally lightweight and human-readable. Group entries by rel
 - Added an opt-in `auto_update` policy block plus `foundrygate-auto-update` so controlled deployments can gate helper-driven updates without enabling silent self-updates
 - Added `GET /api/operator-events` plus operator-event metrics for update checks and helper-driven auto-update attempts
 - Added dashboard cards and tables for operator-side update checks and apply attempts
+- Added provider-health rollout guardrails so helper-driven auto-updates can block when gateway health is already degraded
 
 ## v0.6.0 - 2026-03-12
 

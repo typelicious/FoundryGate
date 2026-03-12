@@ -62,6 +62,7 @@ If you want scheduled update application:
 
 - keep `auto_update.enabled: true` explicit in `config.yaml`
 - keep `allow_major: false` unless you are ready to absorb breaking changes automatically
+- keep `require_healthy_providers: true` unless you are intentionally allowing rollouts while the gateway is degraded
 - prefer the reviewed examples in [examples/foundrygate-auto-update.service](./examples/foundrygate-auto-update.service) and [examples/foundrygate-auto-update.timer](./examples/foundrygate-auto-update.timer)
 - use the cron example in [examples/foundrygate-auto-update.cron](./examples/foundrygate-auto-update.cron) only when `systemd` timers are not practical
 

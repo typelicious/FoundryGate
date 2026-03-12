@@ -23,7 +23,7 @@ from .hooks import AppliedHooks, HookExecutionError, RequestHookContext, apply_r
 from .metrics import MetricsStore, calc_cost
 from .providers import ProviderBackend, ProviderError
 from .router import Router, RoutingDecision
-from .updates import UpdateChecker
+from .updates import UpdateChecker, apply_auto_update_guardrails
 
 logger = logging.getLogger("foundrygate")
 
@@ -246,6 +246,17 @@ def _build_capability_coverage() -> dict[str, dict[str, Any]]:
                 bucket["healthy_providers"].append(name)
 
     return dict(sorted(coverage.items()))
+
+
+def _health_summary() -> dict[str, int]:
+    """Return a compact provider-health summary for operator guardrails."""
+    providers_healthy = sum(1 for provider in _providers.values() if provider.health.healthy)
+    providers_unhealthy = sum(1 for provider in _providers.values() if not provider.health.healthy)
+    return {
+        "providers_total": len(_providers),
+        "providers_healthy": providers_healthy,
+        "providers_unhealthy": providers_unhealthy,
+    }
 
 
 def _estimate_request_dimensions(body: dict[str, Any]) -> dict[str, int | str]:
@@ -675,13 +686,7 @@ async def health():
     }
     return {
         "status": "ok",
-        "summary": {
-            "providers_total": len(providers),
-            "providers_healthy": sum(1 for provider in providers.values() if provider["healthy"]),
-            "providers_unhealthy": sum(
-                1 for provider in providers.values() if not provider["healthy"]
-            ),
-        },
+        "summary": _health_summary(),
         "coverage": _build_capability_coverage(),
         "providers": providers,
     }
@@ -821,6 +826,11 @@ async def update_status(request: Request, force: bool = False):
     """Return cached or fresh release update metadata."""
     headers = _collect_routing_headers(request)
     status = await _update_checker.get_status(force=force)
+    status.auto_update = apply_auto_update_guardrails(
+        status.auto_update or {},
+        providers_healthy=_health_summary()["providers_healthy"],
+        providers_unhealthy=_health_summary()["providers_unhealthy"],
+    )
     operator_action, client_tag = _collect_operator_context(headers)
     auto_update = status.auto_update or {}
     _metrics.log_operator_event(

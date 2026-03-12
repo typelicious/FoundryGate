@@ -7,6 +7,7 @@ import pytest
 from foundrygate.updates import (
     UpdateChecker,
     alert_level_for_update,
+    apply_auto_update_guardrails,
     classify_update,
     is_update_available,
 )
@@ -55,6 +56,56 @@ def test_alert_level_maps_update_type_and_status():
     assert alert_level_for_update("major", available=True, status="ok") == "critical"
     assert alert_level_for_update("current", available=False, status="ok") == "ok"
     assert alert_level_for_update("unknown", available=False, status="unavailable") == "warning"
+
+
+def test_auto_update_guardrails_block_when_too_many_providers_are_unhealthy():
+    guarded = apply_auto_update_guardrails(
+        {
+            "enabled": True,
+            "eligible": True,
+            "require_healthy_providers": True,
+            "max_unhealthy_providers": 0,
+            "blocked_reason": "",
+        },
+        providers_healthy=1,
+        providers_unhealthy=1,
+    )
+
+    assert guarded["eligible"] is False
+    assert guarded["blocked_reason"] == "Too many unhealthy providers (1 > 0)"
+
+
+def test_auto_update_guardrails_allow_updates_when_health_budget_is_met():
+    guarded = apply_auto_update_guardrails(
+        {
+            "enabled": True,
+            "eligible": True,
+            "require_healthy_providers": True,
+            "max_unhealthy_providers": 1,
+            "blocked_reason": "",
+        },
+        providers_healthy=2,
+        providers_unhealthy=1,
+    )
+
+    assert guarded["eligible"] is True
+
+
+def test_auto_update_guardrails_block_when_no_provider_is_healthy():
+    guarded = apply_auto_update_guardrails(
+        {
+            "enabled": True,
+            "eligible": True,
+            "require_healthy_providers": True,
+            "max_unhealthy_providers": 2,
+            "blocked_reason": "",
+        },
+        providers_healthy=0,
+        providers_unhealthy=2,
+    )
+
+    assert guarded["eligible"] is False
+    assert guarded["blocked_reason"] == "No healthy providers available"
 
 
 @pytest.mark.asyncio

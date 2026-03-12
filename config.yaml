@@ -888,6 +888,8 @@ update_check:
 auto_update:
   enabled: false
   allow_major: false
+  require_healthy_providers: true
+  max_unhealthy_providers: 0
   apply_command: "foundrygate-update"
 
 

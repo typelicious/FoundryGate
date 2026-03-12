@@ -892,6 +892,16 @@ def _normalize_auto_update(data: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(allow_major, bool):
         raise ConfigError("'auto_update.allow_major' must be a boolean")
 
+    require_healthy_providers = raw.get("require_healthy_providers", True)
+    if not isinstance(require_healthy_providers, bool):
+        raise ConfigError("'auto_update.require_healthy_providers' must be a boolean")
+
+    max_unhealthy_providers = raw.get("max_unhealthy_providers", 0)
+    if isinstance(max_unhealthy_providers, bool) or not isinstance(max_unhealthy_providers, int):
+        raise ConfigError("'auto_update.max_unhealthy_providers' must be a non-negative integer")
+    if max_unhealthy_providers < 0:
+        raise ConfigError("'auto_update.max_unhealthy_providers' must be non-negative")
+
     apply_command = raw.get("apply_command", "foundrygate-update")
     if not isinstance(apply_command, str) or not apply_command.strip():
         raise ConfigError("'auto_update.apply_command' must be a non-empty string")
@@ -900,6 +910,8 @@ def _normalize_auto_update(data: dict[str, Any]) -> dict[str, Any]:
     normalized["auto_update"] = {
         "enabled": enabled,
         "allow_major": allow_major,
+        "require_healthy_providers": require_healthy_providers,
+        "max_unhealthy_providers": max_unhealthy_providers,
         "apply_command": apply_command.strip(),
     }
     return normalized
@@ -989,6 +1001,8 @@ class Config:
             {
                 "enabled": False,
                 "allow_major": False,
+                "require_healthy_providers": True,
+                "max_unhealthy_providers": 0,
                 "apply_command": "foundrygate-update",
             },
         )
