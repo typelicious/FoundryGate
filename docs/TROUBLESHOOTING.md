@@ -148,6 +148,7 @@ Check the cached runtime view first:
 
 ```bash
 curl -fsS http://127.0.0.1:8090/api/update
+curl -fsS http://127.0.0.1:8090/api/operator-events
 ./scripts/foundrygate-update-check
 ./scripts/foundrygate-auto-update
 ```

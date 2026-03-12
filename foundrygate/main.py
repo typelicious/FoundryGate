@@ -91,6 +91,13 @@ def _collect_routing_headers(request: Request) -> dict[str, str]:
     return {k.lower(): v for k, v in request.headers.items() if k.lower().startswith(prefixes)}
 
 
+def _collect_operator_context(headers: dict[str, str]) -> tuple[str, str]:
+    """Return operator action and client tag hints from request headers."""
+    action = headers.get("x-foundrygate-operator-action", "update-check").strip().lower()
+    client_tag = headers.get("x-foundrygate-client", "operator").strip().lower() or "operator"
+    return action, client_tag
+
+
 def _match_client_profile_rule(match: dict, headers: dict[str, str]) -> bool:
     """Evaluate one client profile match block."""
     if not match:
@@ -732,6 +739,8 @@ async def stats(
     client_tag: str | None = None,
     layer: str | None = None,
     success: bool | None = None,
+    operator_action: str | None = None,
+    operator_status: str | None = None,
 ):
     """Full statistics: totals, per-provider, routing breakdown, time series."""
     filters = {
@@ -742,12 +751,18 @@ async def stats(
         "layer": layer,
         "success": success,
     }
+    operator_filters = {
+        "action": operator_action,
+        "status": operator_status,
+        "client_tag": client_tag,
+    }
     return {
         "totals": _metrics.get_totals(**filters),
         "providers": _metrics.get_provider_summary(**filters),
         "modalities": _metrics.get_modality_breakdown(**filters),
         "routing": _metrics.get_routing_breakdown(**filters),
         "clients": _metrics.get_client_breakdown(**filters),
+        "operator_actions": _metrics.get_operator_breakdown(**operator_filters),
         "hourly": _metrics.get_hourly_series(24),
         "daily": _metrics.get_daily_totals(30),
     }
@@ -802,10 +817,46 @@ async def traces(
 
 
 @app.get("/api/update")
-async def update_status(force: bool = False):
+async def update_status(request: Request, force: bool = False):
     """Return cached or fresh release update metadata."""
+    headers = _collect_routing_headers(request)
     status = await _update_checker.get_status(force=force)
+    operator_action, client_tag = _collect_operator_context(headers)
+    auto_update = status.auto_update or {}
+    _metrics.log_operator_event(
+        event_type="update",
+        action=operator_action,
+        client_tag=client_tag,
+        status=status.status,
+        update_type=status.update_type,
+        target_version=status.latest_version or status.current_version,
+        eligible=bool(auto_update.get("eligible", False)),
+        recommended_action=status.recommended_action,
+        detail=auto_update.get("blocked_reason", ""),
+    )
     return status.to_dict()
+
+
+@app.get("/api/operator-events")
+async def operator_events(
+    limit: int = 50,
+    action: str | None = None,
+    status: str | None = None,
+    client_tag: str | None = None,
+    update_type: str | None = None,
+    eligible: bool | None = None,
+):
+    """Recent operator events such as update checks and apply attempts."""
+    return {
+        "events": _metrics.get_operator_events(
+            limit,
+            action=action,
+            status=status,
+            client_tag=client_tag,
+            update_type=update_type,
+            eligible=eligible,
+        )
+    }
 
 
 @app.post("/api/route")

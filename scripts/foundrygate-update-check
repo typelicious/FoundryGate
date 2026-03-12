@@ -1,3 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
-curl -fsS "http://127.0.0.1:8090/api/update" | head -c 1600; echo
+curl -fsS \
+  -H 'X-FoundryGate-Client: operator' \
+  -H 'X-FoundryGate-Operator-Action: update-check' \
+  "http://127.0.0.1:8090/api/update" | head -c 1600
+echo

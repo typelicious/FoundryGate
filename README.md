@@ -258,6 +258,7 @@ curl -fsS http://127.0.0.1:8090/v1/images/edits \
 - `POST /api/route/image`
 - `GET /api/providers`
 - `GET /api/update`
+- `GET /api/operator-events`
 - `GET /api/stats`
 - `GET /api/recent?limit=50`
 - `GET /api/traces?limit=50`
@@ -284,6 +285,7 @@ curl -fsS http://127.0.0.1:8090/api/route/image \
 
 curl -fsS http://127.0.0.1:8090/api/stats
 curl -fsS http://127.0.0.1:8090/api/update
+curl -fsS http://127.0.0.1:8090/api/operator-events
 curl -fsS 'http://127.0.0.1:8090/api/providers?healthy=true'
 curl -fsS 'http://127.0.0.1:8090/api/recent?limit=10'
 curl -fsS 'http://127.0.0.1:8090/api/traces?limit=10'
@@ -531,6 +533,7 @@ update_check:
 ```
 
 The status is exposed through `GET /api/update`, the dashboard, and the helper script `foundrygate-update-check`.
+Recent operator-side update checks and apply attempts are exposed through `GET /api/operator-events`.
 
 FoundryGate also supports an optional `auto_update` policy block for controlled environments. This stays strictly opt-in and only marks whether the current release state is eligible for a helper-driven update command.
 
@@ -823,6 +826,7 @@ What it does:
 - exposes the cached status in `GET /api/update`
 - surfaces the same status in the dashboard and `foundrygate-update-check`
 - exposes opt-in auto-update eligibility and the configured apply command
+- records operator-side update checks and apply attempts in `GET /api/operator-events`
 
 What it does not do:
 
@@ -834,6 +838,7 @@ Manual check:
 
 ```bash
 curl -fsS http://127.0.0.1:8090/api/update
+curl -fsS http://127.0.0.1:8090/api/operator-events
 ./scripts/foundrygate-update-check
 ./scripts/foundrygate-auto-update
 ./scripts/foundrygate-auto-update --apply

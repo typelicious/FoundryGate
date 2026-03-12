@@ -57,6 +57,23 @@ CREATE TABLE IF NOT EXISTS requests (
 CREATE INDEX IF NOT EXISTS idx_req_ts       ON requests(timestamp);
 CREATE INDEX IF NOT EXISTS idx_req_provider ON requests(provider);
 CREATE INDEX IF NOT EXISTS idx_req_layer    ON requests(layer);
+
+CREATE TABLE IF NOT EXISTS operator_events (
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp          REAL    NOT NULL,
+    event_type         TEXT    NOT NULL,
+    action             TEXT    NOT NULL,
+    client_tag         TEXT    DEFAULT '',
+    status             TEXT    DEFAULT '',
+    update_type        TEXT    DEFAULT '',
+    target_version     TEXT    DEFAULT '',
+    eligible           INTEGER DEFAULT 0,
+    recommended_action TEXT    DEFAULT '',
+    detail             TEXT    DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_op_ts        ON operator_events(timestamp);
+CREATE INDEX IF NOT EXISTS idx_op_action    ON operator_events(action);
+CREATE INDEX IF NOT EXISTS idx_op_status    ON operator_events(status);
 """
 
 _OPTIONAL_COLUMNS: dict[str, str] = {
@@ -164,6 +181,45 @@ class MetricsStore:
         except Exception as e:
             logger.warning("Metrics write failed: %s", e)
 
+    def log_operator_event(
+        self,
+        *,
+        event_type: str,
+        action: str,
+        client_tag: str = "",
+        status: str = "",
+        update_type: str = "",
+        target_version: str = "",
+        eligible: bool = False,
+        recommended_action: str = "",
+        detail: str = "",
+    ) -> None:
+        """Persist one operator event such as an update check or apply attempt."""
+        if not self._conn:
+            return
+        try:
+            self._conn.execute(
+                """INSERT INTO operator_events
+                   (timestamp,event_type,action,client_tag,status,update_type,
+                    target_version,eligible,recommended_action,detail)
+                   VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    time.time(),
+                    event_type,
+                    action,
+                    client_tag,
+                    status,
+                    update_type,
+                    target_version,
+                    1 if eligible else 0,
+                    recommended_action,
+                    detail,
+                ),
+            )
+            self._conn.commit()
+        except Exception as e:
+            logger.warning("Operator metrics write failed: %s", e)
+
     def get_provider_summary(self, **filters: Any) -> list[dict]:
         where_sql, params = self._build_where_clause(filters)
         return self._q(
@@ -269,6 +325,31 @@ class MetricsStore:
             (cutoff,),
         )
 
+    def get_operator_events(self, limit: int = 50, **filters: Any) -> list[dict]:
+        where_sql, params = self._build_operator_where_clause(filters)
+        return self._q(
+            f"SELECT * FROM operator_events{where_sql} ORDER BY timestamp DESC LIMIT ?",
+            (*params, limit),
+        )
+
+    def get_operator_breakdown(self, **filters: Any) -> list[dict]:
+        where_sql, params = self._build_operator_where_clause(filters)
+        return self._q(
+            f"""
+            SELECT event_type,
+                action,
+                client_tag,
+                status,
+                update_type,
+                eligible,
+                COUNT(*) AS events
+            FROM operator_events{where_sql}
+            GROUP BY event_type, action, client_tag, status, update_type, eligible
+            ORDER BY events DESC, action ASC
+        """,
+            params,
+        )
+
     def get_recent(self, limit: int = 50, **filters: Any) -> list[dict]:
         where_sql, params = self._build_where_clause(filters)
         rows = self._q(
@@ -329,6 +410,33 @@ class MetricsStore:
         if success not in (None, ""):
             clauses.append("success = ?")
             params.append(1 if bool(success) else 0)
+
+        if not clauses:
+            return "", ()
+        return f" WHERE {' AND '.join(clauses)}", tuple(params)
+
+    def _build_operator_where_clause(self, filters: dict[str, Any]) -> tuple[str, tuple[Any, ...]]:
+        """Build a WHERE clause for operator-event filters."""
+        clauses = []
+        params: list[Any] = []
+        mapping = {
+            "event_type": "event_type",
+            "action": "action",
+            "client_tag": "client_tag",
+            "status": "status",
+            "update_type": "update_type",
+        }
+        for key, column in mapping.items():
+            value = filters.get(key)
+            if value in (None, ""):
+                continue
+            clauses.append(f"{column} = ?")
+            params.append(value)
+
+        eligible = filters.get("eligible")
+        if eligible not in (None, ""):
+            clauses.append("eligible = ?")
+            params.append(1 if bool(eligible) else 0)
 
         if not clauses:
             return "", ()

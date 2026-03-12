@@ -3,8 +3,15 @@ set -euo pipefail
 
 api_url="${FOUNDRYGATE_UPDATE_API_URL:-http://127.0.0.1:8090/api/update?force=true}"
 mode="${1:-}"
+operator_action="auto-update-check"
+if [ "$mode" = "--apply" ]; then
+  operator_action="auto-update-apply"
+fi
 
-payload="$(curl -fsS "$api_url")"
+payload="$(curl -fsS \
+  -H 'X-FoundryGate-Client: operator' \
+  -H "X-FoundryGate-Operator-Action: ${operator_action}" \
+  "$api_url")"
 
 if [ "$mode" = "--json" ]; then
   printf '%s\n' "$payload"

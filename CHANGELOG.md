@@ -10,6 +10,7 @@ The format is intentionally lightweight and human-readable. Group entries by rel
 
 - Added stronger update-alert metadata to `GET /api/update`, including update type, alert level, and recommended action for operators and dashboard consumers
 - Added an opt-in `auto_update` policy block plus `foundrygate-auto-update` so controlled deployments can gate helper-driven updates without enabling silent self-updates
+- Added `GET /api/operator-events` plus operator-event metrics for update checks and helper-driven auto-update attempts
 
 ## v0.6.0 - 2026-03-12
 

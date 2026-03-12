@@ -147,3 +147,44 @@ def test_metrics_store_filters_recent_and_breakdowns(tmp_path):
     assert totals["total_failures"] == 1
 
     metrics.close()
+
+
+def test_metrics_store_tracks_operator_events(tmp_path):
+    db_path = tmp_path / "operator.db"
+    metrics = MetricsStore(str(db_path))
+    metrics.init()
+
+    metrics.log_operator_event(
+        event_type="update",
+        action="auto-update-apply",
+        client_tag="operator",
+        status="ok",
+        update_type="minor",
+        target_version="v0.7.0",
+        eligible=True,
+        recommended_action="Upgrade to the latest release",
+        detail="",
+    )
+    metrics.log_operator_event(
+        event_type="update",
+        action="update-check",
+        client_tag="operator",
+        status="unavailable",
+        update_type="unknown",
+        target_version="",
+        eligible=False,
+        recommended_action="Inspect release connectivity and retry later",
+        detail="network unavailable",
+    )
+
+    events = metrics.get_operator_events(10, action="auto-update-apply")
+    assert len(events) == 1
+    assert events[0]["update_type"] == "minor"
+    assert events[0]["eligible"] == 1
+
+    breakdown = metrics.get_operator_breakdown(status="ok")
+    assert len(breakdown) == 1
+    assert breakdown[0]["action"] == "auto-update-apply"
+    assert breakdown[0]["events"] == 1
+
+    metrics.close()
