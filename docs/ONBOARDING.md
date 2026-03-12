@@ -53,6 +53,7 @@ For many-provider rollouts, run the onboarding report after every provider chang
 ```bash
 ./scripts/foundrygate-onboarding-report
 ./scripts/foundrygate-onboarding-report --json
+./scripts/foundrygate-onboarding-validate
 ```
 
 ## Client onboarding sequence
