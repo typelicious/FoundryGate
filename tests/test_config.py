@@ -81,3 +81,10 @@ def test_metrics_db_path_never_dot_slash(monkeypatch):
     db_path = cfg.metrics["db_path"]
     assert not db_path.startswith("./"), f"unsafe db_path in metrics: {db_path}"
     assert db_path.startswith("/"), f"expected absolute path, got: {db_path}"
+
+
+def test_auto_update_defaults_are_exposed():
+    cfg = load_config(Path(__file__).parent.parent / "config.yaml")
+    assert cfg.auto_update["enabled"] is False
+    assert cfg.auto_update["allow_major"] is False
+    assert cfg.auto_update["apply_command"] == "foundrygate-update"

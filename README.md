@@ -509,7 +509,7 @@ Timeouts and connection errors still participate in fallback behavior and health
 
 ### Update Check Settings
 
-FoundryGate can also cache release-update metadata for operators. This is read-only runtime behavior; it does not perform automatic upgrades.
+FoundryGate can also cache release-update metadata for operators. The runtime surface stays read-only; optional helper-driven updates remain explicit and opt-in.
 
 Supported fields in `update_check`:
 
@@ -531,6 +531,35 @@ update_check:
 ```
 
 The status is exposed through `GET /api/update`, the dashboard, and the helper script `foundrygate-update-check`.
+
+FoundryGate also supports an optional `auto_update` policy block for controlled environments. This stays strictly opt-in and only marks whether the current release state is eligible for a helper-driven update command.
+
+Supported fields in `auto_update`:
+
+- `enabled`
+- `allow_major`
+- `apply_command`
+
+Example:
+
+```yaml
+auto_update:
+  enabled: true
+  allow_major: false
+  apply_command: "foundrygate-update"
+```
+
+What the current runtime does with it:
+
+- exposes eligibility in `GET /api/update` under `auto_update`
+- shows the same state in the dashboard
+- lets `foundrygate-auto-update --apply` run only when the current release state is eligible
+
+What it still does not do:
+
+- it does not self-update over HTTP
+- it does not schedule itself
+- it does not apply major upgrades unless you opt in with `allow_major: true`
 
 ### Provider Capability Schema
 
@@ -777,6 +806,7 @@ Running `./scripts/foundrygate-install` also creates symlinks in `/usr/local/bin
 | `foundrygate-logs` | Tails `journalctl -u foundrygate.service` |
 | `foundrygate-health` | Calls `GET /health` locally with `curl` |
 | `foundrygate-update-check` | Calls `GET /api/update` locally and prints the cached release-check status |
+| `foundrygate-auto-update` | Evaluates the cached update status and, with `--apply`, only runs the configured update command when the release is eligible |
 | `foundrygate-update` | Fetches from Git, hard-resets to `origin/main`, cleans untracked files, reinstalls the unit, restarts, and retries health checks |
 | `foundrygate-uninstall` | Stops and disables the service, removes the unit file, and removes helper symlinks |
 
@@ -792,18 +822,21 @@ What it does:
 - caches the result for `update_check.check_interval_seconds`
 - exposes the cached status in `GET /api/update`
 - surfaces the same status in the dashboard and `foundrygate-update-check`
+- exposes opt-in auto-update eligibility and the configured apply command
 
 What it does not do:
 
 - it does not download releases
 - it does not modify the checkout
-- it does not auto-update the service
+- it does not auto-update the service unless an operator explicitly wires `foundrygate-auto-update --apply` into their own scheduler
 
 Manual check:
 
 ```bash
 curl -fsS http://127.0.0.1:8090/api/update
 ./scripts/foundrygate-update-check
+./scripts/foundrygate-auto-update
+./scripts/foundrygate-auto-update --apply
 ```
 
 ## Community And Security

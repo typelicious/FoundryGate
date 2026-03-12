@@ -876,6 +876,35 @@ def _normalize_update_check(data: dict[str, Any]) -> dict[str, Any]:
     return normalized
 
 
+def _normalize_auto_update(data: dict[str, Any]) -> dict[str, Any]:
+    """Validate optional auto-update helper configuration."""
+    raw = data.get("auto_update", {})
+    if raw is None:
+        raw = {}
+    if not isinstance(raw, dict):
+        raise ConfigError("'auto_update' must be a mapping")
+
+    enabled = raw.get("enabled", False)
+    if not isinstance(enabled, bool):
+        raise ConfigError("'auto_update.enabled' must be a boolean")
+
+    allow_major = raw.get("allow_major", False)
+    if not isinstance(allow_major, bool):
+        raise ConfigError("'auto_update.allow_major' must be a boolean")
+
+    apply_command = raw.get("apply_command", "foundrygate-update")
+    if not isinstance(apply_command, str) or not apply_command.strip():
+        raise ConfigError("'auto_update.apply_command' must be a non-empty string")
+
+    normalized = dict(data)
+    normalized["auto_update"] = {
+        "enabled": enabled,
+        "allow_major": allow_major,
+        "apply_command": apply_command.strip(),
+    }
+    return normalized
+
+
 class Config:
     """Holds the parsed and expanded configuration."""
 
@@ -953,6 +982,17 @@ class Config:
             },
         )
 
+    @property
+    def auto_update(self) -> dict:
+        return self._data.get(
+            "auto_update",
+            {
+                "enabled": False,
+                "allow_major": False,
+                "apply_command": "foundrygate-update",
+            },
+        )
+
     def provider(self, name: str) -> dict | None:
         return self.providers.get(name)
 
@@ -978,10 +1018,12 @@ def load_config(path: str | Path | None = None) -> Config:
     with path.open() as f:
         raw = yaml.safe_load(f)
 
-    expanded = _normalize_update_check(
-        _normalize_request_hooks(
-            _normalize_client_profiles(
-                _normalize_routing_policies(_normalize_providers(_walk_expand(raw)))
+    expanded = _normalize_auto_update(
+        _normalize_update_check(
+            _normalize_request_hooks(
+                _normalize_client_profiles(
+                    _normalize_routing_policies(_normalize_providers(_walk_expand(raw)))
+                )
             )
         )
     )

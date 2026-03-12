@@ -149,6 +149,7 @@ Check the cached runtime view first:
 ```bash
 curl -fsS http://127.0.0.1:8090/api/update
 ./scripts/foundrygate-update-check
+./scripts/foundrygate-auto-update
 ```
 
 Common causes:
@@ -174,3 +175,9 @@ Use `force=true` when you need an immediate refresh instead of the cached result
 ```bash
 curl -fsS 'http://127.0.0.1:8090/api/update?force=true'
 ```
+
+If `foundrygate-auto-update --apply` refuses to run, inspect the `auto_update` block in the JSON response. Common blockers are:
+
+- `auto_update.enabled: false`
+- the latest release is a major upgrade while `allow_major: false`
+- the release lookup itself is unavailable

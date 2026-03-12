@@ -89,6 +89,7 @@ class UpdateStatus:
     update_type: str = "current"
     alert_level: str = "disabled"
     recommended_action: str = ""
+    auto_update: dict[str, Any] | None = None
     error: str = ""
 
     def to_dict(self) -> dict[str, Any]:
@@ -104,6 +105,7 @@ class UpdateStatus:
             "update_type": self.update_type,
             "alert_level": self.alert_level,
             "recommended_action": self.recommended_action,
+            "auto_update": self.auto_update or {},
             "error": self.error,
         }
 
@@ -120,6 +122,7 @@ class UpdateChecker:
         api_base: str = "https://api.github.com",
         check_interval_seconds: int = 21600,
         timeout_seconds: float = 5.0,
+        auto_update: dict[str, Any] | None = None,
     ):
         self.current_version = current_version
         self.enabled = enabled
@@ -127,6 +130,11 @@ class UpdateChecker:
         self.api_base = api_base.rstrip("/")
         self.check_interval_seconds = check_interval_seconds
         self.timeout_seconds = timeout_seconds
+        self.auto_update = {
+            "enabled": bool((auto_update or {}).get("enabled", False)),
+            "allow_major": bool((auto_update or {}).get("allow_major", False)),
+            "apply_command": str((auto_update or {}).get("apply_command", "foundrygate-update")),
+        }
         self._cached = UpdateStatus(
             enabled=enabled,
             current_version=current_version,
@@ -143,6 +151,49 @@ class UpdateChecker:
     async def close(self) -> None:
         await self._client.aclose()
 
+    def _auto_update_status(
+        self,
+        *,
+        status: str,
+        update_available: bool,
+        update_type: str,
+        latest_version: str = "",
+    ) -> dict[str, Any]:
+        """Return opt-in auto-update eligibility for operator tooling."""
+        enabled = bool(self.auto_update.get("enabled", False))
+        allow_major = bool(self.auto_update.get("allow_major", False))
+        apply_command = str(self.auto_update.get("apply_command", "foundrygate-update"))
+        allowed_types = ["patch", "minor"]
+        if allow_major:
+            allowed_types.append("major")
+
+        blocked_reason = ""
+        eligible = False
+        if not enabled:
+            blocked_reason = "Auto-update is disabled"
+        elif status == "disabled":
+            blocked_reason = "Update checks are disabled"
+        elif status != "ok":
+            blocked_reason = "Release status is unavailable"
+        elif not update_available:
+            blocked_reason = "Already on the latest release"
+        elif update_type not in allowed_types:
+            blocked_reason = f"{update_type.capitalize()} updates require manual approval"
+        else:
+            eligible = True
+
+        return {
+            "enabled": enabled,
+            "strategy": "script",
+            "allowed_update_types": allowed_types,
+            "allow_major": allow_major,
+            "eligible": eligible,
+            "blocked_reason": blocked_reason,
+            "apply_command": apply_command,
+            "target_version": latest_version,
+            "requires_operator_trigger": True,
+        }
+
     async def get_status(self, *, force: bool = False) -> UpdateStatus:
         """Return cached or freshly fetched update status."""
         if not self.enabled:
@@ -155,6 +206,11 @@ class UpdateChecker:
                 update_type="current",
                 alert_level="disabled",
                 recommended_action="Update checks are disabled",
+                auto_update=self._auto_update_status(
+                    status="disabled",
+                    update_available=False,
+                    update_type="current",
+                ),
             )
             return self._cached
 
@@ -180,6 +236,11 @@ class UpdateChecker:
                     update_type="unknown",
                     alert_level="warning",
                     recommended_action="Inspect release connectivity and retry later",
+                    auto_update=self._auto_update_status(
+                        status="unavailable",
+                        update_available=False,
+                        update_type="unknown",
+                    ),
                     error=f"Release lookup returned HTTP {response.status_code}",
                 )
                 return self._cached
@@ -208,6 +269,12 @@ class UpdateChecker:
                 recommended_action=(
                     "Upgrade to the latest release" if update_available else "No action needed"
                 ),
+                auto_update=self._auto_update_status(
+                    status="ok",
+                    update_available=update_available,
+                    update_type=update_type,
+                    latest_version=latest_version,
+                ),
             )
             return self._cached
         except Exception as exc:
@@ -220,6 +287,11 @@ class UpdateChecker:
                 update_type="unknown",
                 alert_level="warning",
                 recommended_action="Inspect release connectivity and retry later",
+                auto_update=self._auto_update_status(
+                    status="unavailable",
+                    update_available=False,
+                    update_type="unknown",
+                ),
                 error=str(exc),
             )
             return self._cached

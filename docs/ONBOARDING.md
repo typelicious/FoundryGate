@@ -103,12 +103,12 @@ Current state:
 
 - manual updates via Git or `foundrygate-update`
 - cached release update checks via `GET /api/update` and `foundrygate-update-check`
+- optional eligibility reporting and helper-driven apply flow via `foundrygate-auto-update`
 - tag-driven release artifacts for Python distributions and container images
 - publish dry-run workflow for Python packaging and GHCR container builds
 
 Planned state:
 
-- stronger update alerts
-- optional auto-update enablers for controlled environments
+- scheduled use of `foundrygate-auto-update --apply` in controlled environments
 
-These are roadmap items. They are not implemented as automatic runtime behavior today.
+This remains opt-in. FoundryGate does not self-schedule or mutate the checkout over HTTP.

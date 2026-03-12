@@ -882,6 +882,14 @@ update_check:
   timeout_seconds: 5
   check_interval_seconds: 21600
 
+# ── Optional Auto-Update Enabler ────────────────────────────────────────────
+# This does not make the API mutate the checkout. It only marks whether the
+# current release status is eligible for a helper-driven update command.
+auto_update:
+  enabled: false
+  allow_major: false
+  apply_command: "foundrygate-update"
+
 
 # ── Prompt Caching ─────────────────────────────────────────────────────────
 # DeepSeek: Automatisch server-seitig (prefix-basiert, 64-token Granularität)

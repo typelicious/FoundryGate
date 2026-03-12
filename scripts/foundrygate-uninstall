@@ -9,6 +9,7 @@ helpers=(
   foundrygate-logs
   foundrygate-health
   foundrygate-update
+  foundrygate-auto-update
   foundrygate-uninstall
 )
 

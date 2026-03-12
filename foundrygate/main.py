@@ -614,6 +614,7 @@ async def lifespan(app: FastAPI):
         api_base=str(_config.update_check.get("api_base", "https://api.github.com")),
         check_interval_seconds=int(_config.update_check.get("check_interval_seconds", 21600)),
         timeout_seconds=float(_config.update_check.get("timeout_seconds", 5.0)),
+        auto_update=_config.auto_update,
     )
 
     # Metrics
@@ -1567,7 +1568,7 @@ async function load(){
       <div class="card"><div class="label">Healthy Providers</div><div class="value">${healthyProviders}/${providers.length}</div><div class="detail">${unhealthyProviders} unhealthy</div></div>
       <div class="card"><div class="label">Capability Coverage</div><div class="value">${coverageEntries.length}</div><div class="detail">${coverageEntries.map(([name]) => name).slice(0,3).join(', ') || 'none'}</div></div>
       <div class="card"><div class="label">Top Modality</div><div class="value">${esc(topModality)}</div><div class="detail">${modalityRows.length} modality groups</div></div>
-      <div class="card"><div class="label">Release Status</div><div class="value ${(update.alert_level === 'critical' || update.alert_level === 'warning') ? 'err' : update.update_available ? 'cost' : ''}">${esc(update.latest_version || update.current_version || 'n/a')}</div><div class="detail">${update.enabled ? (update.status === 'ok' ? `${esc(update.update_type || 'current')} / ${esc(update.recommended_action || (update.update_available ? 'Upgrade recommended' : 'No action needed'))}` : esc(update.recommended_action || 'Update check unavailable')) : 'Update checks disabled'}</div></div>
+      <div class="card"><div class="label">Release Status</div><div class="value ${(update.alert_level === 'critical' || update.alert_level === 'warning') ? 'err' : update.update_available ? 'cost' : ''}">${esc(update.latest_version || update.current_version || 'n/a')}</div><div class="detail">${update.enabled ? (update.status === 'ok' ? `${esc(update.update_type || 'current')} / ${esc(update.recommended_action || (update.update_available ? 'Upgrade recommended' : 'No action needed'))}${update.auto_update && update.auto_update.enabled ? ` / auto: ${esc(update.auto_update.eligible ? 'eligible' : (update.auto_update.blocked_reason || 'blocked'))}` : ''}` : esc(update.recommended_action || 'Update check unavailable')) : 'Update checks disabled'}</div></div>
     `;
 
     const providerRows = providers.map(provider => `<tr>

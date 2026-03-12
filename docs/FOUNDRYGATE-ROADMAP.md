@@ -212,6 +212,13 @@ This release line is about day-2 operations rather than new routing concepts.
 
 The first small slice in this line is to turn `GET /api/update` from a plain boolean check into an operator-facing alert surface with update type, alert level, and recommended action.
 
+The next small slice is to keep auto-update conservative:
+
+- disabled by default
+- no checkout mutation over HTTP
+- helper-driven and operator-triggered only
+- major upgrades still manual unless explicitly allowed
+
 ### `v0.8.x`: many-provider and many-client onboarding
 
 Primary goals:
@@ -352,8 +359,9 @@ Current baseline:
 - cached release checks via `GET /api/update`
 - dashboard visibility for current vs latest known release
 - local helper access via `foundrygate-update-check`
+- opt-in eligibility reporting and helper-driven apply flow via `foundrygate-auto-update`
 
-This should remain opt-in and operationally conservative as it expands toward stronger alerts and optional controlled auto-update flows.
+This should remain opt-in and operationally conservative as it expands toward scheduled helper use, stronger rollout controls, and clearer operator approval boundaries.
 
 ### 7. Distribution channels
 

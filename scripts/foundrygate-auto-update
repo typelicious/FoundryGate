@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+api_url="${FOUNDRYGATE_UPDATE_API_URL:-http://127.0.0.1:8090/api/update?force=true}"
+mode="${1:-}"
+
+payload="$(curl -fsS "$api_url")"
+
+if [ "$mode" = "--json" ]; then
+  printf '%s\n' "$payload"
+  exit 0
+fi
+
+export FOUNDRYGATE_UPDATE_PAYLOAD="$payload"
+
+mapfile -t parsed < <(
+python3 - <<'PY'
+import json
+import os
+
+payload = json.loads(os.environ["FOUNDRYGATE_UPDATE_PAYLOAD"])
+auto = payload.get("auto_update") or {}
+
+current = payload.get("current_version") or "unknown"
+latest = payload.get("latest_version") or current
+update_type = payload.get("update_type") or "unknown"
+recommended = payload.get("recommended_action") or ""
+enabled = bool(auto.get("enabled"))
+eligible = bool(auto.get("eligible"))
+blocked = auto.get("blocked_reason") or ""
+apply_command = auto.get("apply_command") or "foundrygate-update"
+
+for value in (
+    current,
+    latest,
+    payload.get("status") or "unknown",
+    update_type,
+    recommended,
+    "true" if enabled else "false",
+    "true" if eligible else "false",
+    blocked,
+    apply_command,
+):
+    print(value)
+PY
+)
+current="${parsed[0]}"
+latest="${parsed[1]}"
+status="${parsed[2]}"
+update_type="${parsed[3]}"
+recommended_action="${parsed[4]}"
+auto_enabled="${parsed[5]}"
+auto_eligible="${parsed[6]}"
+auto_blocked_reason="${parsed[7]}"
+apply_command="${parsed[8]}"
+
+if [ "$mode" = "--apply" ]; then
+  if [ "$auto_enabled" != "true" ]; then
+    echo "auto-update is disabled" >&2
+    exit 1
+  fi
+  if [ "$auto_eligible" != "true" ]; then
+    echo "auto-update not eligible: ${auto_blocked_reason:-blocked}" >&2
+    exit 1
+  fi
+
+  echo "Applying ${update_type} update to ${latest} via: ${apply_command}"
+  exec /bin/sh -lc "$apply_command"
+fi
+
+printf 'Current: %s\nLatest: %s\nStatus: %s\nUpdate type: %s\nAction: %s\n' \
+  "$current" "$latest" "$status" "$update_type" "$recommended_action"
+
+if [ "$auto_enabled" = "true" ]; then
+  if [ "$auto_eligible" = "true" ]; then
+    printf 'Auto-update: eligible via %s\n' "$apply_command"
+  else
+    printf 'Auto-update: blocked (%s)\n' "${auto_blocked_reason:-blocked}"
+  fi
+else
+  printf 'Auto-update: disabled\n'
+fi

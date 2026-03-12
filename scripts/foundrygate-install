@@ -6,6 +6,7 @@ helpers=(
   foundrygate-bootstrap
   foundrygate-doctor
   foundrygate-update-check
+  foundrygate-auto-update
   foundrygate-install
   foundrygate-start
   foundrygate-stop

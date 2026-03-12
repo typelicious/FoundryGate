@@ -63,6 +63,7 @@ async def test_update_checker_reports_latest_release():
         current_version="0.4.0",
         enabled=True,
         repository="typelicious/FoundryGate",
+        auto_update={"enabled": True, "allow_major": False},
     )
     checker._client = _FakeClient(
         _FakeResponse(
@@ -82,6 +83,9 @@ async def test_update_checker_reports_latest_release():
     assert status.update_type == "minor"
     assert status.alert_level == "warning"
     assert status.recommended_action == "Upgrade to the latest release"
+    assert status.auto_update["enabled"] is True
+    assert status.auto_update["eligible"] is True
+    assert status.auto_update["allowed_update_types"] == ["patch", "minor"]
     assert status.release_url.endswith("/v0.5.0")
 
 
@@ -128,4 +132,49 @@ async def test_update_checker_handles_remote_errors():
     assert status.update_available is False
     assert status.alert_level == "warning"
     assert status.recommended_action == "Inspect release connectivity and retry later"
+    assert status.auto_update["eligible"] is False
+    assert status.auto_update["blocked_reason"] == "Auto-update is disabled"
     assert "network unavailable" in status.error
+
+
+@pytest.mark.asyncio
+async def test_major_updates_are_blocked_when_auto_update_disallows_them():
+    checker = UpdateChecker(
+        current_version="0.6.0",
+        enabled=True,
+        repository="typelicious/FoundryGate",
+        auto_update={"enabled": True, "allow_major": False},
+    )
+    checker._client = _FakeClient(
+        _FakeResponse(
+            200,
+            {
+                "tag_name": "v1.0.0",
+                "html_url": "https://github.com/typelicious/FoundryGate/releases/tag/v1.0.0",
+            },
+        )
+    )
+
+    status = await checker.get_status(force=True)
+
+    assert status.update_type == "major"
+    assert status.auto_update["enabled"] is True
+    assert status.auto_update["eligible"] is False
+    assert status.auto_update["blocked_reason"] == "Major updates require manual approval"
+
+
+@pytest.mark.asyncio
+async def test_auto_update_disabled_status_is_reported_cleanly():
+    checker = UpdateChecker(
+        current_version="0.6.0",
+        enabled=False,
+        repository="typelicious/FoundryGate",
+        auto_update={"enabled": False},
+    )
+
+    status = await checker.get_status(force=False)
+
+    assert status.status == "disabled"
+    assert status.auto_update["enabled"] is False
+    assert status.auto_update["eligible"] is False
+    assert status.auto_update["blocked_reason"] == "Auto-update is disabled"
