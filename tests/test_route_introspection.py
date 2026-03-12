@@ -43,6 +43,7 @@ import foundrygate.main as main_module
 from foundrygate.config import load_config
 from foundrygate.main import (
     _extract_image_edit_request_fields,
+    _normalize_image_request_body,
     _refresh_local_worker_probes,
     _resolve_image_route_preview,
     _resolve_route_preview,
@@ -435,6 +436,51 @@ class TestRoutePreview:
         assert payload["size"] == "1024x1024"
         assert payload["response_format"] == "b64_json"
         assert payload["user"] == "tester"
+
+    def test_normalize_image_request_body_validates_size_and_n(self):
+        payload = _normalize_image_request_body(
+            {
+                "model": "auto",
+                "prompt": " Render a scene ",
+                "n": 2,
+                "size": " 2048x2048 ",
+                "quality": " high ",
+            },
+            capability="image_generation",
+        )
+
+        assert payload["prompt"] == "Render a scene"
+        assert payload["model"] == "auto"
+        assert payload["n"] == 2
+        assert payload["size"] == "2048x2048"
+        assert payload["quality"] == "high"
+
+    def test_normalize_image_request_body_rejects_invalid_size(self):
+        with pytest.raises(ValueError, match="must use the form <width>x<height>"):
+            _normalize_image_request_body(
+                {
+                    "model": "auto",
+                    "prompt": "Render a scene",
+                    "size": "wide",
+                },
+                capability="image_generation",
+            )
+
+    @pytest.mark.asyncio
+    async def test_image_route_preview_rejects_invalid_size(self, preview_config):
+        response = await preview_image_route(
+            _json_request(
+                "/api/route/image",
+                {
+                    "model": "auto",
+                    "capability": "image_generation",
+                    "prompt": "Draw a gateway diagram.",
+                    "size": "invalid",
+                },
+            )
+        )
+
+        assert response.status_code == 400
 
 
 class TestLocalWorkerProbeRefresh:

@@ -219,6 +219,7 @@ OpenAI-compatible image generation endpoint.
 
 - `model: "auto"` selects the best loaded provider with `capabilities.image_generation: true`
 - `model: "<provider-id>"` routes directly to a loaded image-capable provider
+- validates `prompt`, `n`, and `size` before any provider call
 
 ```bash
 curl -fsS http://127.0.0.1:8090/v1/images/generations \
@@ -238,6 +239,7 @@ OpenAI-compatible image editing endpoint.
 - currently supports one required `image` upload plus an optional `mask`
 - `model: "auto"` selects the best loaded provider with `capabilities.image_editing: true`
 - `model: "<provider-id>"` routes directly to a loaded image-edit-capable provider
+- validates scalar fields such as `prompt`, `n`, and `size` before any provider call
 
 ```bash
 curl -fsS http://127.0.0.1:8090/v1/images/edits \

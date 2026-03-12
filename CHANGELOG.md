@@ -12,6 +12,7 @@ The format is intentionally lightweight and human-readable. Group entries by rel
 - Added `POST /api/route/image` for dry-run preview of image-generation and image-editing routing decisions
 - Added optional `image` provider metadata (`max_outputs`, `max_side_px`, `supported_sizes`) so image-capable providers can be ranked against `n` and `size`
 - Added top-level capability coverage to `GET /health` plus `GET /api/providers` for filtered provider inventory and dashboard coverage views
+- Added shared request validation for image-generation, image-editing, and image-route preview payloads so invalid `size`, `n`, and scalar fields fail fast before provider calls
 
 ## v0.5.0 - 2026-03-12
 

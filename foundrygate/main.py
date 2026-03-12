@@ -389,33 +389,89 @@ def _parse_optional_positive_int(value: Any, *, field_name: str) -> int | None:
     return parsed
 
 
-def _extract_image_edit_request_fields(form_data: dict[str, Any]) -> dict[str, Any]:
-    """Return the validated scalar fields for one image-edit request."""
-    prompt = form_data.get("prompt")
-    if not isinstance(prompt, str) or not prompt.strip():
-        raise ValueError("Image editing requires a non-empty 'prompt' field")
+def _parse_image_size_max_side(value: str) -> int:
+    """Return the larger dimension from a WxH image size string."""
+    parts = value.lower().split("x", 1)
+    if len(parts) != 2:
+        return 0
+    try:
+        width = int(parts[0])
+        height = int(parts[1])
+    except ValueError:
+        return 0
+    return max(width, height)
 
-    model = form_data.get("model")
+
+def _normalize_image_size(value: Any, *, field_name: str = "size") -> str | None:
+    """Return one normalized WxH image size string."""
+    if value in (None, ""):
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"Field '{field_name}' must be a non-empty string")
+    cleaned = value.strip().lower()
+    max_side = _parse_image_size_max_side(cleaned)
+    if max_side <= 0:
+        raise ValueError(f"Field '{field_name}' must use the form <width>x<height>")
+    return cleaned
+
+
+def _normalize_image_request_body(body: dict[str, Any], *, capability: str) -> dict[str, Any]:
+    """Validate and normalize one JSON image request body."""
+    if not isinstance(body, dict):
+        raise ValueError("Image request body must be a JSON object")
+
+    prompt = body.get("prompt")
+    if not isinstance(prompt, str) or not prompt.strip():
+        raise ValueError("Image request requires a non-empty 'prompt' string")
+
+    model = body.get("model")
     if model is None:
         model = "auto"
     elif not isinstance(model, str) or not model.strip():
         raise ValueError("Field 'model' must be a non-empty string when provided")
 
-    payload: dict[str, Any] = {
+    normalized: dict[str, Any] = {
         "prompt": prompt.strip(),
-        "model": model.strip() if isinstance(model, str) else "auto",
+        "model": model.strip(),
     }
 
-    n = _parse_optional_positive_int(form_data.get("n"), field_name="n")
+    n = _parse_optional_positive_int(body.get("n"), field_name="n")
     if n is not None:
-        payload["n"] = n
+        normalized["n"] = n
 
-    for key in ("size", "response_format", "user"):
-        value = form_data.get(key)
-        if isinstance(value, str) and value.strip():
-            payload[key] = value.strip()
+    size = _normalize_image_size(body.get("size"))
+    if size is not None:
+        normalized["size"] = size
 
-    return payload
+    for key in ("response_format", "user"):
+        value = body.get(key)
+        if value in (None, ""):
+            continue
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"Field '{key}' must be a non-empty string when provided")
+        normalized[key] = value.strip()
+
+    if capability == "image_generation":
+        for key in ("quality", "style", "background"):
+            value = body.get(key)
+            if value in (None, ""):
+                continue
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(f"Field '{key}' must be a non-empty string when provided")
+            normalized[key] = value.strip()
+
+    metadata = body.get("metadata")
+    if metadata is not None:
+        if not isinstance(metadata, dict):
+            raise ValueError("Field 'metadata' must be an object when provided")
+        normalized["metadata"] = metadata
+
+    return normalized
+
+
+def _extract_image_edit_request_fields(form_data: dict[str, Any]) -> dict[str, Any]:
+    """Return the validated scalar fields for one image-edit request."""
+    return _normalize_image_request_body(form_data, capability="image_editing")
 
 
 async def _read_uploaded_file(
@@ -446,9 +502,8 @@ async def _resolve_image_route_preview(
 ) -> tuple[RoutingDecision, str, str, list[str], str, AppliedHooks, dict[str, Any]]:
     """Resolve one image-generation request without calling a provider."""
     body, hook_state = await _apply_request_hooks(body, headers)
-    prompt = body.get("prompt")
-    if not isinstance(prompt, str) or not prompt.strip():
-        raise ValueError("Image request requires a non-empty 'prompt' string")
+    body = _normalize_image_request_body(body, capability=capability)
+    prompt = body["prompt"]
 
     model_requested = str(body.get("model", "auto"))
     client_profile, profile_hints = _resolve_client_profile(
@@ -828,6 +883,10 @@ async def image_generations(request: Request):
         body = await request.json()
     except Exception:
         return JSONResponse({"error": "Invalid JSON body"}, status_code=400)
+    try:
+        body = _normalize_image_request_body(body, capability="image_generation")
+    except ValueError as exc:
+        return _invalid_request_response("Invalid image generation request", exc=exc)
 
     headers = _collect_routing_headers(request)
     try:
