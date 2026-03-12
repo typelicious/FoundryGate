@@ -38,6 +38,42 @@ def is_update_available(current_version: str, latest_version: str) -> bool:
     return latest > current
 
 
+def classify_update(current_version: str, latest_version: str) -> str:
+    """Classify a newer release as patch, minor, major, or current."""
+    current = _normalize_version(current_version)
+    latest = _normalize_version(latest_version)
+    if not current or not latest:
+        return "unknown"
+
+    width = max(3, len(current), len(latest))
+    current += (0,) * (width - len(current))
+    latest += (0,) * (width - len(latest))
+    if latest <= current:
+        return "current"
+    if latest[0] > current[0]:
+        return "major"
+    if latest[1] > current[1]:
+        return "minor"
+    return "patch"
+
+
+def alert_level_for_update(update_type: str, *, available: bool, status: str) -> str:
+    """Return an operator-facing alert level for one update status."""
+    if status in {"unavailable"}:
+        return "warning"
+    if status in {"disabled"}:
+        return "disabled"
+    if not available:
+        return "ok"
+    if update_type == "major":
+        return "critical"
+    if update_type == "minor":
+        return "warning"
+    if update_type == "patch":
+        return "info"
+    return "warning"
+
+
 @dataclass
 class UpdateStatus:
     """Structured update-check result."""
@@ -50,6 +86,9 @@ class UpdateStatus:
     release_url: str = ""
     checked_at: float = 0.0
     status: str = "disabled"
+    update_type: str = "current"
+    alert_level: str = "disabled"
+    recommended_action: str = ""
     error: str = ""
 
     def to_dict(self) -> dict[str, Any]:
@@ -62,6 +101,9 @@ class UpdateStatus:
             "release_url": self.release_url,
             "checked_at": self.checked_at,
             "status": self.status,
+            "update_type": self.update_type,
+            "alert_level": self.alert_level,
+            "recommended_action": self.recommended_action,
             "error": self.error,
         }
 
@@ -110,6 +152,9 @@ class UpdateChecker:
                 repository=self.repository,
                 checked_at=time.time(),
                 status="disabled",
+                update_type="current",
+                alert_level="disabled",
+                recommended_action="Update checks are disabled",
             )
             return self._cached
 
@@ -132,6 +177,9 @@ class UpdateChecker:
                     repository=self.repository,
                     checked_at=now,
                     status="unavailable",
+                    update_type="unknown",
+                    alert_level="warning",
+                    recommended_action="Inspect release connectivity and retry later",
                     error=f"Release lookup returned HTTP {response.status_code}",
                 )
                 return self._cached
@@ -139,15 +187,27 @@ class UpdateChecker:
             payload = response.json()
             latest_version = str(payload.get("tag_name") or "").strip()
             release_url = str(payload.get("html_url") or "").strip()
+            update_available = is_update_available(self.current_version, latest_version)
+            update_type = classify_update(self.current_version, latest_version)
+            alert_level = alert_level_for_update(
+                update_type,
+                available=update_available,
+                status="ok",
+            )
             self._cached = UpdateStatus(
                 enabled=True,
                 current_version=self.current_version,
                 latest_version=latest_version,
-                update_available=is_update_available(self.current_version, latest_version),
+                update_available=update_available,
                 repository=self.repository,
                 release_url=release_url,
                 checked_at=now,
                 status="ok",
+                update_type=update_type,
+                alert_level=alert_level,
+                recommended_action=(
+                    "Upgrade to the latest release" if update_available else "No action needed"
+                ),
             )
             return self._cached
         except Exception as exc:
@@ -157,6 +217,9 @@ class UpdateChecker:
                 repository=self.repository,
                 checked_at=now,
                 status="unavailable",
+                update_type="unknown",
+                alert_level="warning",
+                recommended_action="Inspect release connectivity and retry later",
                 error=str(exc),
             )
             return self._cached

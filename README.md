@@ -304,7 +304,7 @@ For image-capable providers, `image.policy_tags` can be used as lightweight pres
 
 `GET /api/traces` returns recent enriched routing records from the metrics store, including requested model, modality, resolved client profile, client tag, decision reason, confidence, and attempt order.
 
-`GET /api/update` returns the cached release-check result for the running service, including the current version, latest known tag, update availability, and the release URL when GitHub lookups succeed.
+`GET /api/update` returns the cached release-check result for the running service, including the current version, latest known tag, update availability, update type (`patch`, `minor`, `major`), alert level, recommended action, and the release URL when GitHub lookups succeed.
 
 ## Model Aliases And Routing
 

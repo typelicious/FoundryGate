@@ -210,6 +210,8 @@ Primary goals:
 
 This release line is about day-2 operations rather than new routing concepts.
 
+The first small slice in this line is to turn `GET /api/update` from a plain boolean check into an operator-facing alert surface with update type, alert level, and recommended action.
+
 ### `v0.8.x`: many-provider and many-client onboarding
 
 Primary goals:

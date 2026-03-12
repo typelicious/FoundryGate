@@ -6,6 +6,10 @@ The format is intentionally lightweight and human-readable. Group entries by rel
 
 ## Unreleased
 
+### Added
+
+- Added stronger update-alert metadata to `GET /api/update`, including update type, alert level, and recommended action for operators and dashboard consumers
+
 ## v0.6.0 - 2026-03-12
 
 ### Added
