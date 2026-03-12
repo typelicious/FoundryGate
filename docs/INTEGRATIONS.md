@@ -31,6 +31,7 @@ Recommended pattern:
 - send requests to the OpenAI-compatible endpoint
 - set `X-FoundryGate-Client: n8n`
 - enable the `n8n` client preset or an explicit `n8n` profile
+- optionally enable `request_hooks` if a workflow should prefer one provider or stay local-only
 
 This gives you:
 
@@ -54,6 +55,10 @@ Recommended pattern:
 - point the client to FoundryGate
 - set `X-FoundryGate-Client: codex`, `claude`, `kilocode`, or another stable client tag
 - use the built-in `cli` preset or a tighter custom profile
+- optionally enable request hooks for per-request locality or provider hints:
+  - `X-FoundryGate-Prefer-Provider`
+  - `X-FoundryGate-Locality`
+  - `X-FoundryGate-Profile`
 
 ## Provider onboarding
 
@@ -72,8 +77,9 @@ When onboarding a new client:
 1. keep the client on the OpenAI-compatible API if possible
 2. assign a stable client tag or header
 3. start with a built-in preset or a minimal custom profile
-4. use `/api/route` and `/api/traces` to validate behavior
-5. only add a dedicated adapter if the client cannot cleanly use the common API surface
+4. add request hooks only if the client needs per-request overrides
+5. use `/api/route` and `/api/traces` to validate behavior
+6. only add a dedicated adapter if the client cannot cleanly use the common API surface
 
 ## Planned integration directions
 

@@ -62,6 +62,11 @@ server:
 # Optional caller-aware defaults. Profiles are resolved from request headers and
 # applied as default provider preferences only when policy/static/heuristic
 # routing did not already make a stronger decision.
+#
+# request_hooks
+# ─────────────
+# Optional pre-routing extension seam. Hooks may add per-request routing hints
+# or profile overrides before the normal route selection continues.
 
 providers:
 
@@ -678,6 +683,23 @@ client_profiles:
     #   match:
     #     header_contains:
     #       x-foundrygate-profile: ["local-only", "private"]
+
+
+# ── Request Hooks (optional) ──────────────────────────────────────────────
+# Built-in hooks:
+#   prefer-provider-header  -> x-foundrygate-prefer-provider
+#   locality-header         -> x-foundrygate-locality: local-only | cloud-only
+#   profile-override-header -> x-foundrygate-profile
+#
+# Hook hints run after policy/static/heuristic rules and before client-profile
+# defaults. Keep them opt-in and request-scoped.
+request_hooks:
+  enabled: false
+  hooks: []
+  # hooks:
+  #   - prefer-provider-header
+  #   - locality-header
+  #   - profile-override-header
 
 
 # ── Layer 1: Statische Regeln ──────────────────────────────────────────────

@@ -16,6 +16,7 @@
 - [Model Aliases And Routing](#model-aliases-and-routing)
 - [Policy Routing](#policy-routing)
 - [Client Profiles](#client-profiles)
+- [Request Hooks](#request-hooks)
 - [Configuration](#configuration)
 - [Deployment](#deployment)
 - [Helper Scripts](#helper-scripts)
@@ -102,8 +103,9 @@ http://127.0.0.1:8090/v1
   +--> Layer 0: optional policy rules
   +--> Layer 1: static rules
   +--> Layer 2: heuristic rules
-  +--> Layer 3: optional client profile defaults
-  +--> Layer 4: optional LLM classifier
+  +--> Layer 3: optional request hooks
+  +--> Layer 4: optional client profile defaults
+  +--> Layer 5: optional LLM classifier
   |
   +--> chosen provider
          |- deepseek-chat
@@ -118,8 +120,9 @@ Routing decisions happen in order:
 1. Optional policy rules for client-specific, governance, or local/cloud constraints
 2. Static rules for known patterns such as heartbeat, explicit model hints, and sub-agent traffic
 3. Heuristic rules for user-message content, tools, and rough token size
-4. Optional client profile defaults for callers such as OpenClaw, n8n, or CLI wrappers
-5. An optional LLM classifier if you enable it in `config.yaml`
+4. Optional request hooks that can add per-request routing hints or profile overrides
+5. Optional client profile defaults for callers such as OpenClaw, n8n, or CLI wrappers
+6. An optional LLM classifier if you enable it in `config.yaml`
 
 Important implementation detail: heuristic keyword scoring only evaluates user messages, not the system prompt. This avoids over-routing to expensive tiers because of long system prompts.
 
@@ -204,6 +207,8 @@ curl -fsS 'http://127.0.0.1:8090/api/traces?limit=10'
 ```
 
 `POST /api/route` is a dry-run endpoint. It uses the same routing logic as `POST /v1/chat/completions` but does not call an upstream provider. The response includes the resolved client profile, the routing decision, and the fallback attempt order.
+
+If request hooks are enabled, `POST /api/route` also shows the applied hook names and the effective request metadata after hook processing.
 
 `GET /api/traces` returns recent enriched routing records from the metrics store, including requested model, resolved client profile, client tag, decision reason, confidence, and attempt order.
 
@@ -301,6 +306,44 @@ client_profiles:
       match:
         header_contains:
           x-foundrygate-client: ["codex"]
+```
+
+## Request Hooks
+
+FoundryGate also supports optional `request_hooks` as a narrow pre-routing extension seam.
+
+The current built-in hooks are:
+
+- `prefer-provider-header` for `x-foundrygate-prefer-provider`
+- `locality-header` for `x-foundrygate-locality: local-only | cloud-only`
+- `profile-override-header` for `x-foundrygate-profile`
+
+Hooks run after policy, static, and heuristic routing, but before client-profile defaults. They are request-scoped and meant for controlled extensions such as context, memory, or CLI optimization layers without baking that logic into the core gateway.
+
+Example:
+
+```yaml
+request_hooks:
+  enabled: true
+  hooks:
+    - prefer-provider-header
+    - locality-header
+    - profile-override-header
+```
+
+Dry-run example:
+
+```bash
+curl -fsS http://127.0.0.1:8090/api/route \
+  -H 'Content-Type: application/json' \
+  -H 'X-FoundryGate-Prefer-Provider: local-worker' \
+  -H 'X-FoundryGate-Locality: local-only' \
+  -d '{
+    "model": "auto",
+    "messages": [
+      {"role": "user", "content": "Keep this on the local worker."}
+    ]
+  }'
 ```
 
 ## Configuration
@@ -611,12 +654,15 @@ Short version:
 
 - `FoundryGate` is the product name
 - the completed foundation already covers capability-aware routing, local worker support, client profiles, route introspection, route traces, and local worker probing
-- the next steps focus on optional request hooks, multi-dimensional routing, modality expansion, onboarding, and operations polish
+- `v0.4.x` deepens routing and hardens the simple dashboard
+- `v0.5.0` is the target line for Docker and PyPI publishing plus onboarding helpers
+- the path to `v1.0.0` includes modality expansion, update operations, a separate npm or TypeScript CLI package, and a full security review
 
 ## Releases
 
 - [CHANGELOG.md](./CHANGELOG.md) tracks notable user-facing changes
 - [RELEASES.md](./RELEASES.md) describes the lightweight release process for tags and GitHub Releases
+- planned publishing path: GitHub Releases now, Docker and PyPI by `v0.5.0`, separate npm or TypeScript CLI package by `v1.0.0`
 - GitHub Releases: [https://github.com/typelicious/FoundryGate/releases](https://github.com/typelicious/FoundryGate/releases)
 
 ## Contributing

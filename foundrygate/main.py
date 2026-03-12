@@ -17,6 +17,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 
 from .config import Config, load_config
+from .hooks import AppliedHooks, RequestHookContext, apply_request_hooks
 from .metrics import MetricsStore, calc_cost
 from .providers import ProviderBackend, ProviderError
 from .router import Router, RoutingDecision
@@ -84,14 +85,19 @@ def _match_client_profile_rule(match: dict, headers: dict[str, str]) -> bool:
 
 
 def _resolve_client_profile(
-    config: Config, headers: dict[str, str]
+    config: Config, headers: dict[str, str], profile_override: str | None = None
 ) -> tuple[str, dict[str, object]]:
     """Resolve the active client profile and its routing hints from request headers."""
     profiles_cfg = config.client_profiles
     default_profile = profiles_cfg.get("default", "generic")
     active_profile = default_profile
 
-    if profiles_cfg.get("enabled"):
+    if profile_override and profile_override in profiles_cfg.get("profiles", {}):
+        active_profile = profile_override
+    elif profile_override:
+        logger.warning("Ignoring unknown request hook profile override: %s", profile_override)
+
+    elif profiles_cfg.get("enabled"):
         for rule in profiles_cfg.get("rules", []):
             if _match_client_profile_rule(rule.get("match", {}), headers):
                 active_profile = rule["profile"]
@@ -136,15 +142,36 @@ def _serialize_provider(name: str) -> dict[str, Any] | None:
     }
 
 
+async def _apply_request_hooks(
+    body: dict[str, Any], headers: dict[str, str]
+) -> tuple[dict[str, Any], AppliedHooks]:
+    """Apply configured request hooks before route resolution."""
+    model_requested = str(body.get("model", "auto"))
+    applied = await apply_request_hooks(
+        _config.request_hooks,
+        RequestHookContext(
+            body=dict(body),
+            headers=headers,
+            model_requested=model_requested,
+        ),
+    )
+    return applied.body, applied
+
+
 async def _resolve_route_preview(
     body: dict[str, Any], headers: dict[str, str]
-) -> tuple[RoutingDecision, str, str, list[str], str]:
+) -> tuple[RoutingDecision, str, str, list[str], str, AppliedHooks, dict[str, Any]]:
     """Resolve one request into a routing decision without calling a provider."""
+    body, hook_state = await _apply_request_hooks(body, headers)
     messages = body.get("messages", [])
     model_requested = body.get("model", "auto")
     tools = body.get("tools")
 
-    client_profile, profile_hints = _resolve_client_profile(_config, headers)
+    client_profile, profile_hints = _resolve_client_profile(
+        _config,
+        headers,
+        profile_override=hook_state.profile_override,
+    )
     client_tag = _resolve_client_tag(headers, client_profile)
 
     if model_requested != "auto" and model_requested in _providers:
@@ -163,6 +190,8 @@ async def _resolve_route_preview(
             has_tools=bool(tools),
             client_profile=client_profile,
             profile_hints=profile_hints,
+            hook_hints=hook_state.routing_hints,
+            applied_hooks=hook_state.applied_hooks,
             headers=headers,
             provider_health=health_map,
         )
@@ -173,6 +202,8 @@ async def _resolve_route_preview(
         client_tag,
         _build_attempt_order(decision.provider_name),
         model_requested,
+        hook_state,
+        body,
     )
 
 
@@ -317,6 +348,8 @@ async def preview_route(request: Request):
         client_tag,
         attempt_order,
         model_requested,
+        hook_state,
+        effective_body,
     ) = await _resolve_route_preview(body, headers)
 
     return {
@@ -324,6 +357,12 @@ async def preview_route(request: Request):
         "resolved_profile": client_profile,
         "client_tag": client_tag,
         "routing_headers": headers,
+        "applied_hooks": hook_state.applied_hooks,
+        "hook_notes": hook_state.notes,
+        "effective_request": {
+            "model": effective_body.get("model", "auto"),
+            "has_tools": bool(effective_body.get("tools")),
+        },
         "decision": decision.to_dict(),
         "selected_provider": _serialize_provider(decision.provider_name),
         "attempt_order": [_serialize_provider(name) for name in attempt_order],
@@ -352,11 +391,6 @@ async def chat_completions(request: Request):
     except Exception:
         return JSONResponse({"error": "Invalid JSON body"}, status_code=400)
 
-    stream = body.get("stream", False)
-    temperature = body.get("temperature")
-    max_tokens = body.get("max_tokens")
-    tools = body.get("tools")
-
     headers = _collect_routing_headers(request)
     (
         decision,
@@ -364,8 +398,14 @@ async def chat_completions(request: Request):
         client_tag,
         attempt_order,
         model_requested,
+        hook_state,
+        effective_body,
     ) = await _resolve_route_preview(body, headers)
-    messages = body.get("messages", [])
+    messages = effective_body.get("messages", [])
+    stream = effective_body.get("stream", False)
+    temperature = effective_body.get("temperature")
+    max_tokens = effective_body.get("max_tokens")
+    tools = effective_body.get("tools")
 
     logger.info(
         "Route: %s [%s/%s] %.1fms",
@@ -432,6 +472,7 @@ async def chat_completions(request: Request):
                     headers={
                         "X-FoundryGate-Provider": provider_name,
                         "X-FoundryGate-Profile": client_profile,
+                        "X-FoundryGate-Hooks": ",".join(hook_state.applied_hooks),
                     },
                 )
 
@@ -441,6 +482,7 @@ async def chat_completions(request: Request):
             resp.headers["X-FoundryGate-Profile"] = client_profile
             resp.headers["X-FoundryGate-Layer"] = decision.layer
             resp.headers["X-FoundryGate-Rule"] = decision.rule_name
+            resp.headers["X-FoundryGate-Hooks"] = ",".join(hook_state.applied_hooks)
             return resp
 
         except ProviderError as e:

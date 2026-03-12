@@ -36,9 +36,10 @@ The current chat path is:
 1. policy rules
 2. static rules
 3. heuristic rules
-4. client profile defaults
-5. optional LLM classifier
-6. fallback chain if the chosen provider fails
+4. optional request hooks
+5. client profile defaults
+6. optional LLM classifier
+7. fallback chain if the chosen provider fails
 
 ## Provider layer
 
@@ -65,6 +66,8 @@ Current caller-aware signals:
 - `x-openclaw-source`
 - `x-foundrygate-client`
 - `x-foundrygate-profile`
+- `x-foundrygate-prefer-provider`
+- `x-foundrygate-locality`
 
 This is enough to support:
 

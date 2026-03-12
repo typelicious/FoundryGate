@@ -10,6 +10,7 @@ The foundation that used to be the near-term buildout is largely in place:
 - policy-based provider selection
 - local worker provider contract
 - client profiles and presets
+- optional request hook interfaces
 - route introspection
 - routing traces and client/profile metrics
 - local worker probing
@@ -154,16 +155,106 @@ Responsibilities:
 - optimization hooks
 - policy overlays
 
+## Release path to v1.0.0
+
+`v0.3.0` is the first public FoundryGate release. The path to `v1.0.0` should stay incremental and reviewable.
+
+### `v0.4.x`: deeper routing and extension hardening
+
+Primary goals:
+
+- add richer multi-dimensional routing inputs for cache behavior, context windows, provider limits, and locality
+- harden the existing simple dashboard around traces, provider/client breakdowns, and route visibility
+- keep OpenClaw one-agent and many-agent flows on the same OpenAI-compatible path with clearer defaults
+- harden the request hook seam for context, memory, and optimization layers
+
+This release line should deepen the gateway core without turning it into a monolith.
+
+### `v0.5.0`: operator distribution baseline
+
+Primary goals:
+
+- publish an official Docker release path
+- publish FoundryGate to PyPI
+- add provider and client onboarding helpers for many-provider and many-client deployments
+- add validation workflows so operators can catch config mistakes before rollout
+
+This is the first release line where installation and upgrade paths should feel productized for external users.
+
+### `v0.6.x`: modality expansion
+
+Primary goals:
+
+- add modality-aware provider contracts, starting with image generation
+- extend that contract toward image editing where the provider surface supports it
+- keep chat and image paths explicit instead of mixing modality-specific behavior into one opaque route
+- expose modality-aware health and routing visibility in the dashboard and operational endpoints
+
+This should borrow the useful parts of image-router patterns without copying another gateway's product shape.
+
+### `v0.7.x`: operations polish
+
+Primary goals:
+
+- add update alerts so operators can see when a newer release is available
+- add an optional automatic update enabler for controlled deployments
+- improve route traces, metrics, and dashboard filters for providers, clients, and profiles
+- keep the dashboard simple, read-heavy, and operationally safe
+
+This release line is about day-2 operations rather than new routing concepts.
+
+### `v0.8.x`: many-provider and many-client onboarding
+
+Primary goals:
+
+- make onboarding repeatable for many providers and many clients on one gateway
+- ship clearer presets and validation for OpenClaw, n8n, CLI wrappers, and future AI-native applications
+- reduce manual config editing for common deployment shapes
+- tighten integration coverage for delegated or many-agent traffic where headers identify sub-clients
+
+The target is faster adoption without custom glue for every client.
+
+### `v0.9.x`: pre-1.0 hardening
+
+Primary goals:
+
+- stabilize request hook boundaries and extension contracts
+- expand integration and functional test coverage across real client flows
+- complete documentation review across README, onboarding, integrations, troubleshooting, and release docs
+- close obvious operational gaps discovered during earlier releases
+
+This release line should leave `v1.0.0` focused on stability and security gates, not backlog cleanup.
+
+### `v1.0.0`: stable gateway baseline
+
+Primary goals:
+
+- declare a stable FoundryGate gateway baseline for local-first, multi-provider routing
+- publish the first separate npm or TypeScript CLI package for FoundryGate-adjacent CLI usage
+- complete a comprehensive security review before release
+
+The `v1.0.0` security review should explicitly cover:
+
+- cross-site scripting and HTML or CSS injection risks in the dashboard
+- request, header, and parameter injection risks in proxy and routing paths
+- dependency vulnerabilities and unsafe defaults
+- local-worker and upstream proxy trust boundaries
+- auth, secret-handling, and writable-path assumptions
+
+`v1.0.0` should only ship after those review results are addressed or documented with a clear mitigation plan.
+
 ## Updated near-term PR sequence
 
-The original near-term sequence has mostly landed. The next sequence should now be:
+The next sequence should ladder directly into the release path above:
 
-1. `docs: refresh roadmap, architecture, onboarding, integrations, and troubleshooting`
-2. `feat(ext): add optional request hook interfaces`
-3. `feat(router): add multi-dimensional routing inputs for cache, context windows, and provider limits`
-4. `feat(provider): add modality-aware provider contracts, starting with image generation`
+1. `feat(router): add multi-dimensional routing inputs for cache, context windows, provider limits, and locality`
+2. `feat(obs): harden the simple dashboard around traces, provider/client filters, and route visibility`
+3. `feat(provider): add modality-aware provider contracts, starting with image generation`
+4. `feat(provider): extend modality contracts toward image editing where supported`
 5. `feat(onboarding): add provider/client onboarding helpers and validation workflows`
 6. `feat(ops): add update alerts and an optional auto-update enabler for controlled deployments`
+7. `feat(dist): add Docker release path and PyPI publishing baseline`
+8. `feat(cli): define the separate npm or TypeScript CLI package path for the `v1.0.0` line`
 
 ## Check on the earlier sequence
 
@@ -175,7 +266,7 @@ The earlier near-term sequence is now effectively complete up through the routin
 4. `feat(provider): add local worker provider contract` -> done
 5. `feat(api): add client profile support` -> done
 6. `feat(obs): add route introspection and policy metrics` -> done, and now extended with traces and local worker probing
-7. `feat(ext): add optional request hook interfaces` -> still open and should stay near the top of the next sequence
+7. `feat(ext): add optional request hook interfaces` -> done
 
 ## Detailed near-term backlog
 
@@ -184,6 +275,12 @@ The earlier near-term sequence is now effectively complete up through the routin
 Why:
 
 - this creates the seam for context, memory, and optimization layers without hard-coupling them
+
+Examples:
+
+- optional memory or context enrichment before routing
+- request-shaping hooks for RTK-like CLI optimization
+- operator-controlled extension points that can stay disabled by default
 
 ### 2. Multi-dimensional routing inputs
 
@@ -197,26 +294,76 @@ Examples:
 - context window fit
 - locality and policy constraints
 - latency/health tradeoffs
+- provider-specific max context and cache behavior
 
-### 3. Image generation routing
+### 3. Simple dashboard hardening
+
+Why:
+
+- FoundryGate already exposes a dashboard endpoint, but operators need a clearer read-only control surface
+
+Examples:
+
+- route trace table with provider and client filters
+- provider health panel with capabilities and contract type
+- quick links to dry-run routing and recent failure context
+
+### 4. Image generation and editing routing
 
 Why:
 
 - multi-modal routing is a natural next expansion for a gateway plane
 
-### 4. Provider and client onboarding helpers
+Examples:
+
+- image-generation-capable provider contracts
+- image-editing-capable provider contracts
+- explicit modality routing so chat, image generation, and image editing stay understandable
+
+### 5. Provider and client onboarding helpers
 
 Why:
 
 - many-provider, many-client deployments need a clearer adoption path than manual config editing alone
 
-### 5. Update alerts and optional automatic update enablers
+Examples:
+
+- bootstrap helpers for provider credentials and base URLs
+- starter profiles for OpenClaw, n8n, CLI, and future AI-native applications
+- preflight config validation before a rollout or restart
+
+### 6. Update alerts and optional automatic update enablers
 
 Why:
 
 - operators need a safer path than only ad hoc manual updates
 
 This should remain opt-in and operationally conservative.
+
+### 7. Distribution channels
+
+Why:
+
+- the project should become easier to adopt without coupling packaging strategy to one runtime
+
+Examples:
+
+- GitHub Releases as the default channel now
+- Docker images and PyPI packages by `v0.5.0`
+- a separate npm or TypeScript CLI package by `v1.0.0`, not a Node rewrite of the core gateway
+
+### 8. Security review as a release gate
+
+Why:
+
+- `v1.0.0` needs a credible stability and security bar, not just a larger feature list
+
+Examples:
+
+- dashboard rendering review for XSS and HTML or CSS injection paths
+- request routing review for injection, header abuse, and unsafe forwarding behavior
+- dependency and configuration review for known vulnerabilities and insecure defaults
+- documentation review so security expectations and deployment assumptions are explicit
 
 ## Documentation direction
 

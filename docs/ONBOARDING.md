@@ -60,7 +60,15 @@ Start with:
 
 Then tighten it only if the default is not good enough.
 
-### 4. Validate with route introspection
+### 4. Add request hooks only if needed
+
+Keep hooks opt-in and narrow. Good uses are:
+
+- `X-FoundryGate-Prefer-Provider` for one explicit provider preference
+- `X-FoundryGate-Locality: local-only` for private or worker-local traffic
+- `X-FoundryGate-Profile` for a one-request profile override
+
+### 5. Validate with route introspection
 
 Use:
 

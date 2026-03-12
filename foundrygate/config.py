@@ -28,6 +28,8 @@ from urllib.parse import urlparse
 import yaml
 from dotenv import load_dotenv
 
+from .hooks import get_registered_request_hooks
+
 _SUPPORTED_BACKENDS = {"openai-compat", "google-genai", "anthropic-compat"}
 _SUPPORTED_PROVIDER_CONTRACTS = {"generic", "local-worker"}
 _BOOL_CAPABILITY_FIELDS = {
@@ -57,6 +59,7 @@ _POLICY_SELECT_KEYS = {
 }
 _CLIENT_PROFILE_MATCH_KEYS = {"header_contains", "header_present", "any", "all"}
 _SUPPORTED_CLIENT_PROFILE_PRESETS = {"openclaw", "n8n", "cli"}
+_SUPPORTED_REQUEST_HOOKS = set(get_registered_request_hooks())
 
 _CLIENT_PROFILE_PRESET_SPECS: dict[str, dict[str, Any]] = {
     "openclaw": {
@@ -630,6 +633,32 @@ def _normalize_client_profiles(data: dict[str, Any]) -> dict[str, Any]:
     return normalized
 
 
+def _normalize_request_hooks(data: dict[str, Any]) -> dict[str, Any]:
+    """Validate the optional request hook pipeline."""
+    raw = data.get("request_hooks", {"enabled": False, "hooks": []})
+    if not isinstance(raw, dict):
+        raise ConfigError("'request_hooks' must be a mapping")
+
+    enabled = raw.get("enabled", False)
+    if not isinstance(enabled, bool):
+        raise ConfigError("'request_hooks.enabled' must be a boolean")
+
+    hooks = _normalize_string_list(
+        raw.get("hooks", []),
+        field_name="hooks",
+        rule_name="request_hooks",
+        allow_empty=True,
+    )
+    unknown_hooks = sorted(set(hooks) - _SUPPORTED_REQUEST_HOOKS)
+    if unknown_hooks:
+        unknown_list = ", ".join(unknown_hooks)
+        raise ConfigError(f"'request_hooks.hooks' has unknown hook names: {unknown_list}")
+
+    normalized = dict(data)
+    normalized["request_hooks"] = {"enabled": enabled, "hooks": hooks}
+    return normalized
+
+
 class Config:
     """Holds the parsed and expanded configuration."""
 
@@ -668,6 +697,10 @@ class Config:
             "client_profiles",
             {"enabled": False, "default": "generic", "profiles": {"generic": {}}, "rules": []},
         )
+
+    @property
+    def request_hooks(self) -> dict:
+        return self._data.get("request_hooks", {"enabled": False, "hooks": []})
 
     @property
     def llm_classifier(self) -> dict:
@@ -712,7 +745,9 @@ def load_config(path: str | Path | None = None) -> Config:
     with path.open() as f:
         raw = yaml.safe_load(f)
 
-    expanded = _normalize_client_profiles(
-        _normalize_routing_policies(_normalize_providers(_walk_expand(raw)))
+    expanded = _normalize_request_hooks(
+        _normalize_client_profiles(
+            _normalize_routing_policies(_normalize_providers(_walk_expand(raw)))
+        )
     )
     return Config(expanded)

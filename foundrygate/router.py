@@ -78,6 +78,8 @@ class Router:
         has_tools: bool = False,
         client_profile: str = "generic",
         profile_hints: dict[str, Any] | None = None,
+        hook_hints: dict[str, Any] | None = None,
+        applied_hooks: list[str] | None = None,
         headers: dict[str, str] | None = None,
         provider_health: dict[str, Any] | None = None,
     ) -> RoutingDecision:
@@ -98,6 +100,8 @@ class Router:
             has_tools=has_tools,
             client_profile=client_profile,
             profile_hints=profile_hints or {},
+            hook_hints=hook_hints or {},
+            applied_hooks=applied_hooks or [],
             headers=headers or {},
             provider_health=provider_health or {},
             providers=self.config.providers,
@@ -121,13 +125,19 @@ class Router:
             decision.elapsed_ms = (time.time() - t0) * 1000
             return self._validate_health(decision, ctx)
 
-        # Layer 3: Client profile hints
+        # Layer 3: Request hook hints
+        decision = self._layer_hook(ctx)
+        if decision:
+            decision.elapsed_ms = (time.time() - t0) * 1000
+            return self._validate_health(decision, ctx)
+
+        # Layer 4: Client profile hints
         decision = self._layer_profile(ctx)
         if decision:
             decision.elapsed_ms = (time.time() - t0) * 1000
             return self._validate_health(decision, ctx)
 
-        # Layer 3: LLM classifier (if enabled)
+        # Layer 5: LLM classifier (if enabled)
         if self.config.llm_classifier.get("enabled"):
             decision = await self._layer_llm_classify(ctx)
             if decision:
@@ -263,7 +273,27 @@ class Router:
 
         return preferred
 
-    # ── Layer 3: Client Profiles ──────────────────────────────
+    # ── Layer 3: Request Hooks ────────────────────────────────
+
+    def _layer_hook(self, ctx: _RoutingContext) -> RoutingDecision | None:
+        """Apply hook-provided routing hints after heuristic routing."""
+        if not ctx.hook_hints:
+            return None
+
+        provider_name = self._select_policy_provider(ctx.hook_hints, ctx)
+        if not provider_name:
+            return None
+
+        hook_list = ", ".join(ctx.applied_hooks) if ctx.applied_hooks else "request hooks"
+        return RoutingDecision(
+            provider_name=provider_name,
+            layer="hook",
+            rule_name="request-hooks",
+            confidence=0.7,
+            reason=f"{hook_list} selected a preferred provider",
+        )
+
+    # ── Layer 4: Client Profiles ──────────────────────────────
 
     def _layer_profile(self, ctx: _RoutingContext) -> RoutingDecision | None:
         """Apply default provider preferences for the resolved client profile."""
@@ -463,6 +493,8 @@ class _RoutingContext:
         "has_tools",
         "client_profile",
         "profile_hints",
+        "hook_hints",
+        "applied_hooks",
         "headers",
         "provider_health",
         "providers",

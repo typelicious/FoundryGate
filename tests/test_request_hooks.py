@@ -1,4 +1,4 @@
-"""Tests for route introspection and dry-run previews."""
+"""Tests for optional request hook interfaces."""
 
 # ruff: noqa: E402
 
@@ -38,8 +38,8 @@ _httpx.ConnectError = Exception
 sys.modules["httpx"] = _httpx
 
 import foundrygate.main as main_module
-from foundrygate.config import load_config
-from foundrygate.main import _refresh_local_worker_probes, _resolve_route_preview
+from foundrygate.config import ConfigError, load_config
+from foundrygate.main import _resolve_route_preview
 from foundrygate.router import Router
 
 
@@ -55,15 +55,14 @@ class _ProviderStub:
         *,
         name: str,
         model: str,
-        backend_type: str = "openai-compat",
-        contract: str = "generic",
         tier: str = "default",
-        healthy: bool = True,
+        contract: str = "generic",
         capabilities: dict | None = None,
+        healthy: bool = True,
     ):
         self.name = name
         self.model = model
-        self.backend_type = backend_type
+        self.backend_type = "openai-compat"
         self.contract = contract
         self.tier = tier
         self.capabilities = capabilities or {}
@@ -78,16 +77,37 @@ class _ProviderStub:
                 "last_error": "",
             },
         )
-        self.probe_calls = 0
 
-    async def probe_health(self, timeout_seconds: float = 10.0) -> bool:
-        self.probe_calls += 1
-        self.health.last_check = 1.0
-        return self.health.healthy
+
+class TestRequestHookConfig:
+    def test_rejects_unknown_request_hook_name(self, tmp_path):
+        path = _write_config(
+            tmp_path,
+            """
+server:
+  host: "127.0.0.1"
+  port: 8090
+providers:
+  default-provider:
+    backend: openai-compat
+    base_url: "https://api.example.com/v1"
+    api_key: "secret"
+    model: "chat-model"
+request_hooks:
+  enabled: true
+  hooks: ["missing-hook"]
+fallback_chain: []
+metrics:
+  enabled: false
+""",
+        )
+
+        with pytest.raises(ConfigError, match="unknown hook"):
+            load_config(path)
 
 
 @pytest.fixture
-def preview_config(tmp_path, monkeypatch):
+def hook_config(tmp_path, monkeypatch):
     cfg = load_config(
         _write_config(
             tmp_path,
@@ -109,6 +129,12 @@ providers:
     api_key: "local"
     model: "llama3"
     tier: local
+request_hooks:
+  enabled: true
+  hooks:
+    - prefer-provider-header
+    - locality-header
+    - profile-override-header
 client_profiles:
   enabled: true
   default: generic
@@ -118,11 +144,6 @@ client_profiles:
       capability_values:
         local: true
       prefer_tiers: ["local"]
-  rules:
-    - profile: local-only
-      match:
-        header_contains:
-          x-foundrygate-profile: ["local-only"]
 fallback_chain:
   - cloud-default
 metrics:
@@ -140,6 +161,7 @@ metrics:
                 name="cloud-default",
                 model="cloud-chat",
                 tier="default",
+                capabilities={"local": False, "cloud": True, "network_zone": "public"},
             ),
             "local-worker": _ProviderStub(
                 name="local-worker",
@@ -154,9 +176,9 @@ metrics:
     return cfg
 
 
-class TestRoutePreview:
+class TestRequestHookRouting:
     @pytest.mark.asyncio
-    async def test_preview_resolves_profile_and_attempt_order(self, preview_config):
+    async def test_prefer_provider_header_selects_requested_provider(self, hook_config):
         (
             decision,
             profile_name,
@@ -168,55 +190,46 @@ class TestRoutePreview:
         ) = await _resolve_route_preview(
             {
                 "model": "auto",
-                "messages": [{"role": "user", "content": "hello from local-only traffic"}],
+                "messages": [{"role": "user", "content": "inspect the route"}],
             },
-            {"x-foundrygate-profile": "local-only"},
+            {"x-foundrygate-prefer-provider": "local-worker"},
         )
 
         assert model_requested == "auto"
-        assert profile_name == "local-only"
-        assert client_tag == "local-only"
-        assert decision.layer == "profile"
+        assert profile_name == "generic"
+        assert client_tag == "generic"
+        assert decision.layer == "hook"
         assert decision.provider_name == "local-worker"
         assert attempt_order == ["local-worker", "cloud-default"]
-        assert hook_state.applied_hooks == []
+        assert hook_state.applied_hooks == ["prefer-provider-header"]
         assert effective_body["model"] == "auto"
 
     @pytest.mark.asyncio
-    async def test_preview_direct_model_keeps_explicit_provider_first(self, preview_config):
+    async def test_locality_and_profile_hooks_shape_one_request(self, hook_config):
         (
             decision,
             profile_name,
             client_tag,
             attempt_order,
-            model_requested,
+            _model_requested,
             hook_state,
-            effective_body,
+            _effective_body,
         ) = await _resolve_route_preview(
             {
-                "model": "cloud-default",
-                "messages": [{"role": "user", "content": "use the explicit provider"}],
+                "model": "auto",
+                "messages": [{"role": "user", "content": "keep this on the local worker"}],
             },
-            {},
+            {
+                "x-foundrygate-locality": "local-only",
+                "x-foundrygate-profile": "local-only",
+            },
         )
 
-        assert model_requested == "cloud-default"
-        assert profile_name == "generic"
-        assert client_tag == "generic"
-        assert decision.layer == "direct"
-        assert decision.provider_name == "cloud-default"
-        assert attempt_order == ["cloud-default"]
-        assert hook_state.applied_hooks == []
-        assert effective_body["model"] == "cloud-default"
-
-
-class TestLocalWorkerProbeRefresh:
-    @pytest.mark.asyncio
-    async def test_refresh_only_probes_local_worker_contracts(self, preview_config):
-        await _refresh_local_worker_probes(force=True)
-
-        local_worker = main_module._providers["local-worker"]
-        cloud_default = main_module._providers["cloud-default"]
-
-        assert local_worker.probe_calls == 1
-        assert cloud_default.probe_calls == 0
+        assert profile_name == "local-only"
+        assert client_tag == "local-only"
+        assert decision.layer == "hook"
+        assert decision.provider_name == "local-worker"
+        assert attempt_order == ["local-worker", "cloud-default"]
+        assert hook_state.applied_hooks == ["locality-header", "profile-override-header"]
+        assert hook_state.profile_override == "local-only"
+        assert hook_state.routing_hints["prefer_tiers"] == ["local"]

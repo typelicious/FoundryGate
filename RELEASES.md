@@ -38,6 +38,14 @@ Then open GitHub Releases and publish a release for `v0.3.0`.
 - `v0.3.0` is the first FoundryGate-branded release.
 - This release establishes the FoundryGate runtime naming, routing foundation, and public docs baseline.
 
+## Planned Publishing Path
+
+- `v0.3.x`: GitHub Releases plus source checkout remain the default distribution path.
+- `v0.5.0`: add Docker and PyPI as supported release channels.
+- `v1.0.0`: keep GitHub Releases, Docker, and PyPI, and add a separate npm or TypeScript CLI package if the CLI surface is ready.
+
+The npm or TypeScript package should stay separate from the Python gateway core. It is meant for CLI-facing integrations, not for rewriting the service runtime.
+
 ## What Belongs In Release Notes
 
 - New providers or routing behavior changes

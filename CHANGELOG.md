@@ -6,7 +6,11 @@ The format is intentionally lightweight and human-readable. Group entries by rel
 
 ## Unreleased
 
-No unreleased entries yet.
+### Added
+
+- Added optional `request_hooks` with a small built-in hook registry for per-request provider preferences, locality hints, and profile overrides
+- Added a dedicated routing layer for hook-provided hints before client-profile defaults
+- Added dry-run route output for applied hooks and effective request metadata
 
 ## v0.3.0 - 2026-03-12
 
