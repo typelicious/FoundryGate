@@ -306,6 +306,50 @@ def _normalize_provider_cache(name: str, cfg: dict[str, Any]) -> dict[str, Any]:
     return {"mode": mode, "read_discount": read_discount}
 
 
+def _normalize_provider_image(name: str, cfg: dict[str, Any]) -> dict[str, Any]:
+    """Validate optional provider image metadata."""
+    raw = cfg.get("image") or {}
+    if not isinstance(raw, dict):
+        raise ConfigError(f"Provider '{name}' field 'image' must be a mapping")
+
+    image: dict[str, Any] = {}
+    max_outputs = _normalize_positive_int(
+        raw.get("max_outputs"),
+        field_name="image.max_outputs",
+        provider_name=name,
+    )
+    if max_outputs is not None:
+        image["max_outputs"] = max_outputs
+
+    max_side_px = _normalize_positive_int(
+        raw.get("max_side_px"),
+        field_name="image.max_side_px",
+        provider_name=name,
+    )
+    if max_side_px is not None:
+        image["max_side_px"] = max_side_px
+
+    supported_sizes = raw.get("supported_sizes", [])
+    if supported_sizes in (None, ""):
+        supported_sizes = []
+    if isinstance(supported_sizes, str):
+        supported_sizes = [supported_sizes]
+    if not isinstance(supported_sizes, list):
+        raise ConfigError(f"Provider '{name}' field 'image.supported_sizes' must be a list")
+
+    normalized_sizes = []
+    for value in supported_sizes:
+        if not isinstance(value, str) or not value.strip():
+            raise ConfigError(
+                f"Provider '{name}' field 'image.supported_sizes' must contain non-empty strings"
+            )
+        normalized_sizes.append(value.strip())
+    if normalized_sizes:
+        image["supported_sizes"] = normalized_sizes
+
+    return image
+
+
 def _normalize_provider(name: str, cfg: Any) -> dict[str, Any]:
     """Validate a provider definition and attach normalized capability metadata."""
     if not isinstance(cfg, dict):
@@ -392,6 +436,7 @@ def _normalize_provider(name: str, cfg: Any) -> dict[str, Any]:
             normalized["limits"]["max_output_tokens"] = max_tokens
 
     normalized["cache"] = _normalize_provider_cache(name, normalized)
+    normalized["image"] = _normalize_provider_image(name, normalized)
     normalized["capabilities"] = _normalize_provider_capabilities(name, normalized)
     return normalized
 

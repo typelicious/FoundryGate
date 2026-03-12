@@ -579,6 +579,7 @@ What the current runtime guarantees for `image-provider`:
 - backend must be `openai-compat`
 - `capabilities.image_generation` is normalized to `true`
 - explicit `image_editing: true` enables `POST /v1/images/edits`
+- optional `image.max_outputs`, `image.max_side_px`, and `image.supported_sizes` help the router choose the best image-capable provider for `n` and `size`
 - `model: "auto"` on `POST /v1/images/generations` selects only providers with image-generation capability
 - `model: "auto"` on `POST /v1/images/edits` selects only providers with image-editing capability
 
@@ -594,6 +595,10 @@ providers:
     model: "gpt-image-1"
     capabilities:
       image_editing: true
+    image:
+      max_outputs: 4
+      max_side_px: 2048
+      supported_sizes: ["1024x1024", "2048x2048"]
 ```
 
 ### Routing Policy Schema

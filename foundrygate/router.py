@@ -58,6 +58,21 @@ def _score_capacity_ratio(ratio: float, *, strong: float = 2.0, ideal: float = 4
     return 10
 
 
+def _score_image_fit_ratio(ratio: float) -> int:
+    """Return a score for image limits that prefers a close fit over excess headroom."""
+    if ratio <= 0 or ratio > 1:
+        return 0
+    if ratio >= 0.9:
+        return 10
+    if ratio >= 0.7:
+        return 8
+    if ratio >= 0.5:
+        return 6
+    if ratio >= 0.25:
+        return 4
+    return 2
+
+
 def _merge_select_constraints(*selects: dict[str, Any]) -> dict[str, Any]:
     """Merge policy-like select mappings without dropping list/dict constraints."""
     merged: dict[str, Any] = {
@@ -125,6 +140,19 @@ def _extract_text(messages: list[dict]) -> tuple[str, str, str]:
     return system, last_user, "\n".join(full)
 
 
+def _parse_image_size_max_side(value: str) -> int:
+    """Return the larger dimension from a WxH image size string."""
+    parts = value.lower().split("x", 1)
+    if len(parts) != 2:
+        return 0
+    try:
+        width = int(parts[0])
+        height = int(parts[1])
+    except ValueError:
+        return 0
+    return max(width, height)
+
+
 class Router:
     """Layered routing engine."""
 
@@ -166,6 +194,10 @@ class Router:
             stable_prefix_tokens=stable_prefix_tokens,
             requested_output_tokens=requested_output_tokens,
             total_requested_tokens=total_requested_tokens,
+            requested_image_outputs=1,
+            requested_image_side_px=0,
+            requested_image_size="",
+            required_capability="",
             cache_preference=(headers or {}).get("x-foundrygate-cache", "").strip().lower(),
             model_requested=model_requested.lower().strip(),
             has_tools=has_tools,
@@ -232,6 +264,8 @@ class Router:
         *,
         capability: str,
         request_text: str = "",
+        requested_outputs: int | None = None,
+        requested_size: str = "",
         model_requested: str = "",
         client_profile: str = "generic",
         profile_hints: dict[str, Any] | None = None,
@@ -252,6 +286,10 @@ class Router:
             stable_prefix_tokens=0,
             requested_output_tokens=0,
             total_requested_tokens=total_tokens,
+            requested_image_outputs=requested_outputs or 1,
+            requested_image_side_px=_parse_image_size_max_side(requested_size),
+            requested_image_size=requested_size.strip().lower() if requested_size else "",
+            required_capability=capability,
             cache_preference=(headers or {}).get("x-foundrygate-cache", "").strip().lower(),
             model_requested=model_requested.lower().strip(),
             has_tools=False,
@@ -517,6 +555,25 @@ class Router:
             return False
         if context_window and ctx.total_requested_tokens > context_window:
             return False
+        if ctx.required_capability in {"image_generation", "image_editing"}:
+            image_cfg = provider.get("image", {})
+            max_outputs = int(image_cfg.get("max_outputs") or 0)
+            max_side_px = int(image_cfg.get("max_side_px") or 0)
+            supported_sizes = image_cfg.get("supported_sizes", [])
+            if max_outputs and ctx.requested_image_outputs > max_outputs:
+                return False
+            if (
+                max_side_px
+                and ctx.requested_image_side_px
+                and ctx.requested_image_side_px > max_side_px
+            ):
+                return False
+            if (
+                supported_sizes
+                and ctx.requested_image_size
+                and ctx.requested_image_size not in supported_sizes
+            ):
+                return False
         return True
 
     def _provider_dimension_details(
@@ -526,6 +583,7 @@ class Router:
         provider = self.config.provider(name) or {}
         limits = provider.get("limits", {})
         cache = provider.get("cache", {})
+        image_cfg = provider.get("image", {})
         capabilities = provider.get("capabilities", {})
         health = ctx.provider_health.get(name, {}) if ctx else {}
 
@@ -603,6 +661,39 @@ class Router:
                 2 if capabilities.get("local") else 1 if capabilities.get("cloud") else 0
             )
 
+        image_score = 0
+        image_outputs_fit = True
+        image_size_fit = True
+        image_supported_size = True
+        if ctx.required_capability in {"image_generation", "image_editing"}:
+            max_outputs = int(image_cfg.get("max_outputs") or 0)
+            max_side_px = int(image_cfg.get("max_side_px") or 0)
+            supported_sizes = image_cfg.get("supported_sizes", [])
+            requested_outputs = max(ctx.requested_image_outputs, 1)
+            requested_side = ctx.requested_image_side_px
+
+            if max_outputs:
+                image_outputs_fit = requested_outputs <= max_outputs
+                ratio = requested_outputs / max_outputs
+                image_score += _score_image_fit_ratio(ratio) if image_outputs_fit else 0
+            else:
+                image_score += 2
+
+            if max_side_px and requested_side:
+                image_size_fit = requested_side <= max_side_px
+                ratio = requested_side / max_side_px
+                image_score += _score_image_fit_ratio(ratio) if image_size_fit else 0
+            elif requested_side:
+                image_score += 2
+
+            if supported_sizes:
+                image_supported_size = (
+                    not ctx.requested_image_size or ctx.requested_image_size in supported_sizes
+                )
+                image_score += 6 if image_supported_size else 0
+            elif ctx.requested_image_size:
+                image_score += 1
+
         fit = self._provider_fits_request_dimensions(name, provider, ctx)
         score_total = (
             health_score
@@ -613,6 +704,7 @@ class Router:
             + context_score
             + input_score
             + output_score
+            + image_score
         )
         return {
             "fit": fit,
@@ -625,10 +717,19 @@ class Router:
             "context_score": context_score,
             "input_score": input_score,
             "output_score": output_score,
+            "image_score": image_score,
             "headroom": headroom,
             "context_ratio": round(context_ratio, 3),
             "input_ratio": round(input_ratio, 3),
             "output_ratio": round(output_ratio, 3) if requested_output else 0.0,
+            "image_outputs_fit": image_outputs_fit,
+            "image_size_fit": image_size_fit,
+            "image_supported_size": image_supported_size,
+            "requested_image_outputs": ctx.requested_image_outputs,
+            "requested_image_size": ctx.requested_image_size,
+            "max_image_outputs": image_cfg.get("max_outputs"),
+            "max_image_side_px": image_cfg.get("max_side_px"),
+            "supported_image_sizes": image_cfg.get("supported_sizes", []),
             "avg_latency_ms": avg_latency_ms,
             "consecutive_failures": consecutive_failures,
             "cache_mode": cache.get("mode", "none"),
@@ -911,6 +1012,10 @@ class _RoutingContext:
         "stable_prefix_tokens",
         "requested_output_tokens",
         "total_requested_tokens",
+        "requested_image_outputs",
+        "requested_image_side_px",
+        "requested_image_size",
+        "required_capability",
         "cache_preference",
         "model_requested",
         "has_tools",

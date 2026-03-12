@@ -159,6 +159,23 @@ providers:
     tier: default
     capabilities:
       image_editing: true
+    image:
+      max_outputs: 1
+      max_side_px: 1024
+      supported_sizes: ["1024x1024"]
+  image-large:
+    contract: image-provider
+    backend: openai-compat
+    base_url: "https://api.example.com/v1"
+    api_key: "secret"
+    model: "gpt-image-1-hd"
+    tier: default
+    capabilities:
+      image_editing: true
+    image:
+      max_outputs: 4
+      max_side_px: 2048
+      supported_sizes: ["1024x1024", "2048x2048"]
 client_profiles:
   enabled: true
   default: generic
@@ -201,6 +218,19 @@ metrics:
             "image-cloud": _ProviderStub(
                 name="image-cloud",
                 model="gpt-image-1",
+                contract="image-provider",
+                tier="default",
+                capabilities={
+                    "local": False,
+                    "cloud": True,
+                    "network_zone": "public",
+                    "image_generation": True,
+                    "image_editing": True,
+                },
+            ),
+            "image-large": _ProviderStub(
+                name="image-large",
+                model="gpt-image-1-hd",
                 contract="image-provider",
                 tier="default",
                 capabilities={
@@ -344,6 +374,30 @@ class TestRoutePreview:
         assert response["effective_request"]["modality"] == "image_editing"
         assert response["decision"]["provider"] == "image-cloud"
         assert response["selected_provider"]["contract"] == "image-provider"
+
+    @pytest.mark.asyncio
+    async def test_image_route_preview_prefers_provider_that_fits_size_and_count(
+        self, preview_config
+    ):
+        response = await preview_image_route(
+            _json_request(
+                "/api/route/image",
+                {
+                    "model": "auto",
+                    "capability": "image_generation",
+                    "prompt": "Create a high-resolution architectural render.",
+                    "size": "2048x2048",
+                    "n": 2,
+                },
+            )
+        )
+
+        assert response["decision"]["provider"] == "image-large"
+        ranking = response["decision"]["details"]["candidate_ranking"]
+        assert len(ranking) == 1
+        assert ranking[0]["provider"] == "image-large"
+        assert ranking[0]["image_size_fit"] is True
+        assert ranking[0]["image_outputs_fit"] is True
 
     def test_extract_image_edit_request_fields_requires_prompt(self):
         with pytest.raises(ValueError, match="non-empty 'prompt'"):

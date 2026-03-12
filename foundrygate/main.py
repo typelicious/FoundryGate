@@ -416,6 +416,8 @@ async def _resolve_image_route_preview(
         decision = _router.route_capability_request(
             capability=capability,
             request_text=prompt,
+            requested_outputs=body.get("n") if isinstance(body.get("n"), int) else 1,
+            requested_size=str(body.get("size") or ""),
             model_requested=model_requested,
             client_profile=client_profile,
             profile_hints=profile_hints,
