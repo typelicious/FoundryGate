@@ -36,6 +36,11 @@ class AppliedHooks:
     routing_hints: dict[str, Any] = field(default_factory=dict)
     applied_hooks: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
+
+
+class HookExecutionError(RuntimeError):
+    """Raised when request hook execution is configured to fail closed."""
 
 
 RequestHook = Callable[
@@ -44,6 +49,18 @@ RequestHook = Callable[
 ]
 
 _REQUEST_HOOKS: dict[str, RequestHook] = {}
+_ALLOWED_BODY_UPDATE_KEYS = {
+    "messages",
+    "model",
+    "tools",
+    "tool_choice",
+    "temperature",
+    "max_tokens",
+    "stream",
+    "response_format",
+    "metadata",
+    "user",
+}
 _LIST_HINT_KEYS = {
     "allow_providers",
     "deny_providers",
@@ -68,6 +85,7 @@ async def apply_request_hooks(config: dict[str, Any], context: RequestHookContex
     applied = AppliedHooks(body=dict(context.body))
     if not config.get("enabled"):
         return applied
+    on_error = config.get("on_error", "continue")
 
     ctx = RequestHookContext(
         body=applied.body,
@@ -80,25 +98,148 @@ async def apply_request_hooks(config: dict[str, Any], context: RequestHookContex
         if hook is None:
             continue
 
-        result = hook(ctx)
-        if inspect.isawaitable(result):
-            result = await result
-        if not result:
-            continue
+        try:
+            result = hook(ctx)
+            if inspect.isawaitable(result):
+                result = await result
+            if not result:
+                continue
 
-        if result.body_updates:
-            ctx.body.update(result.body_updates)
-        if result.profile_override:
-            applied.profile_override = result.profile_override.strip()
-        if result.routing_hints:
-            _merge_routing_hints(applied.routing_hints, result.routing_hints)
-        if result.notes:
-            applied.notes.extend(result.notes)
+            body_updates, body_warnings = _sanitize_body_updates(result.body_updates)
+            if body_updates:
+                ctx.body.update(body_updates)
+            applied.notes.extend(body_warnings)
 
-        applied.body = dict(ctx.body)
-        applied.applied_hooks.append(name)
+            if result.profile_override:
+                profile_override = _sanitize_profile_override(result.profile_override)
+                if profile_override:
+                    applied.profile_override = profile_override
+                else:
+                    applied.errors.append(f"Hook '{name}' returned an invalid profile override")
+
+            if result.routing_hints:
+                sanitized_hints, hint_errors = _sanitize_routing_hints(result.routing_hints)
+                if sanitized_hints:
+                    _merge_routing_hints(applied.routing_hints, sanitized_hints)
+                applied.errors.extend(f"Hook '{name}': {error}" for error in hint_errors)
+
+            if result.notes:
+                applied.notes.extend(result.notes)
+
+            applied.body = dict(ctx.body)
+            applied.applied_hooks.append(name)
+        except Exception as exc:
+            message = f"Hook '{name}' failed: {exc}"
+            if on_error == "fail":
+                raise HookExecutionError(message) from exc
+            applied.errors.append(message)
 
     return applied
+
+
+def _sanitize_body_updates(updates: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
+    """Keep request-body updates within a small, predictable surface."""
+    if not updates:
+        return {}, []
+    if not isinstance(updates, dict):
+        return {}, ["Ignored invalid hook body updates (expected a mapping)"]
+
+    sanitized: dict[str, Any] = {}
+    warnings: list[str] = []
+    for key, value in updates.items():
+        if key not in _ALLOWED_BODY_UPDATE_KEYS:
+            warnings.append(f"Ignored unsupported hook body update field '{key}'")
+            continue
+        if key == "messages" and not isinstance(value, list):
+            warnings.append("Ignored hook body update for 'messages' because it was not a list")
+            continue
+        if key in {"model", "tool_choice", "user"} and not isinstance(value, str):
+            warnings.append(f"Ignored hook body update for '{key}' because it was not a string")
+            continue
+        if key in {"temperature"} and not isinstance(value, (int, float)):
+            warnings.append(f"Ignored hook body update for '{key}' because it was not numeric")
+            continue
+        if key in {"max_tokens"} and (
+            isinstance(value, bool) or not isinstance(value, int) or value <= 0
+        ):
+            warnings.append(
+                "Ignored hook body update for 'max_tokens' because it was not a positive integer"
+            )
+            continue
+        if key == "stream" and not isinstance(value, bool):
+            warnings.append("Ignored hook body update for 'stream' because it was not a boolean")
+            continue
+        if key in {"tools"} and not isinstance(value, list):
+            warnings.append(f"Ignored hook body update for '{key}' because it was not a list")
+            continue
+        if key in {"response_format", "metadata"} and not isinstance(value, dict):
+            warnings.append(f"Ignored hook body update for '{key}' because it was not a mapping")
+            continue
+        sanitized[key] = value
+    return sanitized, warnings
+
+
+def _sanitize_profile_override(profile_override: str) -> str | None:
+    """Accept only simple, stable profile override names."""
+    cleaned = profile_override.strip().lower()
+    if not cleaned:
+        return None
+    allowed = set("abcdefghijklmnopqrstuvwxyz0123456789-_.")
+    if any(ch not in allowed for ch in cleaned):
+        return None
+    return cleaned
+
+
+def _sanitize_routing_hints(hints: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
+    """Normalize hook-provided routing hints to the supported runtime surface."""
+    if not isinstance(hints, dict):
+        return {}, ["ignored invalid routing_hints (expected a mapping)"]
+
+    sanitized: dict[str, Any] = {}
+    errors: list[str] = []
+    for key in _LIST_HINT_KEYS:
+        if key not in hints:
+            continue
+        raw_values = hints[key]
+        values = raw_values if isinstance(raw_values, list) else [raw_values]
+        normalized = []
+        for value in values:
+            if not isinstance(value, str) or not value.strip():
+                errors.append(f"ignored invalid value in routing_hints.{key}")
+                continue
+            normalized.append(value.strip())
+        if normalized:
+            sanitized[key] = normalized
+
+    if "capability_values" in hints:
+        raw_cap_values = hints["capability_values"]
+        if not isinstance(raw_cap_values, dict):
+            errors.append("ignored invalid routing_hints.capability_values (expected a mapping)")
+        else:
+            cap_values: dict[str, list[Any]] = {}
+            for capability, raw_values in raw_cap_values.items():
+                if not isinstance(capability, str) or not capability.strip():
+                    errors.append("ignored invalid routing_hints capability name")
+                    continue
+                values = raw_values if isinstance(raw_values, list) else [raw_values]
+                normalized_values = [
+                    value
+                    for value in values
+                    if isinstance(value, (str, bool))
+                    and (not isinstance(value, str) or value.strip())
+                ]
+                if normalized_values:
+                    cap_values[capability.strip()] = normalized_values
+                else:
+                    errors.append(f"ignored invalid routing_hints.capability_values.{capability}")
+            if cap_values:
+                sanitized["capability_values"] = cap_values
+
+    unknown = sorted(set(hints) - (_LIST_HINT_KEYS | {"capability_values"}))
+    for key in unknown:
+        errors.append(f"ignored unsupported routing_hints field '{key}'")
+
+    return sanitized, errors
 
 
 def _merge_routing_hints(target: dict[str, Any], incoming: dict[str, Any]) -> None:

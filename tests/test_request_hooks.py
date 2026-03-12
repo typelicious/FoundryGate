@@ -37,8 +37,15 @@ _httpx.TimeoutException = Exception
 _httpx.ConnectError = Exception
 sys.modules["httpx"] = _httpx
 
+import foundrygate.hooks as hook_module
 import foundrygate.main as main_module
 from foundrygate.config import ConfigError, load_config
+from foundrygate.hooks import (
+    HookExecutionError,
+    RequestHookContext,
+    RequestHookResult,
+    apply_request_hooks,
+)
 from foundrygate.main import _resolve_route_preview
 from foundrygate.router import Router
 
@@ -233,3 +240,83 @@ class TestRequestHookRouting:
         assert hook_state.applied_hooks == ["locality-header", "profile-override-header"]
         assert hook_state.profile_override == "local-only"
         assert hook_state.routing_hints["prefer_tiers"] == ["local"]
+
+
+class TestRequestHookHardening:
+    @pytest.mark.asyncio
+    async def test_invalid_hook_outputs_are_sanitized(self, monkeypatch):
+        def _unsafe_hook(_context):
+            return RequestHookResult(
+                body_updates={
+                    "model": "local-worker",
+                    "max_tokens": "oops",
+                    "internal_flag": True,
+                },
+                profile_override="INVALID PROFILE!",
+                routing_hints={
+                    "prefer_providers": ["local-worker", "", 42],
+                    "capability_values": {"local": [True], "": ["bad"]},
+                    "unexpected": "value",
+                },
+                notes=["unsafe hook ran"],
+            )
+
+        monkeypatch.setitem(hook_module._REQUEST_HOOKS, "unsafe-test", _unsafe_hook)
+        applied = await apply_request_hooks(
+            {"enabled": True, "hooks": ["unsafe-test"], "on_error": "continue"},
+            RequestHookContext(
+                body={"model": "auto", "messages": [{"role": "user", "content": "hello"}]},
+                headers={},
+                model_requested="auto",
+            ),
+        )
+
+        assert applied.body["model"] == "local-worker"
+        assert "max_tokens" not in applied.body
+        assert applied.profile_override is None
+        assert applied.routing_hints["prefer_providers"] == ["local-worker"]
+        assert applied.routing_hints["capability_values"]["local"] == [True]
+        assert "unsafe-test" in applied.applied_hooks
+        assert any(
+            "unsupported hook body update field 'internal_flag'" in note for note in applied.notes
+        )
+        assert any("invalid profile override" in error for error in applied.errors)
+        assert any("routing_hints.prefer_providers" in error for error in applied.errors)
+        assert any(
+            "unsupported routing_hints field 'unexpected'" in error for error in applied.errors
+        )
+
+    @pytest.mark.asyncio
+    async def test_hook_fail_mode_raises(self, monkeypatch):
+        def _failing_hook(_context):
+            raise RuntimeError("boom")
+
+        monkeypatch.setitem(hook_module._REQUEST_HOOKS, "failing-test", _failing_hook)
+
+        with pytest.raises(HookExecutionError, match="failing-test"):
+            await apply_request_hooks(
+                {"enabled": True, "hooks": ["failing-test"], "on_error": "fail"},
+                RequestHookContext(
+                    body={"model": "auto", "messages": []},
+                    headers={},
+                    model_requested="auto",
+                ),
+            )
+
+    @pytest.mark.asyncio
+    async def test_hook_continue_mode_records_errors(self, monkeypatch):
+        def _failing_hook(_context):
+            raise RuntimeError("transient failure")
+
+        monkeypatch.setitem(hook_module._REQUEST_HOOKS, "failing-continue", _failing_hook)
+        applied = await apply_request_hooks(
+            {"enabled": True, "hooks": ["failing-continue"], "on_error": "continue"},
+            RequestHookContext(
+                body={"model": "auto", "messages": []},
+                headers={},
+                model_requested="auto",
+            ),
+        )
+
+        assert applied.applied_hooks == []
+        assert any("failing-continue" in error for error in applied.errors)

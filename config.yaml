@@ -700,8 +700,12 @@ client_profiles:
 #
 # Hook hints run after policy/static/heuristic rules and before client-profile
 # defaults. Keep them opt-in and request-scoped.
+# on_error:
+#   continue -> record hook errors and continue routing
+#   fail     -> reject the request when a hook fails
 request_hooks:
   enabled: false
+  on_error: continue
   hooks: []
   # hooks:
   #   - prefer-provider-header

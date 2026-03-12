@@ -17,7 +17,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 
 from .config import Config, load_config
-from .hooks import AppliedHooks, RequestHookContext, apply_request_hooks
+from .hooks import AppliedHooks, HookExecutionError, RequestHookContext, apply_request_hooks
 from .metrics import MetricsStore, calc_cost
 from .providers import ProviderBackend, ProviderError
 from .router import Router, RoutingDecision
@@ -145,6 +145,52 @@ def _serialize_provider(name: str) -> dict[str, Any] | None:
     }
 
 
+def _estimate_request_dimensions(body: dict[str, Any]) -> dict[str, int | str]:
+    """Return lightweight request-dimension estimates for debugging and routing preview."""
+    messages = body.get("messages", [])
+    system_parts = []
+    full_parts = []
+    for msg in messages:
+        content = msg.get("content") or ""
+        if isinstance(content, list):
+            content = " ".join(part.get("text") or "" for part in content if isinstance(part, dict))
+        if msg.get("role") == "system":
+            system_parts.append(content)
+        full_parts.append(content)
+
+    full_text = "\n".join(full_parts)
+    system_text = "\n".join(system_parts)
+    estimated_input_tokens = max(1, len(full_text) // 4) if full_text else 0
+    stable_prefix_tokens = max(1, len(system_text) // 4) if system_text else 0
+    requested_output_tokens = (
+        body.get("max_tokens") if isinstance(body.get("max_tokens"), int) else 0
+    )
+    return {
+        "estimated_input_tokens": estimated_input_tokens,
+        "stable_prefix_tokens": stable_prefix_tokens,
+        "requested_output_tokens": requested_output_tokens,
+        "estimated_total_tokens": estimated_input_tokens + requested_output_tokens,
+        "cache_preference": str(_collect_request_cache_preference(body) or ""),
+    }
+
+
+def _collect_request_cache_preference(body: dict[str, Any]) -> str:
+    """Return one request-level cache preference."""
+    metadata = body.get("metadata") if isinstance(body.get("metadata"), dict) else {}
+    if isinstance(metadata.get("cache_preference"), str):
+        return metadata["cache_preference"].strip().lower()
+    return ""
+
+
+def _merge_routing_context_headers(headers: dict[str, str], body: dict[str, Any]) -> dict[str, str]:
+    """Return routing headers plus request-body dimension hints."""
+    merged = dict(headers)
+    cache_preference = _collect_request_cache_preference(body)
+    if cache_preference:
+        merged["x-foundrygate-cache"] = cache_preference
+    return merged
+
+
 async def _apply_request_hooks(
     body: dict[str, Any], headers: dict[str, str]
 ) -> tuple[dict[str, Any], AppliedHooks]:
@@ -197,7 +243,7 @@ async def _resolve_route_preview(
             profile_hints=profile_hints,
             hook_hints=hook_state.routing_hints,
             applied_hooks=hook_state.applied_hooks,
-            headers=headers,
+            headers=_merge_routing_context_headers(headers, body),
             provider_health=health_map,
         )
 
@@ -259,7 +305,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="FoundryGate",
-    version="0.3.0",
+    version="0.4.0",
     description="Local OpenAI-compatible routing gateway for OpenClaw and other clients.",
     lifespan=lifespan,
 )
@@ -398,15 +444,18 @@ async def preview_route(request: Request):
         return JSONResponse({"error": "Invalid JSON body"}, status_code=400)
 
     headers = _collect_routing_headers(request)
-    (
-        decision,
-        client_profile,
-        client_tag,
-        attempt_order,
-        model_requested,
-        hook_state,
-        effective_body,
-    ) = await _resolve_route_preview(body, headers)
+    try:
+        (
+            decision,
+            client_profile,
+            client_tag,
+            attempt_order,
+            model_requested,
+            hook_state,
+            effective_body,
+        ) = await _resolve_route_preview(body, headers)
+    except HookExecutionError as exc:
+        return JSONResponse({"error": str(exc), "type": "request_hook_error"}, status_code=500)
 
     return {
         "requested_model": model_requested,
@@ -415,9 +464,11 @@ async def preview_route(request: Request):
         "routing_headers": headers,
         "applied_hooks": hook_state.applied_hooks,
         "hook_notes": hook_state.notes,
+        "hook_errors": hook_state.errors,
         "effective_request": {
             "model": effective_body.get("model", "auto"),
             "has_tools": bool(effective_body.get("tools")),
+            **_estimate_request_dimensions(effective_body),
         },
         "decision": decision.to_dict(),
         "selected_provider": _serialize_provider(decision.provider_name),
@@ -448,15 +499,18 @@ async def chat_completions(request: Request):
         return JSONResponse({"error": "Invalid JSON body"}, status_code=400)
 
     headers = _collect_routing_headers(request)
-    (
-        decision,
-        client_profile,
-        client_tag,
-        attempt_order,
-        model_requested,
-        hook_state,
-        effective_body,
-    ) = await _resolve_route_preview(body, headers)
+    try:
+        (
+            decision,
+            client_profile,
+            client_tag,
+            attempt_order,
+            model_requested,
+            hook_state,
+            effective_body,
+        ) = await _resolve_route_preview(body, headers)
+    except HookExecutionError as exc:
+        return JSONResponse({"error": str(exc), "type": "request_hook_error"}, status_code=500)
     messages = effective_body.get("messages", [])
     stream = effective_body.get("stream", False)
     temperature = effective_body.get("temperature")
@@ -529,6 +583,7 @@ async def chat_completions(request: Request):
                         "X-FoundryGate-Provider": provider_name,
                         "X-FoundryGate-Profile": client_profile,
                         "X-FoundryGate-Hooks": ",".join(hook_state.applied_hooks),
+                        "X-FoundryGate-Hook-Errors": str(len(hook_state.errors)),
                     },
                 )
 
@@ -539,6 +594,7 @@ async def chat_completions(request: Request):
             resp.headers["X-FoundryGate-Layer"] = decision.layer
             resp.headers["X-FoundryGate-Rule"] = decision.rule_name
             resp.headers["X-FoundryGate-Hooks"] = ",".join(hook_state.applied_hooks)
+            resp.headers["X-FoundryGate-Hook-Errors"] = str(len(hook_state.errors))
             return resp
 
         except ProviderError as e:
@@ -615,6 +671,7 @@ h1{font-size:1.4em;color:#7af;margin-bottom:4px}
 .card .detail{font-size:.75em;color:#666;margin-top:4px}
 .filters{padding:14px 16px;margin-bottom:16px}
 .filters h2,.sect h2{font-size:1em;color:#aaa;margin-bottom:10px}
+.filters .summary{margin-top:8px;color:#7f8aa3;font-size:.8em}
 .filters-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}
 label{display:flex;flex-direction:column;gap:6px;font-size:.75em;color:#888;text-transform:uppercase;letter-spacing:.5px}
 input,select{background:#0f1117;color:#e0e0e0;border:1px solid #2a2d38;border-radius:8px;padding:8px 10px;font-size:.9em}
@@ -688,6 +745,7 @@ tr:hover td{background:#1a1a2a}
   <div class="filters-actions">
     <span class="note">Filters apply to stats, traces, and recent requests.</span>
   </div>
+  <div id="filter-summary" class="summary"></div>
 </div>
 
 <div class="grid" id="cards"></div>
@@ -753,6 +811,32 @@ function currentFilters(){
   return params;
 }
 
+function syncFiltersFromUrl(){
+  const params = new URLSearchParams(window.location.search);
+  $('#filter-provider').value = params.get('provider') || '';
+  $('#filter-profile').value = params.get('client_profile') || '';
+  $('#filter-client').value = params.get('client_tag') || '';
+  $('#filter-layer').value = params.get('layer') || '';
+  $('#filter-success').value = params.get('success') || '';
+}
+
+function describeFilters(params){
+  const entries = [];
+  for (const [key, value] of params.entries()){
+    entries.push(`${key}=${value}`);
+  }
+  $('#filter-summary').textContent = entries.length
+    ? `Active filters: ${entries.join(', ')}`
+    : 'No active filters';
+}
+
+function persistFilters(params){
+  const qs = params.toString();
+  const next = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
+  window.history.replaceState({}, '', next);
+  describeFilters(params);
+}
+
 function applyFilters(){ load(); }
 
 function resetFilters(){
@@ -777,6 +861,7 @@ function formatLimits(provider){
 async function load(){
   try{
     const query = currentFilters();
+    persistFilters(query);
     const queryStr = query.toString();
     const suffix = queryStr ? `?${queryStr}` : '';
     const [health, stats, traces, rec] = await Promise.all([
@@ -787,6 +872,9 @@ async function load(){
     ]);
 
     const totals = stats.totals || {};
+    const providers = Object.values(health.providers || {});
+    const healthyProviders = providers.filter(provider => provider.healthy).length;
+    const unhealthyProviders = providers.length - healthyProviders;
     $('#status').style.background = '#5e5';
     $('#ago').textContent = ago(totals.last_request);
 
@@ -797,6 +885,7 @@ async function load(){
       <div class="card"><div class="label">Avg Latency</div><div class="value">${fmtMs(totals.avg_latency_ms || 0)}</div></div>
       <div class="card"><div class="label">Cache Hit Rate</div><div class="value cost">${fmt(totals.cache_hit_pct || 0,1)}%</div><div class="detail">${fmtTok(totals.total_cache_hit || 0)} hit / ${fmtTok(totals.total_cache_miss || 0)} miss</div></div>
       <div class="card"><div class="label">Failures</div><div class="value ${(totals.total_failures||0)>0?'err':''}">${totals.total_failures || 0}</div></div>
+      <div class="card"><div class="label">Healthy Providers</div><div class="value">${healthyProviders}/${providers.length}</div><div class="detail">${unhealthyProviders} unhealthy</div></div>
     `;
 
     const providerRows = Object.entries(health.providers || {}).map(([name, provider]) => `<tr>
@@ -858,9 +947,11 @@ async function load(){
     $('#recent tbody').innerHTML = recentRows.length ? recentRows.join('') : emptyRow(8, 'No recent requests for the current filter set');
   }catch(e){
     $('#status').style.background = '#f66';
+    $('#filter-summary').textContent = 'Failed to load dashboard data';
     console.error(e);
   }
 }
+syncFiltersFromUrl();
 load();
 setInterval(load, 30000);
 </script>

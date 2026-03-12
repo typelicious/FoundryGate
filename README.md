@@ -38,9 +38,10 @@ OpenClaw docs: [https://docs.openclaw.ai/](https://docs.openclaw.ai/)
 - OpenAI-compatible API: expose `/v1/models` and `/v1/chat/completions` to OpenClaw or any OpenAI-style client.
 - Single endpoint, multiple providers: clients call one local base URL while FoundryGate chooses the upstream provider.
 - Multi-provider routing: use `auto` for routing or target a provider directly by model id.
-- Multi-dimensional routing inputs: respect provider locality, context windows, token limits, and cache metadata during provider selection.
+- Multi-dimensional routing: score providers across locality, context headroom, token limits, cache metadata, latency, and recent failure state during provider selection.
 - Robust fallback behavior: provider errors, timeouts, and connection failures fall through the configured fallback chain.
 - Useful observability: `/health` reports provider status, consecutive failures, last error, and average latency.
+- Hardened extension seam: request hooks are sanitized, can fail closed, and expose hook errors in dry-run and completion responses.
 - Safe database path handling: metrics use `FOUNDRYGATE_DB_PATH`, so the SQLite database does not need to live in the repo checkout.
 
 ## Who Is This For?
@@ -125,7 +126,7 @@ Routing decisions happen in order:
 5. Optional client profile defaults for callers such as OpenClaw, n8n, or CLI wrappers
 6. An optional LLM classifier if you enable it in `config.yaml`
 
-Every candidate provider is also checked against its configured context window, token limits, cache metadata, and locality hints before FoundryGate commits to the final route or fallback.
+Every candidate provider is also checked and ranked against configured context windows, token limits, cache metadata, locality hints, health, latency, and recent failures before FoundryGate commits to the final route or fallback.
 
 Important implementation detail: heuristic keyword scoring only evaluates user messages, not the system prompt. This avoids over-routing to expensive tiers because of long system prompts.
 
@@ -210,7 +211,7 @@ curl -fsS 'http://127.0.0.1:8090/api/traces?limit=10'
 curl -fsS 'http://127.0.0.1:8090/api/stats?provider=local-worker&client_tag=codex'
 ```
 
-`POST /api/route` is a dry-run endpoint. It uses the same routing logic as `POST /v1/chat/completions` but does not call an upstream provider. The response includes the resolved client profile, the routing decision, and the fallback attempt order.
+`POST /api/route` is a dry-run endpoint. It uses the same routing logic as `POST /v1/chat/completions` but does not call an upstream provider. The response includes the resolved client profile, the routing decision, candidate ranking details where applicable, hook errors, and the fallback attempt order.
 
 If request hooks are enabled, `POST /api/route` also shows the applied hook names and the effective request metadata after hook processing.
 
@@ -326,11 +327,18 @@ The current built-in hooks are:
 
 Hooks run after policy, static, and heuristic routing, but before client-profile defaults. They are request-scoped and meant for controlled extensions such as context, memory, or CLI optimization layers without baking that logic into the core gateway.
 
+Hook behavior is intentionally narrow:
+
+- body updates are limited to known request fields such as `model`, `messages`, `tools`, `metadata`, and `max_tokens`
+- unsupported routing hints are ignored instead of widening the routing surface accidentally
+- `request_hooks.on_error` can be set to `fail` to reject the request instead of continuing on hook errors
+
 Example:
 
 ```yaml
 request_hooks:
   enabled: true
+  on_error: continue
   hooks:
     - prefer-provider-header
     - locality-header
@@ -372,6 +380,8 @@ The runtime now also understands these optional provider fields:
 - `cache.read_discount`: whether cache reads are cheaper than fresh input
 
 These fields are exposed back through `/health` and `/v1/models`, and they are used by the routing engine when it ranks or rejects candidates.
+
+The ranking logic intentionally prefers providers that both fit the request and leave enough safe headroom, rather than simply preferring the largest context window.
 
 ### Core Environment Variables
 

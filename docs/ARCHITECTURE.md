@@ -41,7 +41,7 @@ The current chat path is:
 6. optional LLM classifier
 7. fallback chain if the chosen provider fails
 
-Before a candidate is accepted, FoundryGate also validates route fit against provider metadata such as context window, input/output token limits, cache hints, and locality.
+Before a candidate is accepted, FoundryGate also scores and validates route fit against provider metadata such as context window, input/output token limits, cache hints, locality, health, latency, and recent failure state.
 
 ## Provider layer
 
@@ -61,6 +61,7 @@ Each provider can expose:
 - token limits
 - cache metadata
 - health state
+- ranking metadata surfaced through route introspection
 
 ## Client layer
 
@@ -81,6 +82,8 @@ This is enough to support:
 - n8n workflows
 - CLI wrappers
 
+Request hooks sit beside these caller-aware signals as a narrow extension seam. They can add sanitized request-level hints or profile overrides without giving arbitrary code the ability to mutate the full routing surface.
+
 ## Operational surface
 
 The main operational endpoints are:
@@ -94,7 +97,7 @@ The main operational endpoints are:
 - `GET /api/traces`
 - `GET /dashboard`
 
-`/api/stats`, `/api/recent`, and `/api/traces` can now be filtered by provider, client profile, client tag, layer, and success state. The dashboard is a thin UI over those same filtered endpoints.
+`/api/stats`, `/api/recent`, and `/api/traces` can now be filtered by provider, client profile, client tag, layer, and success state. The dashboard is a thin UI over those same filtered endpoints and persists its active filters in the URL so operators can share one filtered view.
 
 ## Design target
 

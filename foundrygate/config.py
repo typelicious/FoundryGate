@@ -728,6 +728,9 @@ def _normalize_request_hooks(data: dict[str, Any]) -> dict[str, Any]:
     enabled = raw.get("enabled", False)
     if not isinstance(enabled, bool):
         raise ConfigError("'request_hooks.enabled' must be a boolean")
+    on_error = raw.get("on_error", "continue")
+    if on_error not in {"continue", "fail"}:
+        raise ConfigError("'request_hooks.on_error' must be 'continue' or 'fail'")
 
     hooks = _normalize_string_list(
         raw.get("hooks", []),
@@ -741,7 +744,11 @@ def _normalize_request_hooks(data: dict[str, Any]) -> dict[str, Any]:
         raise ConfigError(f"'request_hooks.hooks' has unknown hook names: {unknown_list}")
 
     normalized = dict(data)
-    normalized["request_hooks"] = {"enabled": enabled, "hooks": hooks}
+    normalized["request_hooks"] = {
+        "enabled": enabled,
+        "hooks": hooks,
+        "on_error": on_error,
+    }
     return normalized
 
 
@@ -786,7 +793,10 @@ class Config:
 
     @property
     def request_hooks(self) -> dict:
-        return self._data.get("request_hooks", {"enabled": False, "hooks": []})
+        return self._data.get(
+            "request_hooks",
+            {"enabled": False, "hooks": [], "on_error": "continue"},
+        )
 
     @property
     def llm_classifier(self) -> dict:

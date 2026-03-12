@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from .config import Config
@@ -22,9 +22,10 @@ class RoutingDecision:
     confidence: float  # 0.0–1.0
     reason: str  # Human-readable explanation
     elapsed_ms: float = 0.0
+    details: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
-        return {
+        payload = {
             "provider": self.provider_name,
             "layer": self.layer,
             "rule": self.rule_name,
@@ -32,11 +33,29 @@ class RoutingDecision:
             "reason": self.reason,
             "elapsed_ms": round(self.elapsed_ms, 2),
         }
+        if self.details:
+            payload["details"] = self.details
+        return payload
 
 
 def _estimate_tokens(text: str) -> int:
     """Rough token estimate: ~4 chars per token for mixed en/de text."""
     return max(1, len(text) // 4)
+
+
+def _score_capacity_ratio(ratio: float, *, strong: float = 2.0, ideal: float = 4.0) -> int:
+    """Return a bounded score for how comfortably a provider fits one request dimension."""
+    if ratio <= 0:
+        return 0
+    if ratio < 1.0:
+        return 0
+    if ratio < strong:
+        return 4
+    if ratio < ideal:
+        return 7
+    if ratio < ideal * 2:
+        return 9
+    return 10
 
 
 def _extract_text(messages: list[dict]) -> tuple[str, str, str]:
@@ -176,7 +195,7 @@ class Router:
             if not self._match_policy(match, ctx):
                 continue
 
-            provider_name = self._select_policy_provider(rule.get("select", {}), ctx)
+            provider_name, ranking = self._select_policy_provider(rule.get("select", {}), ctx)
             if not provider_name:
                 logger.debug("Policy rule matched but no provider was eligible: %s", rule["name"])
                 continue
@@ -188,6 +207,7 @@ class Router:
                 rule_name=rule["name"],
                 confidence=0.95,
                 reason=f"Policy rule '{rule['name']}' matched",
+                details={"candidate_ranking": ranking},
             )
 
         return None
@@ -220,7 +240,9 @@ class Router:
 
         return bool(static_match or heuristic_match)
 
-    def _select_policy_provider(self, select: dict, ctx: _RoutingContext) -> str | None:
+    def _select_policy_provider(
+        self, select: dict, ctx: _RoutingContext
+    ) -> tuple[str | None, list[dict[str, Any]]]:
         """Choose a provider from the current config based on a policy rule."""
         candidates = [
             name
@@ -228,13 +250,13 @@ class Router:
             if self._provider_matches_policy(provider, name, select, ctx)
         ]
         if not candidates:
-            return None
+            return None, []
 
-        ranked = self._rank_policy_candidates(candidates, select, ctx)
+        ranked, ranking = self._rank_policy_candidates(candidates, select, ctx)
         for provider_name in ranked:
             if ctx.provider_health.get(provider_name, {}).get("healthy", True):
-                return provider_name
-        return ranked[0] if ranked else None
+                return provider_name, ranking
+        return (ranked[0] if ranked else None), ranking
 
     def _provider_matches_policy(
         self, provider: dict, name: str, select: dict, ctx: _RoutingContext
@@ -261,15 +283,19 @@ class Router:
 
     def _rank_policy_candidates(
         self, candidates: list[str], select: dict, ctx: _RoutingContext
-    ) -> list[str]:
+    ) -> tuple[list[str], list[dict[str, Any]]]:
         """Rank eligible policy candidates by explicit preference, then provider order."""
         preferred = []
         prefer_providers = select.get("prefer_providers", [])
         prefer_tiers = set(select.get("prefer_tiers", []))
-
+        locality_preference = self._locality_preference(select)
+        diagnostics = {
+            name: self._provider_dimension_details(name, ctx, locality_preference)
+            for name in candidates
+        }
         ranked_candidates = sorted(
             candidates,
-            key=lambda name: self._provider_dimension_score(name, ctx),
+            key=lambda name: diagnostics[name]["sort_key"],
             reverse=True,
         )
 
@@ -289,7 +315,17 @@ class Router:
         for name in ranked_candidates:
             _append(name)
 
-        return preferred
+        ranking = []
+        for idx, name in enumerate(preferred, start=1):
+            ranking.append(
+                {
+                    "rank": idx,
+                    "provider": name,
+                    **{key: value for key, value in diagnostics[name].items() if key != "sort_key"},
+                }
+            )
+
+        return preferred, ranking
 
     def _provider_fits_request_dimensions(
         self, name: str, provider: dict, ctx: _RoutingContext | None
@@ -311,39 +347,138 @@ class Router:
             return False
         return True
 
-    def _provider_dimension_score(
-        self, name: str, ctx: _RoutingContext | None
-    ) -> tuple[int, int, int]:
-        """Return a multi-dimensional ranking score for one provider."""
+    def _provider_dimension_details(
+        self, name: str, ctx: _RoutingContext | None, locality_preference: str | None
+    ) -> dict[str, Any]:
+        """Return a multi-dimensional ranking breakdown for one provider."""
         provider = self.config.provider(name) or {}
         limits = provider.get("limits", {})
         cache = provider.get("cache", {})
+        capabilities = provider.get("capabilities", {})
+        health = ctx.provider_health.get(name, {}) if ctx else {}
 
         if ctx is None:
-            return (0, 0, 0)
+            return {
+                "fit": True,
+                "score_total": 0,
+                "health_score": 0,
+                "failure_score": 0,
+                "latency_score": 0,
+                "locality_score": 0,
+                "cache_score": 0,
+                "context_score": 0,
+                "input_score": 0,
+                "output_score": 0,
+                "headroom": 0,
+                "sort_key": (0, 0, 0),
+            }
 
         context_window = int(provider.get("context_window") or 0)
         max_input = int(limits.get("max_input_tokens") or 0)
+        max_output = int(limits.get("max_output_tokens") or 0)
         headroom = 0
         if context_window:
             headroom = max(0, context_window - ctx.total_requested_tokens)
         elif max_input:
             headroom = max(0, max_input - ctx.total_tokens)
 
+        requested_input = max(ctx.total_tokens, 1)
+        requested_total = max(ctx.total_requested_tokens, 1)
+        requested_output = max(ctx.requested_output_tokens, 1) if ctx.requested_output_tokens else 0
+
+        context_ratio = (context_window / requested_total) if context_window else 0.0
+        input_ratio = (max_input / requested_input) if max_input else context_ratio
+        output_ratio = (max_output / requested_output) if max_output and requested_output else 0.0
+
         prefers_cache = ctx.cache_preference in {"prefer", "prefer-cache"} or (
             not ctx.cache_preference and ctx.stable_prefix_tokens >= 64
         )
         cache_score = 0
         if prefers_cache and cache.get("mode") != "none":
-            cache_score = 2 if cache.get("read_discount") else 1
+            cache_score = 10 if cache.get("read_discount") else 7
+        elif cache.get("mode") != "none":
+            cache_score = 2
 
-        context_score = 0
-        if context_window:
-            context_score = min(context_window, 1_000_000)
-        elif max_input:
-            context_score = min(max_input, 1_000_000)
+        context_score = _score_capacity_ratio(context_ratio)
+        input_score = _score_capacity_ratio(input_ratio)
+        output_score = _score_capacity_ratio(output_ratio) if requested_output else 2
 
-        return (cache_score, context_score, headroom)
+        healthy = bool(health.get("healthy", True))
+        consecutive_failures = int(health.get("consecutive_failures", 0) or 0)
+        avg_latency_ms = float(health.get("avg_latency_ms", 0) or 0)
+        health_score = 25 if healthy else 0
+        failure_score = max(0, 12 - (consecutive_failures * 3))
+        if avg_latency_ms <= 0:
+            latency_score = 6
+        elif avg_latency_ms <= 250:
+            latency_score = 10
+        elif avg_latency_ms <= 750:
+            latency_score = 8
+        elif avg_latency_ms <= 1500:
+            latency_score = 5
+        elif avg_latency_ms <= 3000:
+            latency_score = 2
+        else:
+            latency_score = 0
+
+        locality_score = 0
+        if locality_preference == "local":
+            locality_score = 10 if capabilities.get("local") else 0
+        elif locality_preference == "cloud":
+            locality_score = 10 if capabilities.get("cloud") else 0
+        else:
+            locality_score = (
+                2 if capabilities.get("local") else 1 if capabilities.get("cloud") else 0
+            )
+
+        fit = self._provider_fits_request_dimensions(name, provider, ctx)
+        score_total = (
+            health_score
+            + failure_score
+            + latency_score
+            + locality_score
+            + cache_score
+            + context_score
+            + input_score
+            + output_score
+        )
+        return {
+            "fit": fit,
+            "score_total": score_total,
+            "health_score": health_score,
+            "failure_score": failure_score,
+            "latency_score": latency_score,
+            "locality_score": locality_score,
+            "cache_score": cache_score,
+            "context_score": context_score,
+            "input_score": input_score,
+            "output_score": output_score,
+            "headroom": headroom,
+            "context_ratio": round(context_ratio, 3),
+            "input_ratio": round(input_ratio, 3),
+            "output_ratio": round(output_ratio, 3) if requested_output else 0.0,
+            "avg_latency_ms": avg_latency_ms,
+            "consecutive_failures": consecutive_failures,
+            "cache_mode": cache.get("mode", "none"),
+            "locality_preference": locality_preference or "balanced",
+            "sort_key": (
+                1 if fit else 0,
+                score_total,
+                headroom,
+            ),
+        }
+
+    def _locality_preference(self, select: dict[str, Any]) -> str | None:
+        """Infer one locality preference from the active selector."""
+        prefer_tiers = set(select.get("prefer_tiers", []))
+        if "local" in prefer_tiers:
+            return "local"
+        capability_values = select.get("capability_values", {})
+        if capability_values.get("local") == [True]:
+            return "local"
+        if capability_values.get("cloud") == [True]:
+            return "cloud"
+        return None
 
     # ── Layer 3: Request Hooks ────────────────────────────────
 
@@ -352,7 +487,7 @@ class Router:
         if not ctx.hook_hints:
             return None
 
-        provider_name = self._select_policy_provider(ctx.hook_hints, ctx)
+        provider_name, ranking = self._select_policy_provider(ctx.hook_hints, ctx)
         if not provider_name:
             return None
 
@@ -363,6 +498,7 @@ class Router:
             rule_name="request-hooks",
             confidence=0.7,
             reason=f"{hook_list} selected a preferred provider",
+            details={"candidate_ranking": ranking},
         )
 
     # ── Layer 4: Client Profiles ──────────────────────────────
@@ -372,7 +508,7 @@ class Router:
         if not ctx.profile_hints:
             return None
 
-        provider_name = self._select_policy_provider(ctx.profile_hints, ctx)
+        provider_name, ranking = self._select_policy_provider(ctx.profile_hints, ctx)
         if not provider_name:
             return None
 
@@ -382,6 +518,7 @@ class Router:
             rule_name=f"profile-{ctx.client_profile}",
             confidence=0.6,
             reason=f"Client profile '{ctx.client_profile}' selected a preferred provider",
+            details={"candidate_ranking": ranking},
         )
 
     # ── Layer 1: Static Rules ──────────────────────────────────
@@ -526,6 +663,7 @@ class Router:
                     rule_name=f"classified-as-{category}",
                     confidence=0.7,
                     reason=f"LLM classified task as {category}",
+                    details={"category": category},
                 )
         except Exception as e:
             logger.warning("LLM classification failed: %s", e)
@@ -550,22 +688,31 @@ class Router:
                 decision.provider_name,
                 reason_suffix,
             )
-            for fallback in [decision.provider_name, *self.config.fallback_chain]:
-                if fallback == decision.provider_name:
-                    continue
+            fallback_candidates = []
+            for fallback in self.config.fallback_chain:
                 provider = self.config.provider(fallback) or {}
                 fb_health = ctx.provider_health.get(fallback, {})
                 if not fb_health.get("healthy", True):
                     continue
                 if not self._provider_fits_request_dimensions(fallback, provider, ctx):
                     continue
+                fallback_candidates.append(fallback)
+
+            if fallback_candidates:
+                _, fallback_ranking = self._rank_policy_candidates(fallback_candidates, {}, ctx)
+                best_fallback = fallback_ranking[0]["provider"]
                 return RoutingDecision(
-                    provider_name=fallback,
+                    provider_name=best_fallback,
                     layer=decision.layer,
                     rule_name=f"{decision.rule_name}→fallback",
                     confidence=decision.confidence * 0.8,
-                    reason=f"{decision.reason} ({reason_suffix}, fell to {fallback})",
+                    reason=f"{decision.reason} ({reason_suffix}, fell to {best_fallback})",
                     elapsed_ms=decision.elapsed_ms,
+                    details={
+                        **decision.details,
+                        "fallback_reason": reason_suffix,
+                        "fallback_ranking": fallback_ranking,
+                    },
                 )
         return decision
 

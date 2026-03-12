@@ -39,7 +39,17 @@ Check:
 - layer
 - rule
 - resolved profile
+- hook errors
 - attempt order
+- candidate ranking details in the `decision.details` block
+
+If you enabled request hooks, also decide whether the runtime should continue or fail closed:
+
+```yaml
+request_hooks:
+  enabled: true
+  on_error: fail
+```
 
 ## Local worker stays unhealthy
 
@@ -63,6 +73,15 @@ Then re-check:
 ```bash
 curl -fsS http://127.0.0.1:8090/health
 ```
+
+If the worker is healthy but still loses route selection, inspect `POST /api/route` and compare:
+
+- `decision.details.candidate_ranking`
+- `context_score`
+- `input_score`
+- `output_score`
+- `locality_score`
+- `latency_score`
 
 ## Many-agent OpenClaw traffic is not separated
 
