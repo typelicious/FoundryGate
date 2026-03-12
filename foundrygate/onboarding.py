@@ -48,6 +48,70 @@ def _provider_ready(provider: dict[str, Any]) -> tuple[bool, str]:
     return True, "configured"
 
 
+def _build_provider_rollout(
+    providers: list[dict[str, Any]],
+    fallback_chain: list[str],
+) -> dict[str, Any]:
+    """Return a staged rollout view for many-provider setups."""
+    primary_stage: list[str] = []
+    secondary_stage: list[str] = []
+    modality_stage: list[str] = []
+
+    provider_index = {provider["name"]: provider for provider in providers}
+    fallback_status: list[dict[str, Any]] = []
+
+    for provider in providers:
+        if not provider["ready"]:
+            continue
+
+        capabilities = provider.get("capabilities") or {}
+        is_image_capable = capabilities.get("image_generation") or capabilities.get(
+            "image_editing"
+        )
+        if provider.get("contract") == "image-provider" or is_image_capable:
+            modality_stage.append(provider["name"])
+            continue
+
+        if provider.get("tier") in {"local", "default"}:
+            primary_stage.append(provider["name"])
+        else:
+            secondary_stage.append(provider["name"])
+
+    ready_fallback_targets = 0
+    for name in fallback_chain:
+        provider = provider_index.get(name)
+        is_ready = bool(provider and provider["ready"])
+        if is_ready:
+            ready_fallback_targets += 1
+        fallback_status.append(
+            {
+                "name": name,
+                "configured": provider is not None,
+                "ready": is_ready,
+            }
+        )
+
+    gaps: list[str] = []
+    if providers and not primary_stage:
+        gaps.append("No ready primary provider is available for the first rollout stage.")
+    if len(providers) > 1 and fallback_chain and ready_fallback_targets == 0:
+        gaps.append("Fallback chain is configured, but none of its targets are currently ready.")
+    if any(
+        (provider.get("capabilities") or {}).get("image_generation")
+        or (provider.get("capabilities") or {}).get("image_editing")
+        for provider in providers
+    ) and not modality_stage:
+        gaps.append("Image-capable providers are configured, but none are ready yet.")
+
+    return {
+        "stage_1_primary": primary_stage,
+        "stage_2_secondary": secondary_stage,
+        "stage_3_modality": modality_stage,
+        "fallback_targets": fallback_status,
+        "gaps": gaps,
+    }
+
+
 def build_onboarding_report(
     *,
     config_path: str | Path | None = None,
@@ -110,6 +174,7 @@ def build_onboarding_report(
         suggestions.append("Set a fallback_chain before onboarding multiple clients.")
     if update_check.get("enabled") and not auto_update.get("enabled"):
         suggestions.append("Keep auto_update disabled until the provider and client set is stable.")
+    provider_rollout = _build_provider_rollout(providers, list(config.fallback_chain))
 
     enabled_presets = set(client_profiles.get("presets", []))
     profile_names = set(client_profiles.get("profiles", {}).keys())
@@ -188,6 +253,7 @@ def build_onboarding_report(
             "request_hooks_enabled": bool(request_hooks.get("enabled")),
             "request_hook_count": len(request_hooks.get("hooks", [])),
         },
+        "provider_rollout": provider_rollout,
         "operations": {
             "update_checks_enabled": bool(update_check.get("enabled")),
             "auto_update_enabled": bool(auto_update.get("enabled")),
@@ -203,6 +269,7 @@ def build_onboarding_validation(report: dict[str, Any]) -> dict[str, Any]:
     providers = report["providers"]
     clients = report["clients"]
     routing = report["routing"]
+    provider_rollout = report["provider_rollout"]
     env = report["env"]
 
     blockers: list[str] = []
@@ -217,12 +284,17 @@ def build_onboarding_validation(report: dict[str, Any]) -> dict[str, Any]:
 
     if providers["total"] > 1 and not routing["fallback_chain"]:
         blockers.append("Fallback chain is empty for a multi-provider setup.")
+    if providers["total"] > 1 and not provider_rollout["stage_1_primary"]:
+        blockers.append(
+            "No ready primary provider is available for a staged multi-provider rollout."
+        )
 
     if providers["not_ready"] > 0:
         warnings.append(
             f"{providers['not_ready']} provider(s) are not ready: "
             + ", ".join(item["name"] for item in providers["items"] if not item["ready"])
         )
+    warnings.extend(provider_rollout["gaps"])
 
     if not clients["profiles_enabled"]:
         warnings.append("Client profiles are disabled.")
@@ -243,6 +315,7 @@ def render_onboarding_report(report: dict[str, Any]) -> str:
     provider_block = report["providers"]
     client_block = report["clients"]
     routing_block = report["routing"]
+    rollout_block = report["provider_rollout"]
     ops_block = report["operations"]
     integration_block = report["integrations"]
     preset_text = ", ".join(client_block["presets"]) if client_block["presets"] else "none"
@@ -293,12 +366,26 @@ def render_onboarding_report(report: dict[str, Any]) -> str:
             f"- request hooks: {routing_block['request_hooks_enabled']} "
             f"({routing_block['request_hook_count']} hooks)",
             "",
+            "Provider rollout",
+            "- stage 1 primary: "
+            + (", ".join(rollout_block["stage_1_primary"]) or "none"),
+            "- stage 2 secondary: "
+            + (", ".join(rollout_block["stage_2_secondary"]) or "none"),
+            "- stage 3 modality: "
+            + (", ".join(rollout_block["stage_3_modality"]) or "none"),
+            "",
             "Operations",
             f"- update checks: {ops_block['update_checks_enabled']}",
             f"- auto update: {ops_block['auto_update_enabled']}",
             f"- rollout ring: {ops_block['rollout_ring']}",
         ]
     )
+
+    if rollout_block["fallback_targets"]:
+        lines.append("- fallback targets:")
+        for item in rollout_block["fallback_targets"]:
+            readiness = "ready" if item["ready"] else "not ready"
+            lines.append(f"  - {item['name']}: {readiness}")
 
     lines.extend(["", "Integration quickstarts"])
     for client_name, data in integration_block.items():

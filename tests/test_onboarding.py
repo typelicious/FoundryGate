@@ -106,7 +106,9 @@ auto_update:
 
     assert report["providers"]["ready"] == 1
     assert report["providers"]["local_workers"] == 1
+    assert report["provider_rollout"]["stage_1_primary"] == ["local-worker"]
     assert "local-worker: local-worker / openai-compat / local / ready" in text
+    assert "- stage 1 primary: local-worker" in text
     assert "Integration quickstarts" in text
     assert "header: X-FoundryGate-Client: codex" in text
 
@@ -161,6 +163,10 @@ auto_update:
     assert "Environment file is missing." in validation["blockers"]
     assert "No configured provider is ready." in validation["blockers"]
     assert "Fallback chain is empty for a multi-provider setup." in validation["blockers"]
+    assert (
+        "No ready primary provider is available for a staged multi-provider rollout."
+        in validation["blockers"]
+    )
     assert "Client profiles are disabled." in validation["warnings"]
     assert "Request hooks are enabled but no hooks are configured." in validation["warnings"]
     assert "Status: blocked" in text
@@ -252,3 +258,71 @@ auto_update:
     assert report["integrations"]["openclaw"]["recommended"] is True
     assert report["integrations"]["n8n"]["recommended"] is True
     assert report["integrations"]["cli"]["recommended"] is True
+
+
+def test_onboarding_report_includes_provider_rollout_stages_and_gaps(tmp_path: Path):
+    env_file = tmp_path / ".env"
+    env_file.write_text("PRIMARY_KEY=sk-primary\n", encoding="utf-8")
+
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(
+        """
+fallback_chain:
+  - image-worker
+providers:
+  primary-chat:
+    backend: openai-compat
+    base_url: "https://api.example.com/v1"
+    api_key: "${PRIMARY_KEY}"
+    model: "primary-chat"
+    tier: default
+  image-worker:
+    contract: image-provider
+    backend: openai-compat
+    base_url: "http://127.0.0.1:9000/v1"
+    api_key: "${IMAGE_KEY}"
+    model: "image-model"
+    tier: specialty
+    capabilities:
+      image_generation: true
+client_profiles:
+  enabled: true
+  default: generic
+  presets: ["openclaw", "n8n"]
+  profiles:
+    generic: {}
+  rules: []
+routing_policies:
+  enabled: false
+  rules: []
+request_hooks:
+  enabled: false
+  hooks: []
+update_check:
+  enabled: false
+auto_update:
+  enabled: false
+""".strip(),
+        encoding="utf-8",
+    )
+
+    report = build_onboarding_report(config_path=config_file, env_file=env_file)
+    validation = build_onboarding_validation(report)
+    text = render_onboarding_report(report)
+
+    assert report["provider_rollout"]["stage_1_primary"] == ["primary-chat"]
+    assert report["provider_rollout"]["stage_2_secondary"] == []
+    assert report["provider_rollout"]["stage_3_modality"] == []
+    assert report["provider_rollout"]["fallback_targets"] == [
+        {"name": "image-worker", "configured": True, "ready": False}
+    ]
+    assert (
+        "Image-capable providers are configured, but none are ready yet."
+        in report["provider_rollout"]["gaps"]
+    )
+    assert (
+        "Fallback chain is configured, but none of its targets are currently ready."
+        in validation["warnings"]
+    )
+    assert "- stage 1 primary: primary-chat" in text
+    assert "- fallback targets:" in text

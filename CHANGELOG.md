@@ -11,6 +11,7 @@ The format is intentionally lightweight and human-readable. Group entries by rel
 - Added `foundrygate-onboarding-report` plus a testable onboarding report module for many-provider and many-client readiness checks
 - Added `foundrygate-onboarding-validate` so onboarding blockers can fail fast in local setup and CI-style validation flows
 - Added built-in OpenClaw, n8n, and CLI quickstart examples to the onboarding report and integration docs so client onboarding can stay copy/paste friendly
+- Added staged provider-rollout reporting and fallback/image readiness warnings so many-provider onboarding is easier to phase safely
 
 ## v0.7.0 - 2026-03-12
 

@@ -26,7 +26,7 @@ $EDITOR .env
 ./scripts/foundrygate-onboarding-report
 ```
 
-`foundrygate-onboarding-report` now includes concrete OpenClaw, n8n, and CLI quickstart hints. Use it after every provider or client change to keep the deployment understandable for the next operator as well.
+`foundrygate-onboarding-report` now includes concrete OpenClaw, n8n, and CLI quickstart hints plus a staged provider-rollout view. Use it after every provider or client change to keep the deployment understandable for the next operator as well.
 
 ### 1. Add one provider
 
@@ -57,6 +57,14 @@ For many-provider rollouts, run the onboarding report after every provider chang
 ./scripts/foundrygate-onboarding-report --json
 ./scripts/foundrygate-onboarding-validate
 ```
+
+The rollout section is intentionally staged:
+
+1. stage 1 primary: ready local/default chat providers
+2. stage 2 secondary: additional non-image providers
+3. stage 3 modality: image-capable providers
+
+This keeps provider growth incremental instead of introducing chat, fallback, and modality changes all at once.
 
 ## Client onboarding sequence
 
