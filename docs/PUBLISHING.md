@@ -61,6 +61,8 @@ Publishing creates a tagged release. Applying that release on a host should rema
 If you want scheduled update application:
 
 - keep `auto_update.enabled: true` explicit in `config.yaml`
+- keep `update_check.release_channel` on `stable` unless you intentionally want preview releases in the check path
+- keep `auto_update.rollout_ring` on `stable` or `early` for normal environments; use `canary` only for faster adopters
 - keep `allow_major: false` unless you are ready to absorb breaking changes automatically
 - keep `require_healthy_providers: true` unless you are intentionally allowing rollouts while the gateway is degraded
 - prefer the reviewed examples in [examples/foundrygate-auto-update.service](./examples/foundrygate-auto-update.service) and [examples/foundrygate-auto-update.timer](./examples/foundrygate-auto-update.timer)

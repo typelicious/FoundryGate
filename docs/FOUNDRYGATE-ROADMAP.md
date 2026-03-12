@@ -361,7 +361,7 @@ Current baseline:
 - local helper access via `foundrygate-update-check`
 - opt-in eligibility reporting and helper-driven apply flow via `foundrygate-auto-update`
 
-This should remain opt-in and operationally conservative as it expands toward scheduled helper use, stronger rollout controls, and clearer operator approval boundaries.
+This should remain opt-in and operationally conservative as it expands toward scheduled helper use, stronger rollout controls, clearer operator approval boundaries, and small rollout-ring/channel distinctions.
 
 ### 7. Distribution channels
 

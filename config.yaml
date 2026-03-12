@@ -881,6 +881,7 @@ update_check:
   api_base: "https://api.github.com"
   timeout_seconds: 5
   check_interval_seconds: 21600
+  release_channel: "stable"
 
 # ── Optional Auto-Update Enabler ────────────────────────────────────────────
 # This does not make the API mutate the checkout. It only marks whether the
@@ -888,6 +889,7 @@ update_check:
 auto_update:
   enabled: false
   allow_major: false
+  rollout_ring: "early"
   require_healthy_providers: true
   max_unhealthy_providers: 0
   apply_command: "foundrygate-update"

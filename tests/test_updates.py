@@ -7,9 +7,11 @@ import pytest
 from foundrygate.updates import (
     UpdateChecker,
     alert_level_for_update,
+    allowed_update_types_for_ring,
     apply_auto_update_guardrails,
     classify_update,
     is_update_available,
+    select_release_payload,
 )
 
 
@@ -56,6 +58,26 @@ def test_alert_level_maps_update_type_and_status():
     assert alert_level_for_update("major", available=True, status="ok") == "critical"
     assert alert_level_for_update("current", available=False, status="ok") == "ok"
     assert alert_level_for_update("unknown", available=False, status="unavailable") == "warning"
+
+
+def test_allowed_update_types_follow_rollout_ring():
+    assert allowed_update_types_for_ring("stable", allow_major=False) == ["patch"]
+    assert allowed_update_types_for_ring("early", allow_major=False) == ["patch", "minor"]
+    assert allowed_update_types_for_ring("canary", allow_major=False) == ["patch", "minor"]
+    assert allowed_update_types_for_ring("canary", allow_major=True) == [
+        "patch",
+        "minor",
+        "major",
+    ]
+
+
+def test_select_release_payload_uses_first_preview_release():
+    payload = [
+        {"tag_name": "v0.8.0-rc1", "draft": False, "html_url": "https://example.test/rc1"},
+        {"tag_name": "v0.7.0", "draft": False, "html_url": "https://example.test/stable"},
+    ]
+    chosen = select_release_payload(payload, release_channel="preview")
+    assert chosen["tag_name"] == "v0.8.0-rc1"
 
 
 def test_auto_update_guardrails_block_when_too_many_providers_are_unhealthy():
@@ -136,6 +158,7 @@ async def test_update_checker_reports_latest_release():
     assert status.recommended_action == "Upgrade to the latest release"
     assert status.auto_update["enabled"] is True
     assert status.auto_update["eligible"] is True
+    assert status.release_channel == "stable"
     assert status.auto_update["allowed_update_types"] == ["patch", "minor"]
     assert status.release_url.endswith("/v0.5.0")
 
@@ -212,6 +235,65 @@ async def test_major_updates_are_blocked_when_auto_update_disallows_them():
     assert status.auto_update["enabled"] is True
     assert status.auto_update["eligible"] is False
     assert status.auto_update["blocked_reason"] == "Major updates require manual approval"
+
+
+@pytest.mark.asyncio
+async def test_stable_rollout_ring_blocks_minor_updates():
+    checker = UpdateChecker(
+        current_version="0.6.0",
+        enabled=True,
+        repository="typelicious/FoundryGate",
+        auto_update={"enabled": True, "rollout_ring": "stable", "allow_major": False},
+    )
+    checker._client = _FakeClient(
+        _FakeResponse(
+            200,
+            {
+                "tag_name": "v0.7.0",
+                "html_url": "https://github.com/typelicious/FoundryGate/releases/tag/v0.7.0",
+            },
+        )
+    )
+
+    status = await checker.get_status(force=True)
+
+    assert status.update_type == "minor"
+    assert status.auto_update["rollout_ring"] == "stable"
+    assert status.auto_update["eligible"] is False
+    assert status.auto_update["blocked_reason"] == "Minor updates require manual approval"
+
+
+@pytest.mark.asyncio
+async def test_preview_release_channel_reads_latest_preview_release():
+    checker = UpdateChecker(
+        current_version="0.6.0",
+        enabled=True,
+        repository="typelicious/FoundryGate",
+        release_channel="preview",
+        auto_update={"enabled": True, "rollout_ring": "canary", "allow_major": False},
+    )
+    checker._client = _FakeClient(
+        _FakeResponse(
+            200,
+            [
+                {
+                    "tag_name": "v0.7.0-rc1",
+                    "draft": False,
+                    "html_url": "https://github.com/typelicious/FoundryGate/releases/tag/v0.7.0-rc1",
+                },
+                {
+                    "tag_name": "v0.6.2",
+                    "draft": False,
+                    "html_url": "https://github.com/typelicious/FoundryGate/releases/tag/v0.6.2",
+                },
+            ],
+        )
+    )
+
+    status = await checker.get_status(force=True)
+
+    assert status.release_channel == "preview"
+    assert status.latest_version == "v0.7.0-rc1"
 
 
 @pytest.mark.asyncio

@@ -865,6 +865,10 @@ def _normalize_update_check(data: dict[str, Any]) -> dict[str, Any]:
     if check_interval_seconds <= 0:
         raise ConfigError("'update_check.check_interval_seconds' must be positive")
 
+    release_channel = raw.get("release_channel", "stable")
+    if release_channel not in {"stable", "preview"}:
+        raise ConfigError("'update_check.release_channel' must be 'stable' or 'preview'")
+
     normalized = dict(data)
     normalized["update_check"] = {
         "enabled": enabled,
@@ -872,6 +876,7 @@ def _normalize_update_check(data: dict[str, Any]) -> dict[str, Any]:
         "api_base": api_base.strip().rstrip("/"),
         "timeout_seconds": float(timeout_seconds),
         "check_interval_seconds": check_interval_seconds,
+        "release_channel": release_channel,
     }
     return normalized
 
@@ -892,6 +897,10 @@ def _normalize_auto_update(data: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(allow_major, bool):
         raise ConfigError("'auto_update.allow_major' must be a boolean")
 
+    rollout_ring = raw.get("rollout_ring", "early")
+    if rollout_ring not in {"stable", "early", "canary"}:
+        raise ConfigError("'auto_update.rollout_ring' must be 'stable', 'early', or 'canary'")
+
     require_healthy_providers = raw.get("require_healthy_providers", True)
     if not isinstance(require_healthy_providers, bool):
         raise ConfigError("'auto_update.require_healthy_providers' must be a boolean")
@@ -910,6 +919,7 @@ def _normalize_auto_update(data: dict[str, Any]) -> dict[str, Any]:
     normalized["auto_update"] = {
         "enabled": enabled,
         "allow_major": allow_major,
+        "rollout_ring": rollout_ring,
         "require_healthy_providers": require_healthy_providers,
         "max_unhealthy_providers": max_unhealthy_providers,
         "apply_command": apply_command.strip(),
@@ -991,6 +1001,7 @@ class Config:
                 "api_base": "https://api.github.com",
                 "timeout_seconds": 5.0,
                 "check_interval_seconds": 21600,
+                "release_channel": "stable",
             },
         )
 
@@ -1001,6 +1012,7 @@ class Config:
             {
                 "enabled": False,
                 "allow_major": False,
+                "rollout_ring": "early",
                 "require_healthy_providers": True,
                 "max_unhealthy_providers": 0,
                 "apply_command": "foundrygate-update",

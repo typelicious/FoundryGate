@@ -74,6 +74,34 @@ def alert_level_for_update(update_type: str, *, available: bool, status: str) ->
     return "warning"
 
 
+def allowed_update_types_for_ring(rollout_ring: str, *, allow_major: bool) -> list[str]:
+    """Return the allowed update types for one rollout ring."""
+    if rollout_ring == "stable":
+        allowed = ["patch"]
+    elif rollout_ring == "canary":
+        allowed = ["patch", "minor"]
+    else:
+        allowed = ["patch", "minor"]
+
+    if allow_major and rollout_ring == "canary":
+        allowed.append("major")
+    return allowed
+
+
+def select_release_payload(payload: Any, *, release_channel: str) -> dict[str, Any]:
+    """Select one release object from the GitHub API payload."""
+    if release_channel == "preview":
+        if not isinstance(payload, list):
+            return {}
+        for item in payload:
+            if isinstance(item, dict) and not item.get("draft"):
+                return item
+        return {}
+    if isinstance(payload, dict):
+        return payload
+    return {}
+
+
 def apply_auto_update_guardrails(
     auto_update: dict[str, Any],
     *,
@@ -118,6 +146,7 @@ class UpdateStatus:
     release_url: str = ""
     checked_at: float = 0.0
     status: str = "disabled"
+    release_channel: str = "stable"
     update_type: str = "current"
     alert_level: str = "disabled"
     recommended_action: str = ""
@@ -134,6 +163,7 @@ class UpdateStatus:
             "release_url": self.release_url,
             "checked_at": self.checked_at,
             "status": self.status,
+            "release_channel": self.release_channel,
             "update_type": self.update_type,
             "alert_level": self.alert_level,
             "recommended_action": self.recommended_action,
@@ -154,6 +184,7 @@ class UpdateChecker:
         api_base: str = "https://api.github.com",
         check_interval_seconds: int = 21600,
         timeout_seconds: float = 5.0,
+        release_channel: str = "stable",
         auto_update: dict[str, Any] | None = None,
     ):
         self.current_version = current_version
@@ -162,9 +193,11 @@ class UpdateChecker:
         self.api_base = api_base.rstrip("/")
         self.check_interval_seconds = check_interval_seconds
         self.timeout_seconds = timeout_seconds
+        self.release_channel = release_channel
         self.auto_update = {
             "enabled": bool((auto_update or {}).get("enabled", False)),
             "allow_major": bool((auto_update or {}).get("allow_major", False)),
+            "rollout_ring": str((auto_update or {}).get("rollout_ring", "early")),
             "require_healthy_providers": bool(
                 (auto_update or {}).get("require_healthy_providers", True)
             ),
@@ -175,6 +208,7 @@ class UpdateChecker:
             enabled=enabled,
             current_version=current_version,
             repository=repository,
+            release_channel=release_channel,
         )
         self._client = httpx.AsyncClient(
             timeout=httpx.Timeout(timeout_seconds, connect=min(timeout_seconds, 5.0)),
@@ -198,10 +232,9 @@ class UpdateChecker:
         """Return opt-in auto-update eligibility for operator tooling."""
         enabled = bool(self.auto_update.get("enabled", False))
         allow_major = bool(self.auto_update.get("allow_major", False))
+        rollout_ring = str(self.auto_update.get("rollout_ring", "early"))
         apply_command = str(self.auto_update.get("apply_command", "foundrygate-update"))
-        allowed_types = ["patch", "minor"]
-        if allow_major:
-            allowed_types.append("major")
+        allowed_types = allowed_update_types_for_ring(rollout_ring, allow_major=allow_major)
 
         blocked_reason = ""
         eligible = False
@@ -223,6 +256,7 @@ class UpdateChecker:
             "strategy": "script",
             "allowed_update_types": allowed_types,
             "allow_major": allow_major,
+            "rollout_ring": rollout_ring,
             "require_healthy_providers": bool(
                 self.auto_update.get("require_healthy_providers", True)
             ),
@@ -243,6 +277,7 @@ class UpdateChecker:
                 repository=self.repository,
                 checked_at=time.time(),
                 status="disabled",
+                release_channel=self.release_channel,
                 update_type="current",
                 alert_level="disabled",
                 recommended_action="Update checks are disabled",
@@ -263,7 +298,10 @@ class UpdateChecker:
         ):
             return self._cached
 
-        url = f"{self.api_base}/repos/{self.repository}/releases/latest"
+        if self.release_channel == "preview":
+            url = f"{self.api_base}/repos/{self.repository}/releases?per_page=10"
+        else:
+            url = f"{self.api_base}/repos/{self.repository}/releases/latest"
         try:
             response = await self._client.get(url)
             if response.status_code >= 400:
@@ -273,6 +311,7 @@ class UpdateChecker:
                     repository=self.repository,
                     checked_at=now,
                     status="unavailable",
+                    release_channel=self.release_channel,
                     update_type="unknown",
                     alert_level="warning",
                     recommended_action="Inspect release connectivity and retry later",
@@ -285,9 +324,28 @@ class UpdateChecker:
                 )
                 return self._cached
 
-            payload = response.json()
+            payload = select_release_payload(response.json(), release_channel=self.release_channel)
             latest_version = str(payload.get("tag_name") or "").strip()
             release_url = str(payload.get("html_url") or "").strip()
+            if not latest_version:
+                self._cached = UpdateStatus(
+                    enabled=True,
+                    current_version=self.current_version,
+                    repository=self.repository,
+                    checked_at=now,
+                    status="unavailable",
+                    release_channel=self.release_channel,
+                    update_type="unknown",
+                    alert_level="warning",
+                    recommended_action="Inspect release connectivity and retry later",
+                    auto_update=self._auto_update_status(
+                        status="unavailable",
+                        update_available=False,
+                        update_type="unknown",
+                    ),
+                    error="No release found for the selected channel",
+                )
+                return self._cached
             update_available = is_update_available(self.current_version, latest_version)
             update_type = classify_update(self.current_version, latest_version)
             alert_level = alert_level_for_update(
@@ -304,6 +362,7 @@ class UpdateChecker:
                 release_url=release_url,
                 checked_at=now,
                 status="ok",
+                release_channel=self.release_channel,
                 update_type=update_type,
                 alert_level=alert_level,
                 recommended_action=(
@@ -324,6 +383,7 @@ class UpdateChecker:
                 repository=self.repository,
                 checked_at=now,
                 status="unavailable",
+                release_channel=self.release_channel,
                 update_type="unknown",
                 alert_level="warning",
                 recommended_action="Inspect release connectivity and retry later",

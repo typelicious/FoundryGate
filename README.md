@@ -522,6 +522,7 @@ Supported fields in `update_check`:
 - `api_base`
 - `timeout_seconds`
 - `check_interval_seconds`
+- `release_channel`
 
 Example:
 
@@ -532,6 +533,7 @@ update_check:
   api_base: "https://api.github.com"
   timeout_seconds: 5
   check_interval_seconds: 21600
+  release_channel: "stable"
 ```
 
 The status is exposed through `GET /api/update`, the dashboard, and the helper script `foundrygate-update-check`.
@@ -543,6 +545,7 @@ Supported fields in `auto_update`:
 
 - `enabled`
 - `allow_major`
+- `rollout_ring`
 - `require_healthy_providers`
 - `max_unhealthy_providers`
 - `apply_command`
@@ -553,6 +556,7 @@ Example:
 auto_update:
   enabled: true
   allow_major: false
+  rollout_ring: "early"
   require_healthy_providers: true
   max_unhealthy_providers: 0
   apply_command: "foundrygate-update"
@@ -564,6 +568,7 @@ What the current runtime does with it:
 - shows the same state in the dashboard
 - lets `foundrygate-auto-update --apply` run only when the current release state is eligible
 - can block helper-driven rollout when provider health is already degraded
+- lets operators separate `stable` vs `preview` release checks and `stable` / `early` / `canary` rollout rings
 
 What it still does not do:
 
