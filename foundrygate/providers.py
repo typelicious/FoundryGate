@@ -116,6 +116,86 @@ class ProviderBackend:
             self.health.record_failure(f"Probe connection error: {e}")
             return False
 
+    async def generate_image(
+        self,
+        prompt: str,
+        *,
+        model_override: str | None = None,
+        n: int = 1,
+        size: str | None = None,
+        quality: str | None = None,
+        response_format: str | None = None,
+        style: str | None = None,
+        background: str | None = None,
+        user: str | None = None,
+        extra_body: dict[str, Any] | None = None,
+    ) -> dict:
+        """Send an OpenAI-compatible image generation request."""
+        if self.backend_type != "openai-compat":
+            raise ProviderError(
+                self.name,
+                0,
+                f"Image generation is not implemented for backend '{self.backend_type}'",
+            )
+
+        model = model_override or self.model
+        body: dict[str, Any] = {
+            "model": model,
+            "prompt": prompt,
+            "n": n,
+        }
+        if size:
+            body["size"] = size
+        if quality:
+            body["quality"] = quality
+        if response_format:
+            body["response_format"] = response_format
+        if style:
+            body["style"] = style
+        if background:
+            body["background"] = background
+        if user:
+            body["user"] = user
+        if extra_body:
+            body.update(extra_body)
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+        if "openrouter" in self.base_url:
+            headers["HTTP-Referer"] = "https://foundrygate.local"
+            headers["X-Title"] = "FoundryGate"
+
+        url = f"{self.base_url}/images/generations"
+        t0 = time.time()
+
+        try:
+            resp = await self._client.post(url, json=body, headers=headers)
+            latency = (time.time() - t0) * 1000
+
+            if resp.status_code >= 400:
+                error_text = resp.text[:500]
+                self.health.record_failure(f"HTTP {resp.status_code}: {error_text}")
+                raise ProviderError(self.name, resp.status_code, error_text)
+
+            self.health.record_success(latency)
+            data = resp.json()
+            data["_foundrygate"] = {
+                "provider": self.name,
+                "model": model,
+                "latency_ms": round(latency, 1),
+                "modality": "image_generation",
+            }
+            return data
+
+        except httpx.TimeoutException as e:
+            self.health.record_failure(f"Timeout: {e}")
+            raise ProviderError(self.name, 0, f"Timeout: {e}") from e
+        except httpx.ConnectError as e:
+            self.health.record_failure(f"Connection error: {e}")
+            raise ProviderError(self.name, 0, f"Connection error: {e}") from e
+
     # ── OpenAI-compatible completion ───────────────────────────
 
     async def complete(

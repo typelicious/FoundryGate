@@ -116,12 +116,22 @@ def _resolve_client_tag(headers: dict[str, str], client_profile: str) -> str:
     return client_profile
 
 
-def _build_attempt_order(primary_provider: str) -> list[str]:
+def _build_attempt_order(
+    primary_provider: str,
+    *,
+    required_capabilities: list[str] | None = None,
+) -> list[str]:
     """Return the provider attempt order for one routed request."""
     attempt_order = []
     for provider_name in [primary_provider, *_config.fallback_chain]:
-        if provider_name in _providers and provider_name not in attempt_order:
-            attempt_order.append(provider_name)
+        provider = _providers.get(provider_name)
+        if not provider or provider_name in attempt_order:
+            continue
+        if required_capabilities and any(
+            not provider.capabilities.get(capability) for capability in required_capabilities
+        ):
+            continue
+        attempt_order.append(provider_name)
     return attempt_order
 
 
@@ -252,6 +262,78 @@ async def _resolve_route_preview(
         client_profile,
         client_tag,
         _build_attempt_order(decision.provider_name),
+        model_requested,
+        hook_state,
+        body,
+    )
+
+
+def _collect_image_request_fields(body: dict[str, Any]) -> dict[str, Any]:
+    """Return a narrow, validated subset of image-generation request fields."""
+    fields: dict[str, Any] = {}
+    if isinstance(body.get("n"), int) and body["n"] > 0:
+        fields["n"] = body["n"]
+    for key in ("size", "quality", "response_format", "style", "background", "user"):
+        value = body.get(key)
+        if isinstance(value, str) and value.strip():
+            fields[key] = value.strip()
+    return fields
+
+
+async def _resolve_image_route_preview(
+    body: dict[str, Any], headers: dict[str, str]
+) -> tuple[RoutingDecision, str, str, list[str], str, AppliedHooks, dict[str, Any]]:
+    """Resolve one image-generation request without calling a provider."""
+    body, hook_state = await _apply_request_hooks(body, headers)
+    prompt = body.get("prompt")
+    if not isinstance(prompt, str) or not prompt.strip():
+        raise ValueError("Image generation requires a non-empty 'prompt' string")
+
+    model_requested = str(body.get("model", "auto"))
+    client_profile, profile_hints = _resolve_client_profile(
+        _config,
+        headers,
+        profile_override=hook_state.profile_override,
+    )
+    client_tag = _resolve_client_tag(headers, client_profile)
+
+    if model_requested != "auto":
+        provider = _providers.get(model_requested)
+        if not provider:
+            raise ValueError(f"Unknown image provider '{model_requested}'")
+        if not provider.capabilities.get("image_generation"):
+            raise ValueError(f"Provider '{model_requested}' does not support image generation")
+        decision = RoutingDecision(
+            provider_name=model_requested,
+            layer="direct",
+            rule_name="explicit-image-model",
+            confidence=1.0,
+            reason=f"Directly requested image provider: {model_requested}",
+            details={"required_capability": "image_generation"},
+        )
+    else:
+        decision = _router.route_capability_request(
+            capability="image_generation",
+            request_text=prompt,
+            model_requested=model_requested,
+            client_profile=client_profile,
+            profile_hints=profile_hints,
+            hook_hints=hook_state.routing_hints,
+            applied_hooks=hook_state.applied_hooks,
+            headers=headers,
+            provider_health={name: p.health.to_dict() for name, p in _providers.items()},
+        )
+        if not decision:
+            raise ValueError("No image-generation provider is available")
+
+    return (
+        decision,
+        client_profile,
+        client_tag,
+        _build_attempt_order(
+            decision.provider_name,
+            required_capabilities=["image_generation"],
+        ),
         model_requested,
         hook_state,
         body,
@@ -474,6 +556,104 @@ async def preview_route(request: Request):
         "selected_provider": _serialize_provider(decision.provider_name),
         "attempt_order": [_serialize_provider(name) for name in attempt_order],
     }
+
+
+@app.post("/v1/images/generations")
+async def image_generations(request: Request):
+    """OpenAI-compatible image generation endpoint."""
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON body"}, status_code=400)
+
+    headers = _collect_routing_headers(request)
+    try:
+        (
+            decision,
+            client_profile,
+            client_tag,
+            attempt_order,
+            model_requested,
+            hook_state,
+            effective_body,
+        ) = await _resolve_image_route_preview(body, headers)
+    except HookExecutionError as exc:
+        return JSONResponse({"error": str(exc), "type": "request_hook_error"}, status_code=500)
+    except ValueError as exc:
+        return JSONResponse({"error": str(exc), "type": "invalid_request_error"}, status_code=400)
+
+    prompt = effective_body["prompt"].strip()
+    image_fields = _collect_image_request_fields(effective_body)
+    errors: list[str] = []
+
+    for provider_name in attempt_order:
+        provider = _providers.get(provider_name)
+        if not provider:
+            continue
+        if not provider.health.healthy and provider_name != attempt_order[0]:
+            continue
+
+        try:
+            result = await provider.generate_image(
+                prompt,
+                extra_body=image_fields,
+            )
+            if _config.metrics.get("enabled") and isinstance(result, dict):
+                _metrics.log_request(
+                    provider=provider_name,
+                    model=provider.model,
+                    layer=decision.layer,
+                    rule_name=decision.rule_name,
+                    latency_ms=(result.get("_foundrygate") or {}).get("latency_ms", 0),
+                    requested_model=model_requested,
+                    client_profile=client_profile,
+                    client_tag=client_tag,
+                    decision_reason=decision.reason,
+                    confidence=decision.confidence,
+                    attempt_order=attempt_order,
+                )
+
+            resp = JSONResponse(result)
+            resp.headers["X-FoundryGate-Provider"] = provider_name
+            resp.headers["X-FoundryGate-Profile"] = client_profile
+            resp.headers["X-FoundryGate-Layer"] = decision.layer
+            resp.headers["X-FoundryGate-Rule"] = decision.rule_name
+            resp.headers["X-FoundryGate-Hooks"] = ",".join(hook_state.applied_hooks)
+            resp.headers["X-FoundryGate-Hook-Errors"] = str(len(hook_state.errors))
+            return resp
+        except ProviderError as exc:
+            errors.append(f"{provider_name}: {exc.detail}")
+            logger.warning(
+                "Image provider %s failed: %s, trying next...",
+                provider_name,
+                exc.detail[:200],
+            )
+            if _config.metrics.get("enabled"):
+                _metrics.log_request(
+                    provider=provider_name,
+                    model=provider.model,
+                    layer=decision.layer,
+                    rule_name=decision.rule_name,
+                    success=False,
+                    error=exc.detail[:500],
+                    requested_model=model_requested,
+                    client_profile=client_profile,
+                    client_tag=client_tag,
+                    decision_reason=decision.reason,
+                    confidence=decision.confidence,
+                    attempt_order=attempt_order,
+                )
+
+    return JSONResponse(
+        {
+            "error": {
+                "message": f"All image providers failed: {'; '.join(errors)}",
+                "type": "provider_error",
+                "attempts": errors,
+            }
+        },
+        status_code=502,
+    )
 
 
 @app.get("/dashboard", response_class=HTMLResponse)

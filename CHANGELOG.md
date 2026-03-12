@@ -6,6 +6,12 @@ The format is intentionally lightweight and human-readable. Group entries by rel
 
 ## Unreleased
 
+### Added
+
+- Added `contract: image-provider` plus an OpenAI-compatible `POST /v1/images/generations` path for image-capable providers
+- Added a shipped Dockerfile and tag-driven release-artifacts workflow for Python distributions, GHCR images, and optional PyPI publishing
+- Added public community-health and security baseline files: Code of Conduct, Security Policy, issue templates, PR template, Dependabot, and CodeQL
+
 ## v0.4.0 - 2026-03-12
 
 ### Changed

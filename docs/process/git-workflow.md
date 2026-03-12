@@ -54,6 +54,7 @@ That pass should include:
 - integration test review
 - functional test review against current user workflows
 - documentation review across README, roadmap, process docs, troubleshooting docs, and integration guides
+- community-health and security review across code of conduct, security policy, issue templates, PR template, and GitHub security automation
 - cleanup of stale assumptions, outdated examples, or renamed surfaces
 
 This keeps the project understandable from the outside and prevents documentation drift after several fast feature PRs.

@@ -6,7 +6,7 @@ metadata: {"openclaw":{"requires":{"bins":["curl"]},"emoji":"🚪","homepage":"h
 
 # FoundryGate Skill
 
-FoundryGate is a local routing proxy that sits between OpenClaw and your LLM providers (DeepSeek, Gemini, OpenRouter).
+FoundryGate is a local routing proxy that sits between OpenClaw and your model providers (chat and image-capable backends).
 
 ## Available Commands
 
@@ -63,6 +63,19 @@ curl -s http://127.0.0.1:8090/api/route \
 
 Show the selected provider, routing layer, rule, resolved profile, and attempt order. If relevant headers matter for routing, include them in the dry-run request.
 
+### /foundrygate image <prompt>
+Dry-run one image-generation request shape by calling the image endpoint directly.
+
+```bash
+curl -s http://127.0.0.1:8090/v1/images/generations \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "auto",
+    "prompt": "PROMPT_HERE",
+    "size": "1024x1024"
+  }' | python3 -m json.tool
+```
+
 ### /foundrygate recent
 Show the last 10 requests with provider, layer, rule, tokens, cost, and status.
 
@@ -91,7 +104,7 @@ A web dashboard is available at http://127.0.0.1:8090/dashboard — open it in a
 
 ## How Routing Works
 
-FoundryGate uses 5 routing stages (evaluated in order, first decisive match wins):
+FoundryGate uses 6 routing stages for chat requests (evaluated in order, first decisive match wins):
 
 1. **Policy rules**: Governance, local/cloud constraints, and capability-aware provider selection
 2. **Static rules**: Pattern matching on model name and headers (heartbeats, explicit model requests, subagent detection)

@@ -104,6 +104,7 @@ After every 4 or 5 merged PRs, do a full review pass that includes:
 - functional test review against real workflows where possible
 - documentation review and update across every relevant Markdown file
 - roadmap and process review if the project direction changed
+- community-health and security baseline review (`CODE_OF_CONDUCT.md`, `SECURITY.md`, issue templates, PR template, Dependabot, CodeQL)
 
 Follow the branch workflow defined in:
 

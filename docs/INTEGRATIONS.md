@@ -83,9 +83,9 @@ When onboarding a new client:
 
 ## Planned integration directions
 
-These are roadmap items, not current runtime features:
+These are roadmap items or early foundations:
 
-- image generation routing
+- image generation routing through `POST /v1/images/generations` for providers that declare `contract: image-provider`
 - optional request hooks for context or optimization
 - richer CLI-sidecar adapters
 - provider and client onboarding helpers

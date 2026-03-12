@@ -59,11 +59,23 @@ Important: Never score the system prompt for keywords. See ClawRouter's insight 
 4. Ensure `pytest` and `ruff check` pass
 5. Open a PR with a clear description
 
+Use the repository templates when possible:
+
+- bug reports via `.github/ISSUE_TEMPLATE/bug_report.yml`
+- feature requests via `.github/ISSUE_TEMPLATE/feature_request.yml`
+- PR descriptions via `.github/pull_request_template.md`
+
 After every 4 or 5 merged PRs, do a broader review pass:
 
 - review unit, integration, and functional test coverage
 - update every relevant doc, not only the README
 - refresh roadmap/process docs if the project direction or workflow changed
+- verify community-health and security docs still match the repo setup
+
+## Community And Security
+
+- follow [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md) in all repo interactions
+- report vulnerabilities through [SECURITY.md](./SECURITY.md), not a public issue
 
 See [docs/process/git-workflow.md](./docs/process/git-workflow.md) for the full branch model.
 

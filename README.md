@@ -2,9 +2,13 @@
 
 [![repo-safety](https://github.com/typelicious/FoundryGate/actions/workflows/repo-safety.yml/badge.svg)](https://github.com/typelicious/FoundryGate/actions/workflows/repo-safety.yml)
 [![CI](https://github.com/typelicious/FoundryGate/actions/workflows/ci.yml/badge.svg)](https://github.com/typelicious/FoundryGate/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/typelicious/FoundryGate/actions/workflows/codeql.yml/badge.svg)](https://github.com/typelicious/FoundryGate/actions/workflows/codeql.yml)
+[![Release](https://img.shields.io/github/v/release/typelicious/FoundryGate?display_name=tag)](https://github.com/typelicious/FoundryGate/releases)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
 [![OpenAI-compatible](https://img.shields.io/badge/OpenAI-compatible-0ea5e9.svg)](./README.md#api)
 [![OpenClaw-friendly](https://img.shields.io/badge/OpenClaw-friendly-111827.svg)](https://openclaw.ai/)
+[![Docker](https://img.shields.io/badge/docker-ready-2496ED?logo=docker&logoColor=white)](./Dockerfile)
+[![PyPI](https://img.shields.io/badge/pypi-workflow%20ready-3775A9?logo=pypi&logoColor=white)](./RELEASES.md)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](./pyproject.toml)
 
 ## Quick Navigation
@@ -20,6 +24,7 @@
 - [Configuration](#configuration)
 - [Deployment](#deployment)
 - [Helper Scripts](#helper-scripts)
+- [Community And Security](#community-and-security)
 - [Repo Safety And CI](#repo-safety-and-ci)
 - [Workflow](#workflow)
 - [Roadmap](#roadmap)
@@ -30,12 +35,10 @@ Local OpenAI-compatible AI gateway for 🦞 [OpenClaw](https://openclaw.ai/) and
 
 FoundryGate is a local OpenAI-compatible router/proxy for OpenClaw and other clients. Point your client at a single local endpoint, and FoundryGate routes each request to the configured upstream provider and model, applies fallbacks on failures, and exposes health and usage data for operations.
 
-OpenClaw site: [https://openclaw.ai/](https://openclaw.ai/)
-OpenClaw docs: [https://docs.openclaw.ai/](https://docs.openclaw.ai/)
-
 ## Why FoundryGate
 
 - OpenAI-compatible API: expose `/v1/models` and `/v1/chat/completions` to OpenClaw or any OpenAI-style client.
+- Modality growth path: the runtime now includes an OpenAI-compatible `POST /v1/images/generations` path for providers marked as image-capable.
 - Single endpoint, multiple providers: clients call one local base URL while FoundryGate chooses the upstream provider.
 - Multi-provider routing: use `auto` for routing or target a provider directly by model id.
 - Multi-dimensional routing: score providers across locality, context headroom, token limits, cache metadata, latency, and recent failure state during provider selection.
@@ -183,6 +186,23 @@ curl -fsS http://127.0.0.1:8090/v1/chat/completions \
       {"role": "user", "content": "Summarize the benefits of a local LLM gateway."}
     ],
     "max_tokens": 128
+  }'
+```
+
+### `POST /v1/images/generations`
+
+OpenAI-compatible image generation endpoint.
+
+- `model: "auto"` selects the best loaded provider with `capabilities.image_generation: true`
+- `model: "<provider-id>"` routes directly to a loaded image-capable provider
+
+```bash
+curl -fsS http://127.0.0.1:8090/v1/images/generations \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "auto",
+    "prompt": "An architectural diagram of a local AI gateway, blueprint style",
+    "size": "1024x1024"
   }'
 ```
 
@@ -426,7 +446,7 @@ Each provider can expose normalized capability metadata under `capabilities:` in
 
 Supported keys today:
 
-- Boolean flags: `chat`, `reasoning`, `vision`, `tools`, `long_context`, `streaming`, `local`, `cloud`
+- Boolean flags: `chat`, `reasoning`, `vision`, `image_generation`, `image_editing`, `tools`, `long_context`, `streaming`, `local`, `cloud`
 - String labels: `cost_tier`, `latency_tier`, `network_zone`, `compliance_scope`
 
 What the current runtime does with them:
@@ -480,6 +500,31 @@ providers:
       latency_tier: low
 ```
 
+### Image Provider Contract
+
+FoundryGate also supports `contract: image-provider` for OpenAI-compatible backends that expose `POST /images/generations`.
+
+What the current runtime guarantees for `image-provider`:
+
+- backend must be `openai-compat`
+- `capabilities.image_generation` is normalized to `true`
+- explicit `image_editing: true` can be declared for future editing support
+- `model: "auto"` on `POST /v1/images/generations` selects only providers with image-generation capability
+
+Example:
+
+```yaml
+providers:
+  openai-images:
+    contract: image-provider
+    backend: openai-compat
+    base_url: "https://api.openai.com/v1"
+    api_key: "${OPENAI_API_KEY}"
+    model: "gpt-image-1"
+    capabilities:
+      image_editing: true
+```
+
 ### Routing Policy Schema
 
 The optional `routing_policies` block is validated at startup. FoundryGate rejects unknown provider references, unknown capability names, and unsupported select keys before the service comes up.
@@ -520,7 +565,7 @@ Disable a provider:
 
 ## Deployment
 
-FoundryGate runs fine as a plain Python process. `systemd` and helper scripts are optional conveniences. Docker can be used for quick evaluation even though the repo does not currently ship a Dockerfile.
+FoundryGate runs fine as a plain Python process. `systemd` and helper scripts are optional conveniences. The repo now also ships a Dockerfile and a release-artifacts workflow for container and Python package distribution.
 
 ### Generic Linux Host
 
@@ -559,24 +604,42 @@ sudo systemctl enable --now foundrygate.service
 sudo systemctl status foundrygate.service --no-pager -l
 ```
 
-### Docker (quick example, no Dockerfile required)
+### Docker
 
-This repo does not currently ship a Dockerfile. For a quick evaluation run, you can use the official Python image and mount the repo read-only:
+The repo now ships [Dockerfile](./Dockerfile). A minimal local run looks like this:
 
 ```bash
-docker volume create foundrygate-data
+docker build -t foundrygate:dev .
 docker run --rm -p 8090:8090 \
   --env-file .env \
-  -e FOUNDRYGATE_DB_PATH=/data/foundrygate.db \
-  -e PYTHONDONTWRITEBYTECODE=1 \
-  -v "$PWD":/app:ro \
-  -v foundrygate-data:/data \
-  -w /app \
-  python:3.13-slim \
-  sh -lc 'pip install --no-cache-dir -r requirements.txt && python -m uvicorn foundrygate.main:app --host 0.0.0.0 --port 8090'
+  -e FOUNDRYGATE_DB_PATH=/var/lib/foundrygate/foundrygate.db \
+  foundrygate:dev
 ```
 
-This is meant for quick evaluation. For longer-lived deployments, build your own image around the same commands.
+For persistent container state, mount `/var/lib/foundrygate`:
+
+```bash
+docker run --rm -p 8090:8090 \
+  --env-file .env \
+  -e FOUNDRYGATE_DB_PATH=/var/lib/foundrygate/foundrygate.db \
+  -v foundrygate-data:/var/lib/foundrygate \
+  foundrygate:dev
+```
+
+The release workflow also includes a GHCR publishing path for tagged releases.
+
+### Python Package / PyPI Baseline
+
+The repo now ships a release workflow that builds wheels and source distributions on version tags.
+
+Local package build:
+
+```bash
+python -m pip install --upgrade build
+python -m build
+```
+
+Tagged releases always build Python artifacts. PyPI publishing is wired behind the repository variable `PYPI_PUBLISH=true` plus GitHub trusted publishing for the `pypi` environment.
 
 ## Helper Scripts
 
@@ -598,12 +661,31 @@ Running `./scripts/foundrygate-install` also creates symlinks in `/usr/local/bin
 
 `foundrygate-stats --json` now also includes client/profile breakdowns alongside provider and routing summaries.
 
+## Community And Security
+
+FoundryGate now includes the core public community-health files expected for a public open-source repo:
+
+- [Code of Conduct](./CODE_OF_CONDUCT.md)
+- [Contributing Guide](./CONTRIBUTING.md)
+- [Security Policy](./SECURITY.md)
+- [Issue Templates](./.github/ISSUE_TEMPLATE)
+- [Pull Request Template](./.github/pull_request_template.md)
+
+Security automation and review baseline:
+
+- [repo-safety](./.github/workflows/repo-safety.yml) blocks tracked secrets-like artifacts and runtime files
+- [CodeQL](./.github/workflows/codeql.yml) provides code scanning on `main`, pull requests, and a weekly schedule
+- [Dependabot](./.github/dependabot.yml) tracks Python, GitHub Actions, and Docker dependencies
+- GitHub secret scanning is already active at the repository level
+
 ## Repo Safety And CI
 
 FoundryGate includes two GitHub Actions workflows:
 
 - [CI](./.github/workflows/ci.yml): runs Ruff plus the test matrix on Python 3.10 through 3.13
+- [release-artifacts](./.github/workflows/release-artifacts.yml): builds Python distributions on tags, pushes container images to GHCR, and can publish to PyPI when trusted publishing is configured
 - [repo-safety](./.github/workflows/repo-safety.yml): rejects accidental artifacts and secrets-like files
+- [CodeQL](./.github/workflows/codeql.yml): performs repository code scanning for Python
 
 The `repo-safety` workflow fails pull requests if these patterns are tracked in the working tree or still exist anywhere in Git history:
 

@@ -203,3 +203,41 @@ def test_local_worker_contract_rejects_non_openai_backend(tmp_path):
 
     with pytest.raises(ConfigError, match="requires backend 'openai-compat'"):
         load_config(path)
+
+
+def test_image_provider_contract_enables_image_generation(tmp_path):
+    path = _write_config(
+        tmp_path,
+        (
+            "  image-cloud:\n"
+            "    contract: image-provider\n"
+            "    backend: openai-compat\n"
+            '    base_url: "https://api.example.com/v1"\n'
+            '    api_key: "secret"\n'
+            '    model: "gpt-image-1"\n'
+        ),
+    )
+
+    cfg = load_config(path)
+    provider = cfg.provider("image-cloud")
+
+    assert provider["contract"] == "image-provider"
+    assert provider["capabilities"]["image_generation"] is True
+    assert provider["capabilities"]["image_editing"] is False
+
+
+def test_image_provider_contract_rejects_non_openai_backend(tmp_path):
+    path = _write_config(
+        tmp_path,
+        (
+            "  image-cloud:\n"
+            "    contract: image-provider\n"
+            "    backend: google-genai\n"
+            '    base_url: "https://generativelanguage.googleapis.com/v1beta"\n'
+            '    api_key: "secret"\n'
+            '    model: "imagen"\n'
+        ),
+    )
+
+    with pytest.raises(ConfigError, match="image-provider"):
+        load_config(path)

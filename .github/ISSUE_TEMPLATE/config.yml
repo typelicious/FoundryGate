@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/typelicious/FoundryGate/security/policy
+    about: Use the private security reporting path described in SECURITY.md

@@ -58,6 +58,50 @@ def _score_capacity_ratio(ratio: float, *, strong: float = 2.0, ideal: float = 4
     return 10
 
 
+def _merge_select_constraints(*selects: dict[str, Any]) -> dict[str, Any]:
+    """Merge policy-like select mappings without dropping list/dict constraints."""
+    merged: dict[str, Any] = {
+        "allow_providers": [],
+        "deny_providers": [],
+        "prefer_providers": [],
+        "prefer_tiers": [],
+        "require_capabilities": [],
+        "capability_values": {},
+    }
+
+    for select in selects:
+        if not select:
+            continue
+
+        for key in (
+            "allow_providers",
+            "deny_providers",
+            "prefer_providers",
+            "prefer_tiers",
+            "require_capabilities",
+        ):
+            values = select.get(key, [])
+            if isinstance(values, str):
+                values = [values]
+            elif not isinstance(values, list):
+                continue
+            for value in values:
+                if value not in merged[key]:
+                    merged[key].append(value)
+
+        raw_capability_values = select.get("capability_values", {})
+        if not isinstance(raw_capability_values, dict):
+            continue
+        for capability, values in raw_capability_values.items():
+            normalized_values = values if isinstance(values, list) else [values]
+            merged["capability_values"].setdefault(capability, [])
+            for value in normalized_values:
+                if value not in merged["capability_values"][capability]:
+                    merged["capability_values"][capability].append(value)
+
+    return merged
+
+
 def _extract_text(messages: list[dict]) -> tuple[str, str, str]:
     """Extract system prompt, last user message, and full conversation text.
 
@@ -183,6 +227,96 @@ class Router:
             elapsed_ms=elapsed,
         )
 
+    def route_capability_request(
+        self,
+        *,
+        capability: str,
+        request_text: str = "",
+        model_requested: str = "",
+        client_profile: str = "generic",
+        profile_hints: dict[str, Any] | None = None,
+        hook_hints: dict[str, Any] | None = None,
+        applied_hooks: list[str] | None = None,
+        headers: dict[str, str] | None = None,
+        provider_health: dict[str, Any] | None = None,
+        candidate_names: list[str] | None = None,
+    ) -> RoutingDecision | None:
+        """Route one non-chat request against providers with a required capability."""
+        t0 = time.time()
+        total_tokens = _estimate_tokens(request_text) if request_text else 0
+        ctx = _RoutingContext(
+            system_prompt="",
+            last_user_message=request_text,
+            full_text=request_text,
+            total_tokens=total_tokens,
+            stable_prefix_tokens=0,
+            requested_output_tokens=0,
+            total_requested_tokens=total_tokens,
+            cache_preference=(headers or {}).get("x-foundrygate-cache", "").strip().lower(),
+            model_requested=model_requested.lower().strip(),
+            has_tools=False,
+            client_profile=client_profile,
+            profile_hints=profile_hints or {},
+            hook_hints=hook_hints or {},
+            applied_hooks=applied_hooks or [],
+            headers=headers or {},
+            provider_health=provider_health or {},
+            providers=self.config.providers,
+        )
+
+        base_select = _merge_select_constraints(
+            {
+                "require_capabilities": [capability],
+                "allow_providers": candidate_names or [],
+            }
+        )
+
+        policy_decision = self._layer_capability_policy(ctx, capability, base_select)
+        if policy_decision:
+            policy_decision.elapsed_ms = (time.time() - t0) * 1000
+            return self._validate_health(
+                policy_decision,
+                ctx,
+                required_capabilities=[capability],
+            )
+
+        for layer_name, selector, confidence, reason in (
+            ("hook", ctx.hook_hints, 0.7, "Request hooks selected a preferred provider"),
+            (
+                "profile",
+                ctx.profile_hints,
+                0.6,
+                f"Client profile '{ctx.client_profile}' selected a preferred provider",
+            ),
+            (
+                "capability-default",
+                {},
+                0.5,
+                f"Selected the best available provider with capability '{capability}'",
+            ),
+        ):
+            provider_name, ranking = self._select_policy_provider(
+                _merge_select_constraints(base_select, selector),
+                ctx,
+            )
+            if not provider_name:
+                continue
+            decision = RoutingDecision(
+                provider_name=provider_name,
+                layer=layer_name,
+                rule_name=f"{capability}-{layer_name}",
+                confidence=confidence,
+                reason=reason,
+                details={
+                    "required_capability": capability,
+                    "candidate_ranking": ranking,
+                },
+            )
+            decision.elapsed_ms = (time.time() - t0) * 1000
+            return self._validate_health(decision, ctx, required_capabilities=[capability])
+
+        return None
+
     # ── Layer 0: Policy Rules ──────────────────────────────────
 
     def _layer_policy(self, ctx: _RoutingContext) -> RoutingDecision | None:
@@ -208,6 +342,44 @@ class Router:
                 confidence=0.95,
                 reason=f"Policy rule '{rule['name']}' matched",
                 details={"candidate_ranking": ranking},
+            )
+
+        return None
+
+    def _layer_capability_policy(
+        self,
+        ctx: _RoutingContext,
+        capability: str,
+        base_select: dict[str, Any],
+    ) -> RoutingDecision | None:
+        """Apply routing policies while enforcing one required capability."""
+        cfg = self.config.routing_policies
+        if not cfg.get("enabled"):
+            return None
+
+        for rule in cfg.get("rules", []):
+            if not self._match_policy(rule.get("match", {}), ctx):
+                continue
+
+            provider_name, ranking = self._select_policy_provider(
+                _merge_select_constraints(base_select, rule.get("select", {})),
+                ctx,
+            )
+            if not provider_name:
+                continue
+
+            return RoutingDecision(
+                provider_name=provider_name,
+                layer="policy",
+                rule_name=rule["name"],
+                confidence=0.95,
+                reason=(
+                    f"Policy rule '{rule['name']}' matched for required capability '{capability}'"
+                ),
+                details={
+                    "required_capability": capability,
+                    "candidate_ranking": ranking,
+                },
             )
 
         return None
@@ -672,7 +844,13 @@ class Router:
 
     # ── Health validation ──────────────────────────────────────
 
-    def _validate_health(self, decision: RoutingDecision, ctx: _RoutingContext) -> RoutingDecision:
+    def _validate_health(
+        self,
+        decision: RoutingDecision,
+        ctx: _RoutingContext,
+        *,
+        required_capabilities: list[str] | None = None,
+    ) -> RoutingDecision:
         """If chosen provider is unhealthy or over limits, fall through the chain."""
         health = ctx.provider_health.get(decision.provider_name)
         primary = self.config.provider(decision.provider_name) or {}
@@ -693,6 +871,11 @@ class Router:
                 provider = self.config.provider(fallback) or {}
                 fb_health = ctx.provider_health.get(fallback, {})
                 if not fb_health.get("healthy", True):
+                    continue
+                if required_capabilities and any(
+                    not provider.get("capabilities", {}).get(capability)
+                    for capability in required_capabilities
+                ):
                     continue
                 if not self._provider_fits_request_dimensions(fallback, provider, ctx):
                     continue

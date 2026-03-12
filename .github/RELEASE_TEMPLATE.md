@@ -6,7 +6,9 @@
 - [ ] Version tag is created from `main`
 - [ ] Tag is pushed to GitHub
 - [ ] GitHub Release is created from the tag
+- [ ] Release artifacts workflow completed for Python distributions and GHCR image
 - [ ] Release notes summarize user-visible changes
 - [ ] README and relevant docs pages match the shipped behavior
 - [ ] Compatibility notes are included if older runtime identifiers are still mentioned
 - [ ] Any upgrade notes or rollback notes are included
+- [ ] PyPI publishing status is noted (published, intentionally skipped, or blocked on trusted publishing)

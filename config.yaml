@@ -180,6 +180,16 @@ providers:
   #    output: 10.00
   #    cache_read: 1.25
 
+  #openai-images:
+  #  contract: image-provider
+  #  backend: openai-compat
+  #  base_url: "${OPENAI_BASE_URL:-https://api.openai.com/v1}"
+  #  api_key: "${OPENAI_API_KEY}"
+  #  model: "gpt-image-1"
+  #  tier: default
+  #  capabilities:
+  #    image_editing: true
+
   # ── Anthropic ───────────────────────────────────────────────────────────
   # Auth: ANTHROPIC_API_KEY (or setup-token)
   # Rotation: ANTHROPIC_API_KEYS, OPENCLAW_LIVE_ANTHROPIC_KEY

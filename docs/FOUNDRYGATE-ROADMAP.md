@@ -178,10 +178,12 @@ This release line should deepen the gateway core without turning it into a monol
 
 Primary goals:
 
+- add the first modality-aware provider contract, starting with image generation
 - publish an official Docker release path
 - publish FoundryGate to PyPI
 - add provider and client onboarding helpers for many-provider and many-client deployments
 - add validation workflows so operators can catch config mistakes before rollout
+- complete the public community-health baseline and security-overview baseline for the repo
 
 This is the first release line where installation and upgrade paths should feel productized for external users.
 

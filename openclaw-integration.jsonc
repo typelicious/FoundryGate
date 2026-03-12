@@ -73,7 +73,7 @@
         "foundrygate/openrouter-fallback": { "alias": "or" }
       },
       "imageModel": {
-        "primary": "foundrygate/gemini-flash-lite",
+        "primary": "foundrygate/auto",
         "fallbacks": []
       },
       "heartbeat": {

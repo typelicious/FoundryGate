@@ -220,3 +220,49 @@ class TestProviderHealthProbes:
         for item in captured.get("contents", []):
             for part in item.get("parts", []):
                 assert isinstance(part.get("text"), str), f"Non-string text in part: {part}"
+
+
+class TestImageGeneration:
+    @pytest.mark.asyncio
+    async def test_openai_image_generation_posts_to_images_endpoint(self):
+        backend = ProviderBackend(
+            "image-cloud",
+            {
+                "contract": "image-provider",
+                "backend": "openai-compat",
+                "base_url": "https://api.example.com/v1",
+                "api_key": "secret",
+                "model": "gpt-image-1",
+            },
+        )
+        captured: dict = {}
+
+        class _FakeResp:
+            status_code = 200
+
+            def json(self):
+                return {"created": 1, "data": [{"b64_json": "abc"}]}
+
+        async def _fake_post(url, json=None, headers=None, **kw):
+            captured["url"] = url
+            captured["json"] = json or {}
+            captured["headers"] = headers or {}
+            return _FakeResp()
+
+        backend._client.post = _fake_post  # type: ignore[attr-defined]
+
+        result = await backend.generate_image(
+            "draw a lighthouse",
+            size="1024x1024",
+            response_format="b64_json",
+            user="tester",
+        )
+
+        assert captured["url"] == "https://api.example.com/v1/images/generations"
+        assert captured["json"]["model"] == "gpt-image-1"
+        assert captured["json"]["prompt"] == "draw a lighthouse"
+        assert captured["json"]["size"] == "1024x1024"
+        assert captured["json"]["response_format"] == "b64_json"
+        assert captured["json"]["user"] == "tester"
+        assert result["_foundrygate"]["provider"] == "image-cloud"
+        assert result["_foundrygate"]["modality"] == "image_generation"

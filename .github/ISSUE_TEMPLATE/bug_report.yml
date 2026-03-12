@@ -1,0 +1,38 @@
+name: Bug report
+description: Report a reproducible problem in FoundryGate
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened, and what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Include request payloads, config snippets, logs, or curl commands where relevant.
+      placeholder: |
+        1. Start FoundryGate with ...
+        2. Send this request ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Version, Python version, OS, provider config, and whether you run locally, systemd, or Docker.
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: Paste `/health`, `/api/route`, trace output, or logs if they help.
+  - type: markdown
+    attributes:
+      value: "For vulnerabilities or secrets exposure, do not file a public issue. Use the security policy in `SECURITY.md`."

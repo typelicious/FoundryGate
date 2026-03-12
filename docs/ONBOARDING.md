@@ -26,6 +26,7 @@ The safest onboarding order is:
 - check `GET /health`
 - check `GET /v1/models`
 - for `contract: local-worker`, confirm that `GET /models` works on the worker
+- for `contract: image-provider`, confirm that the upstream exposes `POST /images/generations`
 
 ### 3. Validate routing
 
@@ -91,6 +92,7 @@ Recommended rollout:
 Current state:
 
 - manual updates via Git or `foundrygate-update`
+- tag-driven release artifacts for Python distributions and container images
 
 Planned state:
 

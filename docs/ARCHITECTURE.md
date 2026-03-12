@@ -7,6 +7,7 @@ FoundryGate is a local-first AI gateway plane.
 Its job is to sit between many clients and many model backends while keeping one stable operational surface:
 
 - one OpenAI-compatible endpoint
+- one gateway surface for chat and image-generation requests
 - many providers
 - explicit routing and fallback behavior
 - observable health and usage data
@@ -50,6 +51,7 @@ The provider layer already supports:
 - OpenAI-compatible backends
 - Google GenAI backends
 - `contract: local-worker` for LAN/local OpenAI-compatible workers
+- `contract: image-provider` for OpenAI-compatible image generation backends
 
 Each provider can expose:
 
@@ -91,6 +93,7 @@ The main operational endpoints are:
 - `GET /health`
 - `GET /v1/models`
 - `POST /v1/chat/completions`
+- `POST /v1/images/generations`
 - `POST /api/route`
 - `GET /api/stats`
 - `GET /api/recent`

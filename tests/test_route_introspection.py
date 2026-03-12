@@ -39,7 +39,11 @@ sys.modules["httpx"] = _httpx
 
 import foundrygate.main as main_module
 from foundrygate.config import load_config
-from foundrygate.main import _refresh_local_worker_probes, _resolve_route_preview
+from foundrygate.main import (
+    _refresh_local_worker_probes,
+    _resolve_image_route_preview,
+    _resolve_route_preview,
+)
 from foundrygate.router import Router
 
 
@@ -109,6 +113,13 @@ providers:
     api_key: "local"
     model: "llama3"
     tier: local
+  image-cloud:
+    contract: image-provider
+    backend: openai-compat
+    base_url: "https://api.example.com/v1"
+    api_key: "secret"
+    model: "gpt-image-1"
+    tier: default
 client_profiles:
   enabled: true
   default: generic
@@ -147,6 +158,18 @@ metrics:
                 contract="local-worker",
                 tier="local",
                 capabilities={"local": True, "cloud": False, "network_zone": "local"},
+            ),
+            "image-cloud": _ProviderStub(
+                name="image-cloud",
+                model="gpt-image-1",
+                contract="image-provider",
+                tier="default",
+                capabilities={
+                    "local": False,
+                    "cloud": True,
+                    "network_zone": "public",
+                    "image_generation": True,
+                },
             ),
         },
         raising=False,
@@ -208,6 +231,34 @@ class TestRoutePreview:
         assert attempt_order == ["cloud-default"]
         assert hook_state.applied_hooks == []
         assert effective_body["model"] == "cloud-default"
+
+    @pytest.mark.asyncio
+    async def test_image_preview_selects_image_provider(self, preview_config):
+        (
+            decision,
+            profile_name,
+            client_tag,
+            attempt_order,
+            model_requested,
+            hook_state,
+            effective_body,
+        ) = await _resolve_image_route_preview(
+            {
+                "model": "auto",
+                "prompt": "Draw a blueprint-style gateway diagram.",
+                "size": "1024x1024",
+            },
+            {},
+        )
+
+        assert model_requested == "auto"
+        assert profile_name == "generic"
+        assert client_tag == "generic"
+        assert decision.provider_name == "image-cloud"
+        assert decision.details["required_capability"] == "image_generation"
+        assert attempt_order == ["image-cloud"]
+        assert hook_state.applied_hooks == []
+        assert effective_body["prompt"] == "Draw a blueprint-style gateway diagram."
 
 
 class TestLocalWorkerProbeRefresh:

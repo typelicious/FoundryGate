@@ -31,12 +31,14 @@ from dotenv import load_dotenv
 from .hooks import get_registered_request_hooks
 
 _SUPPORTED_BACKENDS = {"openai-compat", "google-genai", "anthropic-compat"}
-_SUPPORTED_PROVIDER_CONTRACTS = {"generic", "local-worker"}
+_SUPPORTED_PROVIDER_CONTRACTS = {"generic", "local-worker", "image-provider"}
 _SUPPORTED_CACHE_MODES = {"none", "implicit", "explicit"}
 _BOOL_CAPABILITY_FIELDS = {
     "chat",
     "reasoning",
     "vision",
+    "image_generation",
+    "image_editing",
     "tools",
     "long_context",
     "streaming",
@@ -197,6 +199,8 @@ def _normalize_provider_capabilities(name: str, cfg: dict[str, Any]) -> dict[str
         "chat": True,
         "reasoning": tier == "reasoning" or "reasoner" in model,
         "vision": False,
+        "image_generation": False,
+        "image_editing": False,
         "tools": False,
         "long_context": context_window >= 128_000 or max_input_tokens >= 128_000,
         "streaming": backend != "google-genai",
@@ -360,6 +364,20 @@ def _normalize_provider(name: str, cfg: Any) -> dict[str, Any]:
             "local": True,
             "cloud": False,
             "network_zone": "local",
+        }
+    elif contract == "image-provider":
+        if backend != "openai-compat":
+            raise ConfigError(
+                f"Provider '{name}' contract 'image-provider' requires backend 'openai-compat'"
+            )
+        raw_capabilities = normalized.get("capabilities")
+        if raw_capabilities is None:
+            raw_capabilities = {}
+        if not isinstance(raw_capabilities, dict):
+            raise ConfigError(f"Provider '{name}' capabilities must be a mapping")
+        normalized["capabilities"] = {
+            **raw_capabilities,
+            "image_generation": True,
         }
 
     normalized["limits"] = _normalize_provider_limits(name, normalized)

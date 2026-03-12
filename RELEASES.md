@@ -1,6 +1,6 @@
 # FoundryGate Releases
 
-This repo does not require a heavy release process. Use lightweight tags plus GitHub Releases.
+This repo does not require a heavy release process. Use lightweight tags plus GitHub Releases, with release automation building the Python package and container image from tags.
 
 ## Release Flow
 
@@ -10,9 +10,10 @@ This repo does not require a heavy release process. Use lightweight tags plus Gi
    - Keep the notes focused on user-visible changes.
 3. Create an annotated tag from `main`.
 4. Push the tag to GitHub.
-5. Create a GitHub Release from that tag.
-6. Use the changelog entry as the release notes, then add any short upgrade notes if needed.
-7. Confirm that README plus the relevant docs pages still match the shipped runtime behavior.
+5. Let the release-artifacts workflow build Python distributions and the GHCR image.
+6. Create a GitHub Release from that tag.
+7. Use the changelog entry as the release notes, then add any short upgrade notes if needed.
+8. Confirm that README plus the relevant docs pages still match the shipped runtime behavior.
 
 ## Example
 
@@ -24,6 +25,14 @@ git push origin v0.4.0
 ```
 
 Then open GitHub Releases and publish a release for `v0.4.0`.
+
+## Automation Baseline
+
+Tagged releases now trigger [release-artifacts](./.github/workflows/release-artifacts.yml):
+
+- always build `sdist` and `wheel`
+- push the container image to GHCR
+- publish to PyPI only when `PYPI_PUBLISH=true` is set and GitHub trusted publishing is configured for the `pypi` environment
 
 ## Versioning Guidance
 
@@ -41,7 +50,7 @@ Then open GitHub Releases and publish a release for `v0.4.0`.
 ## Planned Publishing Path
 
 - `v0.3.x`: GitHub Releases plus source checkout remain the default distribution path.
-- `v0.5.0`: add Docker and PyPI as supported release channels.
+- `v0.5.0`: Docker and PyPI publishing baseline is introduced through the release workflow and repo docs.
 - `v1.0.0`: keep GitHub Releases, Docker, and PyPI, and add a separate npm or TypeScript CLI package if the CLI surface is ready.
 
 The npm or TypeScript package should stay separate from the Python gateway core. It is meant for CLI-facing integrations, not for rewriting the service runtime.
