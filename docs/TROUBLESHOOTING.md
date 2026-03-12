@@ -183,4 +183,6 @@ If `foundrygate-auto-update --apply` refuses to run, inspect the `auto_update` b
 - the latest release is a major upgrade while `allow_major: false`
 - one or more providers are unhealthy while `require_healthy_providers: true`
 - the number of unhealthy providers exceeds `max_unhealthy_providers`
+- the current time is outside the configured `maintenance_window.days` or `maintenance_window.start_hour` / `end_hour`
+- `maintenance_window.timezone` is invalid for the host runtime
 - the release lookup itself is unavailable

@@ -15,6 +15,7 @@ The format is intentionally lightweight and human-readable. Group entries by rel
 - Added provider-health rollout guardrails so helper-driven auto-updates can block when gateway health is already degraded
 - Added `update_check.release_channel` and `auto_update.rollout_ring` so operators can distinguish stable vs preview checks and tighter rollout rings
 - Added `auto_update.min_release_age_hours` so helper-driven auto-updates can wait for a release to age before becoming eligible
+- Added `auto_update.maintenance_window` so helper-driven auto-updates can stay inside explicit local maintenance hours
 
 ## v0.6.0 - 2026-03-12
 

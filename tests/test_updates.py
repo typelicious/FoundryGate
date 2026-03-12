@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -11,6 +11,7 @@ from foundrygate.updates import (
     alert_level_for_update,
     allowed_update_types_for_ring,
     apply_auto_update_guardrails,
+    apply_maintenance_window_guardrail,
     apply_release_age_guardrail,
     classify_update,
     is_update_available,
@@ -85,7 +86,7 @@ def test_select_release_payload_uses_first_preview_release():
 
 
 def test_release_age_hours_reports_elapsed_time():
-    now = datetime(2026, 3, 12, 18, 0, tzinfo=UTC)
+    now = datetime(2026, 3, 12, 18, 0, tzinfo=timezone.utc)
     published = (now - timedelta(hours=6)).isoformat().replace("+00:00", "Z")
     assert release_age_hours(published, now=now) == 6.0
 
@@ -98,7 +99,9 @@ def test_release_age_guardrail_blocks_new_releases():
             "min_release_age_hours": 24,
             "blocked_reason": "",
         },
-        published_at=(datetime.now(UTC) - timedelta(hours=2)).isoformat().replace("+00:00", "Z"),
+        published_at=(datetime.now(timezone.utc) - timedelta(hours=2))
+        .isoformat()
+        .replace("+00:00", "Z"),
     )
     assert guarded["eligible"] is False
     assert guarded["blocked_reason"].startswith("Release is too new")
@@ -152,6 +155,116 @@ def test_auto_update_guardrails_block_when_no_provider_is_healthy():
 
     assert guarded["eligible"] is False
     assert guarded["blocked_reason"] == "No healthy providers available"
+
+
+def test_maintenance_window_guardrail_allows_updates_when_window_is_disabled():
+    guarded = apply_maintenance_window_guardrail(
+        {
+            "enabled": True,
+            "eligible": True,
+            "blocked_reason": "",
+            "maintenance_window": {
+                "enabled": False,
+                "timezone": "UTC",
+                "days": [],
+                "start_hour": 0,
+                "end_hour": 24,
+            },
+        },
+        now=datetime(2026, 3, 12, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert guarded["eligible"] is True
+    assert guarded["maintenance_window"]["open"] is True
+
+
+def test_maintenance_window_guardrail_blocks_outside_allowed_days():
+    guarded = apply_maintenance_window_guardrail(
+        {
+            "enabled": True,
+            "eligible": True,
+            "blocked_reason": "",
+            "maintenance_window": {
+                "enabled": True,
+                "timezone": "UTC",
+                "days": ["sat", "sun"],
+                "start_hour": 0,
+                "end_hour": 24,
+            },
+        },
+        now=datetime(2026, 3, 12, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert guarded["eligible"] is False
+    assert guarded["maintenance_window"]["open"] is False
+    assert guarded["blocked_reason"] == "Outside maintenance days (thu)"
+
+
+def test_maintenance_window_guardrail_blocks_outside_allowed_hours():
+    guarded = apply_maintenance_window_guardrail(
+        {
+            "enabled": True,
+            "eligible": True,
+            "blocked_reason": "",
+            "maintenance_window": {
+                "enabled": True,
+                "timezone": "UTC",
+                "days": [],
+                "start_hour": 2,
+                "end_hour": 5,
+            },
+        },
+        now=datetime(2026, 3, 12, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert guarded["eligible"] is False
+    assert guarded["maintenance_window"]["open"] is False
+    assert guarded["blocked_reason"] == "Outside maintenance window (02:00-05:00 UTC)"
+
+
+def test_maintenance_window_guardrail_allows_inside_matching_window():
+    guarded = apply_maintenance_window_guardrail(
+        {
+            "enabled": True,
+            "eligible": True,
+            "blocked_reason": "",
+            "maintenance_window": {
+                "enabled": True,
+                "timezone": "UTC",
+                "days": ["thu"],
+                "start_hour": 10,
+                "end_hour": 14,
+            },
+        },
+        now=datetime(2026, 3, 12, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert guarded["eligible"] is True
+    assert guarded["maintenance_window"]["open"] is True
+    assert guarded["maintenance_window"]["current_day"] == "thu"
+    assert guarded["maintenance_window"]["current_hour"] == 12
+
+
+def test_maintenance_window_guardrail_blocks_unknown_timezone():
+    guarded = apply_maintenance_window_guardrail(
+        {
+            "enabled": True,
+            "eligible": True,
+            "blocked_reason": "",
+            "maintenance_window": {
+                "enabled": True,
+                "timezone": "Mars/Olympus",
+                "days": [],
+                "start_hour": 0,
+                "end_hour": 24,
+            },
+        },
+        now=datetime(2026, 3, 12, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert guarded["eligible"] is False
+    assert guarded["maintenance_window"]["open"] is False
+    assert guarded["blocked_reason"] == "Unknown maintenance-window timezone 'Mars/Olympus'"
 
 
 @pytest.mark.asyncio
@@ -339,7 +452,7 @@ async def test_min_release_age_blocks_auto_update_until_release_has_aged():
             {
                 "tag_name": "v0.6.1",
                 "html_url": "https://github.com/typelicious/FoundryGate/releases/tag/v0.6.1",
-                "published_at": (datetime.now(UTC) - timedelta(hours=1))
+                "published_at": (datetime.now(timezone.utc) - timedelta(hours=1))
                 .isoformat()
                 .replace("+00:00", "Z"),
             },

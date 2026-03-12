@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
 
@@ -111,7 +112,7 @@ def release_age_hours(published_at: str, *, now: datetime | None = None) -> floa
         published = datetime.fromisoformat(published_at.replace("Z", "+00:00"))
     except ValueError:
         return None
-    current = now or datetime.now(UTC)
+    current = now or datetime.now(timezone.utc)
     return max(0.0, (current - published).total_seconds() / 3600)
 
 
@@ -171,6 +172,63 @@ def apply_release_age_guardrail(
         result["eligible"] = False
         result["blocked_reason"] = (
             f"Release is too new ({age_hours:.1f}h < {min_release_age_hours}h)"
+        )
+    return result
+
+
+def apply_maintenance_window_guardrail(
+    auto_update: dict[str, Any],
+    *,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Apply an optional maintenance-window guardrail to one auto-update status."""
+    result = dict(auto_update or {})
+    window = dict(result.get("maintenance_window") or {})
+    if not result.get("enabled") or not result.get("eligible"):
+        result["maintenance_window"] = window
+        return result
+
+    if not window.get("enabled", False):
+        window["open"] = True
+        result["maintenance_window"] = window
+        return result
+
+    timezone_name = str(window.get("timezone", "UTC"))
+    try:
+        zone = ZoneInfo(timezone_name)
+    except ZoneInfoNotFoundError:
+        result["eligible"] = False
+        result["blocked_reason"] = f"Unknown maintenance-window timezone '{timezone_name}'"
+        window["open"] = False
+        result["maintenance_window"] = window
+        return result
+
+    current = (now or datetime.now(timezone.utc)).astimezone(zone)
+    day_name = current.strftime("%a").lower()[:3]
+    allowed_days = list(window.get("days") or [])
+    start_hour = int(window.get("start_hour", 0))
+    end_hour = int(window.get("end_hour", 24))
+    current_hour = current.hour
+
+    day_allowed = not allowed_days or day_name in allowed_days
+    if start_hour < end_hour:
+        hour_allowed = start_hour <= current_hour < end_hour
+    else:
+        hour_allowed = current_hour >= start_hour or current_hour < end_hour
+
+    window["open"] = bool(day_allowed and hour_allowed)
+    window["current_day"] = day_name
+    window["current_hour"] = current_hour
+    result["maintenance_window"] = window
+
+    if not day_allowed:
+        result["eligible"] = False
+        result["blocked_reason"] = f"Outside maintenance days ({day_name})"
+        return result
+    if not hour_allowed:
+        result["eligible"] = False
+        result["blocked_reason"] = (
+            f"Outside maintenance window ({start_hour:02d}:00-{end_hour:02d}:00 {timezone_name})"
         )
     return result
 
@@ -246,6 +304,7 @@ class UpdateChecker:
             ),
             "max_unhealthy_providers": int((auto_update or {}).get("max_unhealthy_providers", 0)),
             "min_release_age_hours": int((auto_update or {}).get("min_release_age_hours", 0)),
+            "maintenance_window": dict((auto_update or {}).get("maintenance_window") or {}),
             "apply_command": str((auto_update or {}).get("apply_command", "foundrygate-update")),
         }
         self._cached = UpdateStatus(
@@ -306,6 +365,7 @@ class UpdateChecker:
             ),
             "max_unhealthy_providers": int(self.auto_update.get("max_unhealthy_providers", 0)),
             "min_release_age_hours": int(self.auto_update.get("min_release_age_hours", 0)),
+            "maintenance_window": dict(self.auto_update.get("maintenance_window") or {}),
             "eligible": eligible,
             "blocked_reason": blocked_reason,
             "apply_command": apply_command,

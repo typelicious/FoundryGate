@@ -91,6 +91,11 @@ def test_auto_update_defaults_are_exposed():
     assert cfg.auto_update["require_healthy_providers"] is True
     assert cfg.auto_update["max_unhealthy_providers"] == 0
     assert cfg.auto_update["min_release_age_hours"] == 0
+    assert cfg.auto_update["maintenance_window"]["enabled"] is False
+    assert cfg.auto_update["maintenance_window"]["timezone"] == "UTC"
+    assert cfg.auto_update["maintenance_window"]["days"] == ["sat", "sun"]
+    assert cfg.auto_update["maintenance_window"]["start_hour"] == 2
+    assert cfg.auto_update["maintenance_window"]["end_hour"] == 5
     assert cfg.auto_update["apply_command"] == "foundrygate-update"
 
 

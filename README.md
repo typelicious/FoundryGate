@@ -549,6 +549,7 @@ Supported fields in `auto_update`:
 - `require_healthy_providers`
 - `max_unhealthy_providers`
 - `min_release_age_hours`
+- `maintenance_window`
 - `apply_command`
 
 Example:
@@ -561,6 +562,12 @@ auto_update:
   require_healthy_providers: true
   max_unhealthy_providers: 0
   min_release_age_hours: 24
+  maintenance_window:
+    enabled: true
+    timezone: "Europe/Berlin"
+    days: ["sat", "sun"]
+    start_hour: 2
+    end_hour: 5
   apply_command: "foundrygate-update"
 ```
 
@@ -572,6 +579,7 @@ What the current runtime does with it:
 - can block helper-driven rollout when provider health is already degraded
 - lets operators separate `stable` vs `preview` release checks and `stable` / `early` / `canary` rollout rings
 - can require that a release has aged for a minimum number of hours before helper-driven rollout
+- can restrict helper-driven rollout to explicit local maintenance windows
 
 What it still does not do:
 
@@ -848,6 +856,7 @@ What it does not do:
 - it does not download releases
 - it does not modify the checkout
 - it does not auto-update the service unless an operator explicitly wires `foundrygate-auto-update --apply` into their own scheduler
+- it does not bypass maintenance windows, release-age gates, rollout rings, or provider-health guardrails
 
 Manual check:
 
