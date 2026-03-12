@@ -11,13 +11,15 @@ The foundation that used to be the near-term buildout is largely in place:
 - local worker provider contract
 - client profiles and presets
 - optional request hook interfaces
-- first multi-dimensional route-fit inputs for context windows, cache hints, and provider limits
+- multi-dimensional candidate scoring for context windows, token limits, locality, cache alignment, health, latency, and recent failures
 - route introspection
 - routing traces and client/profile metrics
 - local worker probing
-- a hardened simple dashboard with filtered traces and client/provider views
+- a hardened simple dashboard with filtered traces, client/provider views, URL-persisted filters, and operator summary cards
 
 This roadmap now shifts from "rename and foundation" to "deepen the gateway plane without bloating it".
+
+`v0.4.0` is the current routing-baseline release line: hooks, richer scoring, route introspection, and the refined dashboard are now in place.
 
 ## Big Picture
 
@@ -165,10 +167,10 @@ Responsibilities:
 
 Primary goals:
 
-- deepen multi-dimensional scoring beyond the first route-fit checks for cache behavior, context windows, provider limits, and locality
-- keep refining the simple dashboard around traces, provider/client breakdowns, and route visibility
+- deepen multi-dimensional scoring beyond simple fit checks for cache behavior, context windows, provider limits, locality, latency, and recent failures
+- keep refining the simple dashboard around traces, provider/client breakdowns, route visibility, and safe operator ergonomics
 - keep OpenClaw one-agent and many-agent flows on the same OpenAI-compatible path with clearer defaults
-- harden the request hook seam for context, memory, and optimization layers
+- harden the request hook seam for context, memory, and optimization layers, including fail-closed behavior and input sanitization
 
 This release line should deepen the gateway core without turning it into a monolith.
 
@@ -249,14 +251,12 @@ The `v1.0.0` security review should explicitly cover:
 
 The next sequence should ladder directly into the release path above:
 
-1. `feat(router): add multi-dimensional routing inputs for cache, context windows, provider limits, and locality`
-2. `feat(obs): harden the simple dashboard around traces, provider/client filters, and route visibility`
-3. `feat(provider): add modality-aware provider contracts, starting with image generation`
-4. `feat(provider): extend modality contracts toward image editing where supported`
-5. `feat(onboarding): add provider/client onboarding helpers and validation workflows`
-6. `feat(ops): add update alerts and an optional auto-update enabler for controlled deployments`
-7. `feat(dist): add Docker release path and PyPI publishing baseline`
-8. `feat(cli): define the separate npm or TypeScript CLI package path for the `v1.0.0` line`
+1. `feat(provider): add modality-aware provider contracts, starting with image generation`
+2. `feat(provider): extend modality contracts toward image editing where supported`
+3. `feat(onboarding): add provider/client onboarding helpers and validation workflows`
+4. `feat(dist): add Docker release path and PyPI publishing baseline`
+5. `feat(ops): add update alerts and an optional auto-update enabler for controlled deployments`
+6. `feat(cli): define the separate npm or TypeScript CLI package path for the v1.0.0 line`
 
 ## Check on the earlier sequence
 

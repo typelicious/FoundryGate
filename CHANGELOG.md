@@ -6,14 +6,18 @@ The format is intentionally lightweight and human-readable. Group entries by rel
 
 ## Unreleased
 
-### Added
+## v0.4.0 - 2026-03-12
+
+### Changed
 
 - Added optional `request_hooks` with a small built-in hook registry for per-request provider preferences, locality hints, and profile overrides
 - Added a dedicated routing layer for hook-provided hints before client-profile defaults
-- Added dry-run route output for applied hooks and effective request metadata
+- Added dry-run route output for applied hooks, effective request metadata, and candidate ranking details
 - Added provider route-fit metadata for `context_window`, token limits, and cache behavior
 - Added filtered stats, recent-request, and trace queries for provider, client, layer, and success views
-- Hardened the built-in dashboard with provider health, client breakdowns, route traces, filters, and escaped rendering
+- Hardened the built-in dashboard with provider health, client breakdowns, route traces, URL-persisted filters, summary cards, and escaped rendering
+- Deepened provider scoring so routing now considers health, latency, recent failures, cache alignment, and request headroom instead of only first-fit dimension checks
+- Hardened request hooks with sanitized body updates and routing hints plus optional fail-closed behavior via `request_hooks.on_error`
 
 ## v0.3.0 - 2026-03-12
 
