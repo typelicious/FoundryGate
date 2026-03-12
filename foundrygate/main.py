@@ -210,6 +210,16 @@ def _estimate_request_dimensions(body: dict[str, Any]) -> dict[str, int | str]:
     }
 
 
+def _estimate_image_request_dimensions(body: dict[str, Any], *, capability: str) -> dict[str, Any]:
+    """Return lightweight image-request details for debugging and routing preview."""
+    return {
+        "prompt_chars": len(str(body.get("prompt") or "")),
+        "requested_size": body.get("size") or "",
+        "requested_outputs": body.get("n") if isinstance(body.get("n"), int) else 1,
+        "capability": capability,
+    }
+
+
 def _collect_request_cache_preference(body: dict[str, Any]) -> str:
     """Return one request-level cache preference."""
     metadata = body.get("metadata") if isinstance(body.get("metadata"), dict) else {}
@@ -550,6 +560,7 @@ async def list_models():
 @app.get("/api/stats")
 async def stats(
     provider: str | None = None,
+    modality: str | None = None,
     client_profile: str | None = None,
     client_tag: str | None = None,
     layer: str | None = None,
@@ -558,6 +569,7 @@ async def stats(
     """Full statistics: totals, per-provider, routing breakdown, time series."""
     filters = {
         "provider": provider,
+        "modality": modality,
         "client_profile": client_profile,
         "client_tag": client_tag,
         "layer": layer,
@@ -566,6 +578,7 @@ async def stats(
     return {
         "totals": _metrics.get_totals(**filters),
         "providers": _metrics.get_provider_summary(**filters),
+        "modalities": _metrics.get_modality_breakdown(**filters),
         "routing": _metrics.get_routing_breakdown(**filters),
         "clients": _metrics.get_client_breakdown(**filters),
         "hourly": _metrics.get_hourly_series(24),
@@ -577,6 +590,7 @@ async def stats(
 async def recent(
     limit: int = 50,
     provider: str | None = None,
+    modality: str | None = None,
     client_profile: str | None = None,
     client_tag: str | None = None,
     layer: str | None = None,
@@ -587,6 +601,7 @@ async def recent(
         "requests": _metrics.get_recent(
             limit,
             provider=provider,
+            modality=modality,
             client_profile=client_profile,
             client_tag=client_tag,
             layer=layer,
@@ -599,6 +614,7 @@ async def recent(
 async def traces(
     limit: int = 50,
     provider: str | None = None,
+    modality: str | None = None,
     client_profile: str | None = None,
     client_tag: str | None = None,
     layer: str | None = None,
@@ -609,6 +625,7 @@ async def traces(
         "traces": _metrics.get_recent(
             limit,
             provider=provider,
+            modality=modality,
             client_profile=client_profile,
             client_tag=client_tag,
             layer=layer,
@@ -655,9 +672,62 @@ async def preview_route(request: Request):
         "hook_notes": hook_state.notes,
         "hook_errors": hook_state.errors,
         "effective_request": {
+            "modality": "chat",
             "model": effective_body.get("model", "auto"),
             "has_tools": bool(effective_body.get("tools")),
             **_estimate_request_dimensions(effective_body),
+        },
+        "decision": decision.to_dict(),
+        "selected_provider": _serialize_provider(decision.provider_name),
+        "attempt_order": [_serialize_provider(name) for name in attempt_order],
+    }
+
+
+@app.post("/api/route/image")
+async def preview_image_route(request: Request):
+    """Dry-run one image routing decision without sending a provider request."""
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON body"}, status_code=400)
+
+    capability = str(body.get("capability") or "image_generation").strip().lower()
+    if capability not in {"image_generation", "image_editing"}:
+        return _invalid_request_response(
+            "Invalid image route preview request",
+            exc=ValueError("Unsupported capability"),
+        )
+
+    headers = _collect_routing_headers(request)
+    preview_body = dict(body)
+    preview_body.pop("capability", None)
+    try:
+        (
+            decision,
+            client_profile,
+            client_tag,
+            attempt_order,
+            model_requested,
+            hook_state,
+            effective_body,
+        ) = await _resolve_image_route_preview(preview_body, headers, capability=capability)
+    except HookExecutionError as exc:
+        return _request_hook_error_response(exc)
+    except ValueError as exc:
+        return _invalid_request_response("Invalid image route preview request", exc=exc)
+
+    return {
+        "requested_model": model_requested,
+        "resolved_profile": client_profile,
+        "client_tag": client_tag,
+        "routing_headers": headers,
+        "applied_hooks": hook_state.applied_hooks,
+        "hook_notes": hook_state.notes,
+        "hook_errors": hook_state.errors,
+        "effective_request": {
+            "modality": capability,
+            "model": effective_body.get("model", "auto"),
+            **_estimate_image_request_dimensions(effective_body, capability=capability),
         },
         "decision": decision.to_dict(),
         "selected_provider": _serialize_provider(decision.provider_name),
@@ -713,6 +783,7 @@ async def image_generations(request: Request):
                     rule_name=decision.rule_name,
                     latency_ms=(result.get("_foundrygate") or {}).get("latency_ms", 0),
                     requested_model=model_requested,
+                    modality="image_generation",
                     client_profile=client_profile,
                     client_tag=client_tag,
                     decision_reason=decision.reason,
@@ -744,6 +815,7 @@ async def image_generations(request: Request):
                     success=False,
                     error=exc.detail[:500],
                     requested_model=model_requested,
+                    modality="image_generation",
                     client_profile=client_profile,
                     client_tag=client_tag,
                     decision_reason=decision.reason,
@@ -822,6 +894,7 @@ async def image_edits(request: Request):
                     rule_name=decision.rule_name,
                     latency_ms=(result.get("_foundrygate") or {}).get("latency_ms", 0),
                     requested_model=model_requested,
+                    modality="image_editing",
                     client_profile=client_profile,
                     client_tag=client_tag,
                     decision_reason=decision.reason,
@@ -853,6 +926,7 @@ async def image_edits(request: Request):
                     success=False,
                     error=exc.detail[:500],
                     requested_model=model_requested,
+                    modality="image_editing",
                     client_profile=client_profile,
                     client_tag=client_tag,
                     decision_reason=decision.reason,
@@ -964,6 +1038,7 @@ async def chat_completions(request: Request):
                     cost_usd=cost,
                     latency_ms=cg.get("latency_ms", 0),
                     requested_model=model_requested,
+                    modality="chat",
                     client_profile=client_profile,
                     client_tag=client_tag,
                     decision_reason=decision.reason,
@@ -1005,6 +1080,7 @@ async def chat_completions(request: Request):
                     success=False,
                     error=e.detail[:500],
                     requested_model=model_requested,
+                    modality="chat",
                     client_profile=client_profile,
                     client_tag=client_tag,
                     decision_reason=decision.reason,
@@ -1115,6 +1191,14 @@ tr:hover td{background:#1a1a2a}
   <h2>Filters</h2>
   <div class="filters-grid">
     <label>Provider<input id="filter-provider" placeholder="local-worker"></label>
+    <label>Modality
+      <select id="filter-modality">
+        <option value="">All modalities</option>
+        <option value="chat">chat</option>
+        <option value="image_generation">image_generation</option>
+        <option value="image_editing">image_editing</option>
+      </select>
+    </label>
     <label>Client Profile<input id="filter-profile" placeholder="openclaw"></label>
     <label>Client Tag<input id="filter-client" placeholder="codex"></label>
     <label>Layer
@@ -1156,7 +1240,14 @@ tr:hover td{background:#1a1a2a}
 <div class="sect">
   <h2>Client Breakdown</h2>
   <table id="clients"><thead><tr>
-    <th>Profile</th><th>Client Tag</th><th>Provider</th><th>Layer</th><th>Requests</th><th>Cost</th><th>Avg Latency</th>
+    <th>Modality</th><th>Profile</th><th>Client Tag</th><th>Provider</th><th>Layer</th><th>Requests</th><th>Cost</th><th>Avg Latency</th>
+  </tr></thead><tbody></tbody></table>
+</div>
+
+<div class="sect">
+  <h2>Modality Breakdown</h2>
+  <table id="modalities"><thead><tr>
+    <th>Modality</th><th>Provider</th><th>Layer</th><th>Requests</th><th>Cost</th><th>Avg Latency</th>
   </tr></thead><tbody></tbody></table>
 </div>
 
@@ -1196,6 +1287,7 @@ function currentFilters(){
   const params = new URLSearchParams();
   const mapping = {
     provider: $('#filter-provider').value.trim(),
+    modality: $('#filter-modality').value.trim(),
     client_profile: $('#filter-profile').value.trim(),
     client_tag: $('#filter-client').value.trim(),
     layer: $('#filter-layer').value.trim(),
@@ -1210,6 +1302,7 @@ function currentFilters(){
 function syncFiltersFromUrl(){
   const params = new URLSearchParams(window.location.search);
   $('#filter-provider').value = params.get('provider') || '';
+  $('#filter-modality').value = params.get('modality') || '';
   $('#filter-profile').value = params.get('client_profile') || '';
   $('#filter-client').value = params.get('client_tag') || '';
   $('#filter-layer').value = params.get('layer') || '';
@@ -1236,7 +1329,7 @@ function persistFilters(params){
 function applyFilters(){ load(); }
 
 function resetFilters(){
-  ['#filter-provider','#filter-profile','#filter-client','#filter-layer','#filter-success'].forEach(sel => {
+  ['#filter-provider','#filter-modality','#filter-profile','#filter-client','#filter-layer','#filter-success'].forEach(sel => {
     $(sel).value = '';
   });
   load();
@@ -1272,6 +1365,8 @@ async function load(){
     const providers = Object.values(health.providers || {});
     const healthyProviders = providers.filter(provider => provider.healthy).length;
     const unhealthyProviders = providers.length - healthyProviders;
+    const modalityRows = stats.modalities || [];
+    const topModality = modalityRows.length ? modalityRows[0].modality : '—';
     $('#status').style.background = '#5e5';
     $('#ago').textContent = ago(totals.last_request);
 
@@ -1283,6 +1378,7 @@ async function load(){
       <div class="card"><div class="label">Cache Hit Rate</div><div class="value cost">${fmt(totals.cache_hit_pct || 0,1)}%</div><div class="detail">${fmtTok(totals.total_cache_hit || 0)} hit / ${fmtTok(totals.total_cache_miss || 0)} miss</div></div>
       <div class="card"><div class="label">Failures</div><div class="value ${(totals.total_failures||0)>0?'err':''}">${totals.total_failures || 0}</div></div>
       <div class="card"><div class="label">Healthy Providers</div><div class="value">${healthyProviders}/${providers.length}</div><div class="detail">${unhealthyProviders} unhealthy</div></div>
+      <div class="card"><div class="label">Top Modality</div><div class="value">${esc(topModality)}</div><div class="detail">${modalityRows.length} modality groups</div></div>
       <div class="card"><div class="label">Release Status</div><div class="value ${update.update_available ? 'cost' : ''}">${esc(update.latest_version || update.current_version || 'n/a')}</div><div class="detail">${update.enabled ? (update.update_available ? 'Update available' : update.status === 'ok' ? 'Up to date' : 'Update check unavailable') : 'Update checks disabled'}</div></div>
     `;
 
@@ -1300,6 +1396,7 @@ async function load(){
     $('#health tbody').innerHTML = providerRows.length ? providerRows.join('') : emptyRow(9, 'No provider health data');
 
     const clientRows = (stats.clients || []).map(row => `<tr>
+      <td><span class="pill">${esc(row.modality || 'chat')}</span></td>
       <td>${esc(row.client_profile || 'generic')}</td>
       <td>${esc(row.client_tag || '—')}</td>
       <td>${esc(row.provider)}</td>
@@ -1308,7 +1405,17 @@ async function load(){
       <td class="mono">${fmtUsd(row.cost_usd)}</td>
       <td class="mono">${fmtMs(row.avg_latency_ms)}</td>
     </tr>`);
-    $('#clients tbody').innerHTML = clientRows.length ? clientRows.join('') : emptyRow(7, 'No client rows for the current filter set');
+    $('#clients tbody').innerHTML = clientRows.length ? clientRows.join('') : emptyRow(8, 'No client rows for the current filter set');
+
+    const modalityRowsHtml = modalityRows.map(row => `<tr>
+      <td><span class="pill">${esc(row.modality || 'chat')}</span></td>
+      <td>${esc(row.provider)}</td>
+      <td>${layerTag(row.layer)}</td>
+      <td>${row.requests}</td>
+      <td class="mono">${fmtUsd(row.cost_usd)}</td>
+      <td class="mono">${fmtMs(row.avg_latency_ms)}</td>
+    </tr>`);
+    $('#modalities tbody').innerHTML = modalityRowsHtml.length ? modalityRowsHtml.join('') : emptyRow(6, 'No modality rows for the current filter set');
 
     const routingRows = (stats.routing || []).map(row => `<tr>
       <td>${layerTag(row.layer)}</td>
@@ -1323,7 +1430,7 @@ async function load(){
     const traceRows = (traces.traces || []).map(row => `<tr>
       <td class="mono">${ago(row.timestamp)}</td>
       <td>${esc(row.provider)}</td>
-      <td>${esc(row.client_profile || 'generic')}</td>
+      <td>${esc(row.client_profile || 'generic')} <span class="pill">${esc(row.modality || 'chat')}</span></td>
       <td>${esc(row.client_tag || '—')}</td>
       <td>${layerTag(row.layer)}</td>
       <td class="mono">${esc(row.decision_reason || row.rule_name)}</td>
@@ -1335,7 +1442,7 @@ async function load(){
     const recentRows = (rec.requests || []).map(row => `<tr>
       <td class="mono">${ago(row.timestamp)}</td>
       <td>${esc(row.provider)}</td>
-      <td>${layerTag(row.layer)}</td>
+      <td>${layerTag(row.layer)} <span class="pill">${esc(row.modality || 'chat')}</span></td>
       <td class="mono">${esc(row.rule_name)}</td>
       <td class="mono">${fmtTok((row.prompt_tok||0)+(row.compl_tok||0))}</td>
       <td class="mono">${fmtUsd(row.cost_usd)}</td>

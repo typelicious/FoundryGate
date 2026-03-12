@@ -2,11 +2,13 @@
 
 # ruff: noqa: E402
 
+import json
 import sys
 import types
 from pathlib import Path
 
 import pytest
+from starlette.requests import Request
 
 # Mock httpx before importing our modules
 _httpx = types.ModuleType("httpx")
@@ -44,6 +46,7 @@ from foundrygate.main import (
     _refresh_local_worker_probes,
     _resolve_image_route_preview,
     _resolve_route_preview,
+    preview_image_route,
 )
 from foundrygate.router import Router
 
@@ -52,6 +55,36 @@ def _write_config(tmp_path: Path, body: str) -> Path:
     path = tmp_path / "config.yaml"
     path.write_text(body)
     return path
+
+
+def _json_request(
+    path: str,
+    payload: dict[str, object],
+    headers: dict[str, str] | None = None,
+) -> Request:
+    body = json.dumps(payload).encode("utf-8")
+    header_items = [(b"content-type", b"application/json")]
+    for key, value in (headers or {}).items():
+        header_items.append((key.lower().encode("utf-8"), value.encode("utf-8")))
+
+    received = False
+
+    async def receive():
+        nonlocal received
+        if received:
+            return {"type": "http.disconnect"}
+        received = True
+        return {"type": "http.request", "body": body, "more_body": False}
+
+    return Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": path,
+            "headers": header_items,
+        },
+        receive,
+    )
 
 
 class _ProviderStub:
@@ -72,6 +105,9 @@ class _ProviderStub:
         self.contract = contract
         self.tier = tier
         self.capabilities = capabilities or {}
+        self.context_window = 0
+        self.limits = {}
+        self.cache = {"mode": "none", "read_discount": False}
         self.health = types.SimpleNamespace(
             healthy=healthy,
             last_check=0.0,
@@ -291,6 +327,23 @@ class TestRoutePreview:
         assert attempt_order == ["image-cloud"]
         assert hook_state.applied_hooks == []
         assert effective_body["prompt"] == "Remove the background and keep the subject."
+
+    @pytest.mark.asyncio
+    async def test_image_route_preview_endpoint_reports_modality(self, preview_config):
+        response = await preview_image_route(
+            _json_request(
+                "/api/route/image",
+                {
+                    "model": "auto",
+                    "capability": "image_editing",
+                    "prompt": "Remove the background.",
+                },
+            )
+        )
+
+        assert response["effective_request"]["modality"] == "image_editing"
+        assert response["decision"]["provider"] == "image-cloud"
+        assert response["selected_provider"]["contract"] == "image-provider"
 
     def test_extract_image_edit_request_fields_requires_prompt(self):
         with pytest.raises(ValueError, match="non-empty 'prompt'"):
