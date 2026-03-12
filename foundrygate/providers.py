@@ -196,6 +196,101 @@ class ProviderBackend:
             self.health.record_failure(f"Connection error: {e}")
             raise ProviderError(self.name, 0, f"Connection error: {e}") from e
 
+    async def edit_image(
+        self,
+        prompt: str,
+        *,
+        image: dict[str, Any],
+        mask: dict[str, Any] | None = None,
+        model_override: str | None = None,
+        n: int = 1,
+        size: str | None = None,
+        response_format: str | None = None,
+        user: str | None = None,
+        extra_fields: dict[str, Any] | None = None,
+    ) -> dict:
+        """Send an OpenAI-compatible image editing request."""
+        if self.backend_type != "openai-compat":
+            raise ProviderError(
+                self.name,
+                0,
+                f"Image editing is not implemented for backend '{self.backend_type}'",
+            )
+
+        model = model_override or self.model
+        data: dict[str, str] = {
+            "model": model,
+            "prompt": prompt,
+            "n": str(n),
+        }
+        if size:
+            data["size"] = size
+        if response_format:
+            data["response_format"] = response_format
+        if user:
+            data["user"] = user
+        if extra_fields:
+            for key, value in extra_fields.items():
+                if value is None:
+                    continue
+                data[key] = str(value)
+
+        files = [
+            (
+                "image",
+                (
+                    image["filename"],
+                    image["content"],
+                    image.get("content_type") or "application/octet-stream",
+                ),
+            )
+        ]
+        if mask:
+            files.append(
+                (
+                    "mask",
+                    (
+                        mask["filename"],
+                        mask["content"],
+                        mask.get("content_type") or "application/octet-stream",
+                    ),
+                )
+            )
+
+        headers = {"Authorization": f"Bearer {self.api_key}"}
+        if "openrouter" in self.base_url:
+            headers["HTTP-Referer"] = "https://foundrygate.local"
+            headers["X-Title"] = "FoundryGate"
+
+        url = f"{self.base_url}/images/edits"
+        t0 = time.time()
+
+        try:
+            resp = await self._client.post(url, data=data, files=files, headers=headers)
+            latency = (time.time() - t0) * 1000
+
+            if resp.status_code >= 400:
+                error_text = resp.text[:500]
+                self.health.record_failure(f"HTTP {resp.status_code}: {error_text}")
+                raise ProviderError(self.name, resp.status_code, error_text)
+
+            self.health.record_success(latency)
+            data = resp.json()
+            data["_foundrygate"] = {
+                "provider": self.name,
+                "model": model,
+                "latency_ms": round(latency, 1),
+                "modality": "image_editing",
+            }
+            return data
+
+        except httpx.TimeoutException as e:
+            self.health.record_failure(f"Timeout: {e}")
+            raise ProviderError(self.name, 0, f"Timeout: {e}") from e
+        except httpx.ConnectError as e:
+            self.health.record_failure(f"Connection error: {e}")
+            raise ProviderError(self.name, 0, f"Connection error: {e}") from e
+
     # ── OpenAI-compatible completion ───────────────────────────
 
     async def complete(

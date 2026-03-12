@@ -40,7 +40,7 @@ FoundryGate is a local OpenAI-compatible router/proxy for OpenClaw and other cli
 ## Why FoundryGate
 
 - OpenAI-compatible API: expose `/v1/models` and `/v1/chat/completions` to OpenClaw or any OpenAI-style client.
-- Modality growth path: the runtime now includes an OpenAI-compatible `POST /v1/images/generations` path for providers marked as image-capable.
+- Modality growth path: the runtime now includes OpenAI-compatible image generation and image editing paths for providers marked as image-capable.
 - Single endpoint, multiple providers: clients call one local base URL while FoundryGate chooses the upstream provider.
 - Multi-provider routing: use `auto` for routing or target a provider directly by model id.
 - Multi-dimensional routing: score providers across locality, context headroom, token limits, cache metadata, latency, and recent failure state during provider selection.
@@ -215,6 +215,24 @@ curl -fsS http://127.0.0.1:8090/v1/images/generations \
     "prompt": "An architectural diagram of a local AI gateway, blueprint style",
     "size": "1024x1024"
   }'
+```
+
+### `POST /v1/images/edits`
+
+OpenAI-compatible image editing endpoint.
+
+- expects `multipart/form-data`
+- currently supports one required `image` upload plus an optional `mask`
+- `model: "auto"` selects the best loaded provider with `capabilities.image_editing: true`
+- `model: "<provider-id>"` routes directly to a loaded image-edit-capable provider
+
+```bash
+curl -fsS http://127.0.0.1:8090/v1/images/edits \
+  -F 'model=auto' \
+  -F 'prompt=Remove the background and keep the subject centered' \
+  -F 'image=@input.png' \
+  -F 'mask=@mask.png' \
+  -F 'size=1024x1024'
 ```
 
 ### Additional Stable Operational Endpoints
@@ -513,14 +531,15 @@ providers:
 
 ### Image Provider Contract
 
-FoundryGate also supports `contract: image-provider` for OpenAI-compatible backends that expose `POST /images/generations`.
+FoundryGate also supports `contract: image-provider` for OpenAI-compatible backends that expose image generation or image editing paths.
 
 What the current runtime guarantees for `image-provider`:
 
 - backend must be `openai-compat`
 - `capabilities.image_generation` is normalized to `true`
-- explicit `image_editing: true` can be declared for future editing support
+- explicit `image_editing: true` enables `POST /v1/images/edits`
 - `model: "auto"` on `POST /v1/images/generations` selects only providers with image-generation capability
+- `model: "auto"` on `POST /v1/images/edits` selects only providers with image-editing capability
 
 Example:
 

@@ -94,6 +94,7 @@ The main operational endpoints are:
 - `GET /v1/models`
 - `POST /v1/chat/completions`
 - `POST /v1/images/generations`
+- `POST /v1/images/edits`
 - `POST /api/route`
 - `GET /api/stats`
 - `GET /api/recent`

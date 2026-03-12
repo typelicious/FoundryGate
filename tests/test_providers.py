@@ -266,3 +266,65 @@ class TestImageGeneration:
         assert captured["json"]["user"] == "tester"
         assert result["_foundrygate"]["provider"] == "image-cloud"
         assert result["_foundrygate"]["modality"] == "image_generation"
+
+    @pytest.mark.asyncio
+    async def test_openai_image_editing_posts_to_edits_endpoint(self):
+        backend = ProviderBackend(
+            "image-cloud",
+            {
+                "contract": "image-provider",
+                "backend": "openai-compat",
+                "base_url": "https://api.example.com/v1",
+                "api_key": "secret",
+                "model": "gpt-image-1",
+                "capabilities": {"image_editing": True},
+            },
+        )
+        captured: dict = {}
+
+        class _FakeResp:
+            status_code = 200
+
+            def json(self):
+                return {"created": 1, "data": [{"b64_json": "edited"}]}
+
+        async def _fake_post(url, data=None, files=None, headers=None, **kw):
+            captured["url"] = url
+            captured["data"] = data or {}
+            captured["files"] = files or []
+            captured["headers"] = headers or {}
+            return _FakeResp()
+
+        backend._client.post = _fake_post  # type: ignore[attr-defined]
+
+        result = await backend.edit_image(
+            "remove the background",
+            image={
+                "filename": "input.png",
+                "content": b"image-bytes",
+                "content_type": "image/png",
+            },
+            mask={
+                "filename": "mask.png",
+                "content": b"mask-bytes",
+                "content_type": "image/png",
+            },
+            n=2,
+            size="1024x1024",
+            response_format="b64_json",
+            user="tester",
+        )
+
+        assert captured["url"] == "https://api.example.com/v1/images/edits"
+        assert captured["data"]["model"] == "gpt-image-1"
+        assert captured["data"]["prompt"] == "remove the background"
+        assert captured["data"]["n"] == "2"
+        assert captured["data"]["size"] == "1024x1024"
+        assert captured["data"]["response_format"] == "b64_json"
+        assert captured["data"]["user"] == "tester"
+        assert captured["files"][0][0] == "image"
+        assert captured["files"][0][1][0] == "input.png"
+        assert captured["files"][1][0] == "mask"
+        assert captured["files"][1][1][0] == "mask.png"
+        assert result["_foundrygate"]["provider"] == "image-cloud"
+        assert result["_foundrygate"]["modality"] == "image_editing"

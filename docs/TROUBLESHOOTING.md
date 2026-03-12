@@ -83,9 +83,9 @@ If the worker is healthy but still loses route selection, inspect `POST /api/rou
 - `locality_score`
 - `latency_score`
 
-## Image generation fails
+## Image generation or image editing fails
 
-Check whether any loaded provider actually exposes image-generation capability:
+Check whether any loaded provider actually exposes the required image capability:
 
 ```bash
 curl -fsS http://127.0.0.1:8090/v1/models
@@ -101,7 +101,17 @@ curl -fsS https://api.example.com/v1/images/generations \
   -d '{"model":"gpt-image-1","prompt":"test"}'
 ```
 
-If `model: "auto"` still fails, verify that at least one loaded provider reports `capabilities.image_generation: true`.
+For image editing, validate the upstream edit surface too:
+
+```bash
+curl -fsS https://api.example.com/v1/images/edits \
+  -H 'Authorization: Bearer YOUR_KEY' \
+  -F 'model=gpt-image-1' \
+  -F 'prompt=test' \
+  -F 'image=@input.png'
+```
+
+If `model: "auto"` still fails, verify that at least one loaded provider reports `capabilities.image_generation: true` for generation or `capabilities.image_editing: true` for editing.
 
 ## Many-agent OpenClaw traffic is not separated
 

@@ -85,7 +85,7 @@ When onboarding a new client:
 
 These are roadmap items or early foundations:
 
-- image generation routing through `POST /v1/images/generations` for providers that declare `contract: image-provider`
+- image generation and image editing routing through `POST /v1/images/generations` and `POST /v1/images/edits` for providers that declare `contract: image-provider`
 - optional request hooks for context or optimization
 - richer CLI-sidecar adapters
 - provider and client onboarding helpers

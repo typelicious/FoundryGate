@@ -15,6 +15,7 @@ from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from starlette.datastructures import UploadFile
 
 from .config import Config, load_config
 from .hooks import AppliedHooks, HookExecutionError, RequestHookContext, apply_request_hooks
@@ -302,14 +303,79 @@ def _collect_image_request_fields(body: dict[str, Any]) -> dict[str, Any]:
     return fields
 
 
+def _parse_optional_positive_int(value: Any, *, field_name: str) -> int | None:
+    """Return one optional positive integer field from request data."""
+    if value in (None, ""):
+        return None
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Field '{field_name}' must be a positive integer") from exc
+    if parsed <= 0:
+        raise ValueError(f"Field '{field_name}' must be a positive integer")
+    return parsed
+
+
+def _extract_image_edit_request_fields(form_data: dict[str, Any]) -> dict[str, Any]:
+    """Return the validated scalar fields for one image-edit request."""
+    prompt = form_data.get("prompt")
+    if not isinstance(prompt, str) or not prompt.strip():
+        raise ValueError("Image editing requires a non-empty 'prompt' field")
+
+    model = form_data.get("model")
+    if model is None:
+        model = "auto"
+    elif not isinstance(model, str) or not model.strip():
+        raise ValueError("Field 'model' must be a non-empty string when provided")
+
+    payload: dict[str, Any] = {
+        "prompt": prompt.strip(),
+        "model": model.strip() if isinstance(model, str) else "auto",
+    }
+
+    n = _parse_optional_positive_int(form_data.get("n"), field_name="n")
+    if n is not None:
+        payload["n"] = n
+
+    for key in ("size", "response_format", "user"):
+        value = form_data.get(key)
+        if isinstance(value, str) and value.strip():
+            payload[key] = value.strip()
+
+    return payload
+
+
+async def _read_uploaded_file(
+    value: Any, *, field_name: str, required: bool
+) -> dict[str, Any] | None:
+    """Read one uploaded file into a normalized payload."""
+    if value is None:
+        if required:
+            raise ValueError(f"Image editing requires file field '{field_name}'")
+        return None
+
+    if not isinstance(value, UploadFile):
+        raise ValueError(f"Field '{field_name}' must be an uploaded file")
+
+    content = await value.read()
+    if not content:
+        raise ValueError(f"Uploaded file '{field_name}' must not be empty")
+
+    return {
+        "filename": value.filename or field_name,
+        "content": content,
+        "content_type": value.content_type or "application/octet-stream",
+    }
+
+
 async def _resolve_image_route_preview(
-    body: dict[str, Any], headers: dict[str, str]
+    body: dict[str, Any], headers: dict[str, str], *, capability: str = "image_generation"
 ) -> tuple[RoutingDecision, str, str, list[str], str, AppliedHooks, dict[str, Any]]:
     """Resolve one image-generation request without calling a provider."""
     body, hook_state = await _apply_request_hooks(body, headers)
     prompt = body.get("prompt")
     if not isinstance(prompt, str) or not prompt.strip():
-        raise ValueError("Image generation requires a non-empty 'prompt' string")
+        raise ValueError("Image request requires a non-empty 'prompt' string")
 
     model_requested = str(body.get("model", "auto"))
     client_profile, profile_hints = _resolve_client_profile(
@@ -323,19 +389,19 @@ async def _resolve_image_route_preview(
         provider = _providers.get(model_requested)
         if not provider:
             raise ValueError(f"Unknown image provider '{model_requested}'")
-        if not provider.capabilities.get("image_generation"):
-            raise ValueError(f"Provider '{model_requested}' does not support image generation")
+        if not provider.capabilities.get(capability):
+            raise ValueError(f"Provider '{model_requested}' does not support {capability}")
         decision = RoutingDecision(
             provider_name=model_requested,
             layer="direct",
-            rule_name="explicit-image-model",
+            rule_name=f"explicit-{capability}-model",
             confidence=1.0,
             reason=f"Directly requested image provider: {model_requested}",
-            details={"required_capability": "image_generation"},
+            details={"required_capability": capability},
         )
     else:
         decision = _router.route_capability_request(
-            capability="image_generation",
+            capability=capability,
             request_text=prompt,
             model_requested=model_requested,
             client_profile=client_profile,
@@ -346,7 +412,7 @@ async def _resolve_image_route_preview(
             provider_health={name: p.health.to_dict() for name, p in _providers.items()},
         )
         if not decision:
-            raise ValueError("No image-generation provider is available")
+            raise ValueError(f"No provider with capability '{capability}' is available")
 
     return (
         decision,
@@ -354,7 +420,7 @@ async def _resolve_image_route_preview(
         client_tag,
         _build_attempt_order(
             decision.provider_name,
-            required_capabilities=["image_generation"],
+            required_capabilities=[capability],
         ),
         model_requested,
         hook_state,
@@ -670,6 +736,115 @@ async def image_generations(request: Request):
         {
             "error": {
                 "message": f"All image providers failed: {'; '.join(errors)}",
+                "type": "provider_error",
+                "attempts": errors,
+            }
+        },
+        status_code=502,
+    )
+
+
+@app.post("/v1/images/edits")
+async def image_edits(request: Request):
+    """OpenAI-compatible image editing endpoint."""
+    try:
+        form = await request.form()
+        form_data = dict(form.multi_items())
+        body = _extract_image_edit_request_fields(form_data)
+        image = await _read_uploaded_file(form_data.get("image"), field_name="image", required=True)
+        mask = await _read_uploaded_file(form_data.get("mask"), field_name="mask", required=False)
+    except ValueError as exc:
+        return _invalid_request_response("Invalid image editing request", exc=exc)
+    except Exception as exc:
+        logger.warning("Failed to parse image editing form: %s", exc)
+        return _invalid_request_response("Invalid image editing request")
+
+    headers = _collect_routing_headers(request)
+    try:
+        (
+            decision,
+            client_profile,
+            client_tag,
+            attempt_order,
+            model_requested,
+            hook_state,
+            effective_body,
+        ) = await _resolve_image_route_preview(body, headers, capability="image_editing")
+    except HookExecutionError as exc:
+        return _request_hook_error_response(exc)
+    except ValueError as exc:
+        return _invalid_request_response("Invalid image editing request", exc=exc)
+
+    prompt = effective_body["prompt"].strip()
+    errors: list[str] = []
+
+    for provider_name in attempt_order:
+        provider = _providers.get(provider_name)
+        if not provider:
+            continue
+        if not provider.health.healthy and provider_name != attempt_order[0]:
+            continue
+
+        try:
+            result = await provider.edit_image(
+                prompt,
+                image=image,
+                mask=mask,
+                n=effective_body.get("n", 1),
+                size=effective_body.get("size"),
+                response_format=effective_body.get("response_format"),
+                user=effective_body.get("user"),
+            )
+            if _config.metrics.get("enabled") and isinstance(result, dict):
+                _metrics.log_request(
+                    provider=provider_name,
+                    model=provider.model,
+                    layer=decision.layer,
+                    rule_name=decision.rule_name,
+                    latency_ms=(result.get("_foundrygate") or {}).get("latency_ms", 0),
+                    requested_model=model_requested,
+                    client_profile=client_profile,
+                    client_tag=client_tag,
+                    decision_reason=decision.reason,
+                    confidence=decision.confidence,
+                    attempt_order=attempt_order,
+                )
+
+            resp = JSONResponse(result)
+            resp.headers["X-FoundryGate-Provider"] = provider_name
+            resp.headers["X-FoundryGate-Profile"] = client_profile
+            resp.headers["X-FoundryGate-Layer"] = decision.layer
+            resp.headers["X-FoundryGate-Rule"] = decision.rule_name
+            resp.headers["X-FoundryGate-Hooks"] = ",".join(hook_state.applied_hooks)
+            resp.headers["X-FoundryGate-Hook-Errors"] = str(len(hook_state.errors))
+            return resp
+        except ProviderError as exc:
+            errors.append(f"{provider_name}: {exc.detail}")
+            logger.warning(
+                "Image editing provider %s failed: %s, trying next...",
+                provider_name,
+                exc.detail[:200],
+            )
+            if _config.metrics.get("enabled"):
+                _metrics.log_request(
+                    provider=provider_name,
+                    model=provider.model,
+                    layer=decision.layer,
+                    rule_name=decision.rule_name,
+                    success=False,
+                    error=exc.detail[:500],
+                    requested_model=model_requested,
+                    client_profile=client_profile,
+                    client_tag=client_tag,
+                    decision_reason=decision.reason,
+                    confidence=decision.confidence,
+                    attempt_order=attempt_order,
+                )
+
+    return JSONResponse(
+        {
+            "error": {
+                "message": f"All image editing providers failed: {'; '.join(errors)}",
                 "type": "provider_error",
                 "attempts": errors,
             }

@@ -40,6 +40,7 @@ sys.modules["httpx"] = _httpx
 import foundrygate.main as main_module
 from foundrygate.config import load_config
 from foundrygate.main import (
+    _extract_image_edit_request_fields,
     _refresh_local_worker_probes,
     _resolve_image_route_preview,
     _resolve_route_preview,
@@ -120,6 +121,8 @@ providers:
     api_key: "secret"
     model: "gpt-image-1"
     tier: default
+    capabilities:
+      image_editing: true
 client_profiles:
   enabled: true
   default: generic
@@ -169,6 +172,7 @@ metrics:
                     "cloud": True,
                     "network_zone": "public",
                     "image_generation": True,
+                    "image_editing": True,
                 },
             ),
         },
@@ -259,6 +263,57 @@ class TestRoutePreview:
         assert attempt_order == ["image-cloud"]
         assert hook_state.applied_hooks == []
         assert effective_body["prompt"] == "Draw a blueprint-style gateway diagram."
+
+    @pytest.mark.asyncio
+    async def test_image_edit_preview_selects_edit_capable_provider(self, preview_config):
+        (
+            decision,
+            profile_name,
+            client_tag,
+            attempt_order,
+            model_requested,
+            hook_state,
+            effective_body,
+        ) = await _resolve_image_route_preview(
+            {
+                "model": "auto",
+                "prompt": "Remove the background and keep the subject.",
+            },
+            {},
+            capability="image_editing",
+        )
+
+        assert model_requested == "auto"
+        assert profile_name == "generic"
+        assert client_tag == "generic"
+        assert decision.provider_name == "image-cloud"
+        assert decision.details["required_capability"] == "image_editing"
+        assert attempt_order == ["image-cloud"]
+        assert hook_state.applied_hooks == []
+        assert effective_body["prompt"] == "Remove the background and keep the subject."
+
+    def test_extract_image_edit_request_fields_requires_prompt(self):
+        with pytest.raises(ValueError, match="non-empty 'prompt'"):
+            _extract_image_edit_request_fields({"model": "auto"})
+
+    def test_extract_image_edit_request_fields_parses_scalars(self):
+        payload = _extract_image_edit_request_fields(
+            {
+                "model": "image-cloud",
+                "prompt": "Retouch the lighting",
+                "n": "2",
+                "size": "1024x1024",
+                "response_format": "b64_json",
+                "user": "tester",
+            }
+        )
+
+        assert payload["model"] == "image-cloud"
+        assert payload["prompt"] == "Retouch the lighting"
+        assert payload["n"] == 2
+        assert payload["size"] == "1024x1024"
+        assert payload["response_format"] == "b64_json"
+        assert payload["user"] == "tester"
 
 
 class TestLocalWorkerProbeRefresh:

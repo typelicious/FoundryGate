@@ -188,6 +188,7 @@ providers:
   #  model: "gpt-image-1"
   #  tier: default
   #  capabilities:
+  #    # image_generation is enabled automatically by the contract
   #    image_editing: true
 
   # ── Anthropic ───────────────────────────────────────────────────────────

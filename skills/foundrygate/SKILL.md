@@ -76,6 +76,17 @@ curl -s http://127.0.0.1:8090/v1/images/generations \
   }' | python3 -m json.tool
 ```
 
+### /foundrygate image-edit <prompt>
+Send one image-edit request with a local input file and optional mask.
+
+```bash
+curl -s http://127.0.0.1:8090/v1/images/edits \
+  -F "model=auto" \
+  -F "prompt=PROMPT_HERE" \
+  -F "image=@INPUT_IMAGE.png" \
+  -F "mask=@OPTIONAL_MASK.png" | python3 -m json.tool
+```
+
 ### /foundrygate recent
 Show the last 10 requests with provider, layer, rule, tokens, cost, and status.
 
