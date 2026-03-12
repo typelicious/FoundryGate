@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -112,7 +112,7 @@ def release_age_hours(published_at: str, *, now: datetime | None = None) -> floa
         published = datetime.fromisoformat(published_at.replace("Z", "+00:00"))
     except ValueError:
         return None
-    current = now or datetime.now(UTC)
+    current = now or datetime.now(timezone.utc)
     return max(0.0, (current - published).total_seconds() / 3600)
 
 
@@ -209,7 +209,7 @@ def apply_maintenance_window_guardrail(
         result["maintenance_window"] = window
         return result
 
-    current = (now or datetime.now(UTC)).astimezone(zone)
+    current = (now or datetime.now(timezone.utc)).astimezone(zone)
     day_name = current.strftime("%a").lower()[:3]
     allowed_days = list(window.get("days") or [])
     start_hour = int(window.get("start_hour", 0))

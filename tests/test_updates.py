@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -86,7 +86,7 @@ def test_select_release_payload_uses_first_preview_release():
 
 
 def test_release_age_hours_reports_elapsed_time():
-    now = datetime(2026, 3, 12, 18, 0, tzinfo=UTC)
+    now = datetime(2026, 3, 12, 18, 0, tzinfo=timezone.utc)
     published = (now - timedelta(hours=6)).isoformat().replace("+00:00", "Z")
     assert release_age_hours(published, now=now) == 6.0
 
@@ -99,7 +99,9 @@ def test_release_age_guardrail_blocks_new_releases():
             "min_release_age_hours": 24,
             "blocked_reason": "",
         },
-        published_at=(datetime.now(UTC) - timedelta(hours=2)).isoformat().replace("+00:00", "Z"),
+        published_at=(datetime.now(timezone.utc) - timedelta(hours=2))
+        .isoformat()
+        .replace("+00:00", "Z"),
     )
     assert guarded["eligible"] is False
     assert guarded["blocked_reason"].startswith("Release is too new")
@@ -190,7 +192,7 @@ def test_maintenance_window_guardrail_allows_updates_when_window_is_disabled():
                 "end_hour": 24,
             },
         },
-        now=datetime(2026, 3, 12, 12, 0, tzinfo=UTC),
+        now=datetime(2026, 3, 12, 12, 0, tzinfo=timezone.utc),
     )
 
     assert guarded["eligible"] is True
@@ -211,7 +213,7 @@ def test_maintenance_window_guardrail_blocks_outside_allowed_days():
                 "end_hour": 24,
             },
         },
-        now=datetime(2026, 3, 12, 12, 0, tzinfo=UTC),
+        now=datetime(2026, 3, 12, 12, 0, tzinfo=timezone.utc),
     )
 
     assert guarded["eligible"] is False
@@ -233,7 +235,7 @@ def test_maintenance_window_guardrail_blocks_outside_allowed_hours():
                 "end_hour": 5,
             },
         },
-        now=datetime(2026, 3, 12, 12, 0, tzinfo=UTC),
+        now=datetime(2026, 3, 12, 12, 0, tzinfo=timezone.utc),
     )
 
     assert guarded["eligible"] is False
@@ -255,7 +257,7 @@ def test_maintenance_window_guardrail_allows_inside_matching_window():
                 "end_hour": 14,
             },
         },
-        now=datetime(2026, 3, 12, 12, 0, tzinfo=UTC),
+        now=datetime(2026, 3, 12, 12, 0, tzinfo=timezone.utc),
     )
 
     assert guarded["eligible"] is True
@@ -278,7 +280,7 @@ def test_maintenance_window_guardrail_blocks_unknown_timezone():
                 "end_hour": 24,
             },
         },
-        now=datetime(2026, 3, 12, 12, 0, tzinfo=UTC),
+        now=datetime(2026, 3, 12, 12, 0, tzinfo=timezone.utc),
     )
 
     assert guarded["eligible"] is False
@@ -479,7 +481,7 @@ async def test_min_release_age_blocks_auto_update_until_release_has_aged():
             {
                 "tag_name": "v0.6.1",
                 "html_url": "https://github.com/typelicious/FoundryGate/releases/tag/v0.6.1",
-                "published_at": (datetime.now(UTC) - timedelta(hours=1))
+                "published_at": (datetime.now(timezone.utc) - timedelta(hours=1))
                 .isoformat()
                 .replace("+00:00", "Z"),
             },
