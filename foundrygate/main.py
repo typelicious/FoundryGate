@@ -639,7 +639,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="FoundryGate",
-    version="0.5.0",
+    version="0.6.0",
     description="Local OpenAI-compatible routing gateway for OpenClaw and other clients.",
     lifespan=lifespan,
 )
