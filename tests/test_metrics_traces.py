@@ -14,6 +14,7 @@ def test_metrics_store_persists_trace_fields(tmp_path):
     metrics.log_request(
         provider="local-worker",
         model="llama3",
+        modality="chat",
         layer="profile",
         rule_name="profile-local-only",
         prompt_tokens=120,
@@ -30,6 +31,7 @@ def test_metrics_store_persists_trace_fields(tmp_path):
 
     recent = metrics.get_recent(1)
     assert recent[0]["requested_model"] == "auto"
+    assert recent[0]["modality"] == "chat"
     assert recent[0]["client_profile"] == "local-only"
     assert recent[0]["client_tag"] == "n8n"
     assert recent[0]["decision_reason"].startswith("Client profile")
@@ -37,6 +39,7 @@ def test_metrics_store_persists_trace_fields(tmp_path):
     assert recent[0]["attempt_order"] == ["local-worker", "cloud-default"]
 
     client_rows = metrics.get_client_breakdown()
+    assert client_rows[0]["modality"] == "chat"
     assert client_rows[0]["client_profile"] == "local-only"
     assert client_rows[0]["client_tag"] == "n8n"
     assert client_rows[0]["provider"] == "local-worker"
@@ -81,6 +84,7 @@ def test_metrics_store_migrates_existing_db(tmp_path):
 
     assert "client_profile" in columns
     assert "client_tag" in columns
+    assert "modality" in columns
     assert "attempt_order" in columns
     reopened.close()
 
@@ -93,6 +97,7 @@ def test_metrics_store_filters_recent_and_breakdowns(tmp_path):
     metrics.log_request(
         provider="local-worker",
         model="llama3",
+        modality="image_generation",
         layer="hook",
         rule_name="request-hooks",
         cost_usd=0.0,
@@ -104,6 +109,7 @@ def test_metrics_store_filters_recent_and_breakdowns(tmp_path):
     metrics.log_request(
         provider="cloud-default",
         model="cloud-chat",
+        modality="chat",
         layer="policy",
         rule_name="prefer-cloud",
         cost_usd=0.01,
@@ -123,8 +129,14 @@ def test_metrics_store_filters_recent_and_breakdowns(tmp_path):
 
     client_rows = metrics.get_client_breakdown(client_tag="codex")
     assert len(client_rows) == 1
+    assert client_rows[0]["modality"] == "image_generation"
     assert client_rows[0]["client_tag"] == "codex"
     assert client_rows[0]["provider"] == "local-worker"
+
+    modality_rows = metrics.get_modality_breakdown(modality="image_generation")
+    assert len(modality_rows) == 1
+    assert modality_rows[0]["modality"] == "image_generation"
+    assert modality_rows[0]["provider"] == "local-worker"
 
     routing_rows = metrics.get_routing_breakdown(layer="hook")
     assert len(routing_rows) == 1

@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS requests (
     success     INTEGER DEFAULT 1,
     error       TEXT    DEFAULT '',
     requested_model TEXT DEFAULT 'auto',
+    modality        TEXT DEFAULT 'chat',
     client_profile  TEXT DEFAULT 'generic',
     client_tag      TEXT DEFAULT '',
     decision_reason TEXT DEFAULT '',
@@ -60,6 +61,7 @@ CREATE INDEX IF NOT EXISTS idx_req_layer    ON requests(layer);
 
 _OPTIONAL_COLUMNS: dict[str, str] = {
     "requested_model": "TEXT DEFAULT 'auto'",
+    "modality": "TEXT DEFAULT 'chat'",
     "client_profile": "TEXT DEFAULT 'generic'",
     "client_tag": "TEXT DEFAULT ''",
     "decision_reason": "TEXT DEFAULT ''",
@@ -87,6 +89,7 @@ class MetricsStore:
         self._ensure_optional_columns()
         self._conn.execute("CREATE INDEX IF NOT EXISTS idx_req_profile ON requests(client_profile)")
         self._conn.execute("CREATE INDEX IF NOT EXISTS idx_req_client ON requests(client_tag)")
+        self._conn.execute("CREATE INDEX IF NOT EXISTS idx_req_modality ON requests(modality)")
         self._conn.commit()
         logger.info("Metrics DB ready: %s", self._db_path)
 
@@ -116,6 +119,7 @@ class MetricsStore:
         success: bool = True,
         error: str = "",
         requested_model: str = "auto",
+        modality: str = "chat",
         client_profile: str = "generic",
         client_tag: str = "",
         decision_reason: str = "",
@@ -128,11 +132,11 @@ class MetricsStore:
             self._conn.execute(
                 """INSERT INTO requests
                    (timestamp,provider,model,layer,rule_name,
-                    prompt_tok,compl_tok,cache_hit,cache_miss,
-                    cost_usd,latency_ms,success,error,
-                    requested_model,client_profile,client_tag,
+                   prompt_tok,compl_tok,cache_hit,cache_miss,
+                   cost_usd,latency_ms,success,error,
+                    requested_model,modality,client_profile,client_tag,
                     decision_reason,confidence,attempt_order)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     time.time(),
                     provider,
@@ -148,6 +152,7 @@ class MetricsStore:
                     1 if success else 0,
                     error,
                     requested_model,
+                    modality,
                     client_profile,
                     client_tag,
                     decision_reason,
@@ -203,7 +208,8 @@ class MetricsStore:
         where_sql, params = self._build_where_clause(filters)
         return self._q(
             f"""
-            SELECT client_profile,
+            SELECT modality,
+                client_profile,
                 client_tag,
                 provider,
                 layer,
@@ -211,8 +217,25 @@ class MetricsStore:
                 ROUND(SUM(cost_usd),6)   AS cost_usd,
                 ROUND(AVG(latency_ms),1) AS avg_latency_ms
             FROM requests{where_sql}
-            GROUP BY client_profile, client_tag, provider, layer
-            ORDER BY requests DESC, client_profile ASC, client_tag ASC
+            GROUP BY modality, client_profile, client_tag, provider, layer
+            ORDER BY requests DESC, modality ASC, client_profile ASC, client_tag ASC
+        """,
+            params,
+        )
+
+    def get_modality_breakdown(self, **filters: Any) -> list[dict]:
+        where_sql, params = self._build_where_clause(filters)
+        return self._q(
+            f"""
+            SELECT modality,
+                provider,
+                layer,
+                COUNT(*)                 AS requests,
+                ROUND(SUM(cost_usd),6)   AS cost_usd,
+                ROUND(AVG(latency_ms),1) AS avg_latency_ms
+            FROM requests{where_sql}
+            GROUP BY modality, provider, layer
+            ORDER BY requests DESC, modality ASC, provider ASC
         """,
             params,
         )
@@ -290,6 +313,7 @@ class MetricsStore:
         params: list[Any] = []
         mapping = {
             "provider": "provider",
+            "modality": "modality",
             "client_profile": "client_profile",
             "client_tag": "client_tag",
             "layer": "layer",

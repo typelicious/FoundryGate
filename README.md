@@ -239,6 +239,7 @@ curl -fsS http://127.0.0.1:8090/v1/images/edits \
 ### Additional Stable Operational Endpoints
 
 - `POST /api/route`
+- `POST /api/route/image`
 - `GET /api/update`
 - `GET /api/stats`
 - `GET /api/recent?limit=50`
@@ -256,20 +257,30 @@ curl -fsS http://127.0.0.1:8090/api/route \
     ]
   }'
 
+curl -fsS http://127.0.0.1:8090/api/route/image \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "auto",
+    "capability": "image_editing",
+    "prompt": "Remove the background and keep the subject centered."
+  }'
+
 curl -fsS http://127.0.0.1:8090/api/stats
 curl -fsS http://127.0.0.1:8090/api/update
 curl -fsS 'http://127.0.0.1:8090/api/recent?limit=10'
 curl -fsS 'http://127.0.0.1:8090/api/traces?limit=10'
-curl -fsS 'http://127.0.0.1:8090/api/stats?provider=local-worker&client_tag=codex'
+curl -fsS 'http://127.0.0.1:8090/api/stats?provider=local-worker&client_tag=codex&modality=chat'
 ```
 
 `POST /api/route` is a dry-run endpoint. It uses the same routing logic as `POST /v1/chat/completions` but does not call an upstream provider. The response includes the resolved client profile, the routing decision, candidate ranking details where applicable, hook errors, and the fallback attempt order.
 
+`POST /api/route/image` is the matching dry-run endpoint for image-generation and image-editing requests. Use `capability: "image_generation"` or `capability: "image_editing"` to preview modality-specific routing without calling an upstream image provider.
+
 If request hooks are enabled, `POST /api/route` also shows the applied hook names and the effective request metadata after hook processing.
 
-`GET /api/stats`, `GET /api/recent`, and `GET /api/traces` also accept optional `provider`, `client_profile`, `client_tag`, `layer`, and `success` filters. The built-in dashboard uses the same filtered endpoints.
+`GET /api/stats`, `GET /api/recent`, and `GET /api/traces` also accept optional `provider`, `modality`, `client_profile`, `client_tag`, `layer`, and `success` filters. The built-in dashboard uses the same filtered endpoints.
 
-`GET /api/traces` returns recent enriched routing records from the metrics store, including requested model, resolved client profile, client tag, decision reason, confidence, and attempt order.
+`GET /api/traces` returns recent enriched routing records from the metrics store, including requested model, modality, resolved client profile, client tag, decision reason, confidence, and attempt order.
 
 `GET /api/update` returns the cached release-check result for the running service, including the current version, latest known tag, update availability, and the release URL when GitHub lookups succeed.
 
