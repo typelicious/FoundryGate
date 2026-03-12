@@ -6,6 +6,8 @@ The format is intentionally lightweight and human-readable. Group entries by rel
 
 ## Unreleased
 
+## v0.6.0 - 2026-03-12
+
 ### Added
 
 - Added modality-aware metrics and filters so stats, traces, recent requests, and the dashboard can distinguish `chat`, `image_generation`, and `image_editing`
