@@ -21,11 +21,11 @@ This repo does not require a heavy release process. Use lightweight tags plus Gi
 ```bash
 git checkout main
 git pull --ff-only origin main
-git tag -a v0.6.0 -m "FoundryGate v0.6.0"
-git push origin v0.6.0
+git tag -a v0.7.0 -m "FoundryGate v0.7.0"
+git push origin v0.7.0
 ```
 
-Then open GitHub Releases and publish a release for `v0.6.0`.
+Then open GitHub Releases and publish a release for `v0.7.0`.
 
 ## Automation Baseline
 
@@ -55,12 +55,14 @@ The repo also includes [publish-dry-run](./.github/workflows/publish-dry-run.yml
 - `v0.4.0` establishes the hardened routing baseline: request hooks, multi-dimensional scoring, route introspection, and the refined operator dashboard.
 - `v0.5.0` establishes the operator distribution baseline: image-provider contracts, Docker and GHCR packaging, PyPI workflow support, onboarding helpers, repo community standards, and cached release update checks.
 - `v0.6.0` establishes the modality-expansion baseline: image route previews, provider capability coverage, shared image request validation, and image policy presets.
+- `v0.7.0` establishes the operations-polish baseline: update alerts, operator events, rollout guardrails, scoped update checks, maintenance windows, and post-update verification hints.
 
 ## Planned Publishing Path
 
 - `v0.3.x`: GitHub Releases plus source checkout remain the default distribution path.
 - `v0.5.0`: Docker and PyPI publishing baseline is introduced through the release workflow and repo docs.
 - `v0.6.0`: modality-aware image routing becomes an explicit release line with provider inventory and image-policy guidance.
+- `v0.7.0`: helper-driven update controls become a first-class release line with scoped rollout gates and verification hooks.
 - `v1.0.0`: keep GitHub Releases, Docker, and PyPI, and add a separate npm or TypeScript CLI package if the CLI surface is ready.
 
 The npm or TypeScript package should stay separate from the Python gateway core. It is meant for CLI-facing integrations, not for rewriting the service runtime.
