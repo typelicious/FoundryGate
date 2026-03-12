@@ -119,6 +119,7 @@ def release_age_hours(published_at: str, *, now: datetime | None = None) -> floa
 def apply_auto_update_guardrails(
     auto_update: dict[str, Any],
     *,
+    providers_total: int,
     providers_healthy: int,
     providers_unhealthy: int,
 ) -> dict[str, Any]:
@@ -131,6 +132,11 @@ def apply_auto_update_guardrails(
     max_unhealthy_providers = int(result.get("max_unhealthy_providers", 0))
 
     if not require_healthy_providers:
+        return result
+
+    if providers_total <= 0:
+        result["eligible"] = False
+        result["blocked_reason"] = "No providers match rollout provider scope"
         return result
 
     if providers_healthy <= 0:
@@ -304,6 +310,7 @@ class UpdateChecker:
             ),
             "max_unhealthy_providers": int((auto_update or {}).get("max_unhealthy_providers", 0)),
             "min_release_age_hours": int((auto_update or {}).get("min_release_age_hours", 0)),
+            "provider_scope": dict((auto_update or {}).get("provider_scope") or {}),
             "maintenance_window": dict((auto_update or {}).get("maintenance_window") or {}),
             "apply_command": str((auto_update or {}).get("apply_command", "foundrygate-update")),
         }
@@ -365,6 +372,7 @@ class UpdateChecker:
             ),
             "max_unhealthy_providers": int(self.auto_update.get("max_unhealthy_providers", 0)),
             "min_release_age_hours": int(self.auto_update.get("min_release_age_hours", 0)),
+            "provider_scope": dict(self.auto_update.get("provider_scope") or {}),
             "maintenance_window": dict(self.auto_update.get("maintenance_window") or {}),
             "eligible": eligible,
             "blocked_reason": blocked_reason,

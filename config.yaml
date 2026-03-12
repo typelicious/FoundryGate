@@ -893,6 +893,9 @@ auto_update:
   require_healthy_providers: true
   max_unhealthy_providers: 0
   min_release_age_hours: 0
+  provider_scope:
+    allow_providers: []
+    deny_providers: ["openrouter-fallback"]
   maintenance_window:
     enabled: false
     timezone: "UTC"

@@ -114,6 +114,7 @@ def test_auto_update_guardrails_block_when_too_many_providers_are_unhealthy():
             "max_unhealthy_providers": 0,
             "blocked_reason": "",
         },
+        providers_total=2,
         providers_healthy=1,
         providers_unhealthy=1,
     )
@@ -131,6 +132,7 @@ def test_auto_update_guardrails_allow_updates_when_health_budget_is_met():
             "max_unhealthy_providers": 1,
             "blocked_reason": "",
         },
+        providers_total=3,
         providers_healthy=2,
         providers_unhealthy=1,
     )
@@ -147,12 +149,31 @@ def test_auto_update_guardrails_block_when_no_provider_is_healthy():
             "max_unhealthy_providers": 2,
             "blocked_reason": "",
         },
+        providers_total=2,
         providers_healthy=0,
         providers_unhealthy=2,
     )
 
     assert guarded["eligible"] is False
     assert guarded["blocked_reason"] == "No healthy providers available"
+
+
+def test_auto_update_guardrails_block_when_provider_scope_matches_nothing():
+    guarded = apply_auto_update_guardrails(
+        {
+            "enabled": True,
+            "eligible": True,
+            "require_healthy_providers": True,
+            "max_unhealthy_providers": 0,
+            "blocked_reason": "",
+        },
+        providers_total=0,
+        providers_healthy=0,
+        providers_unhealthy=0,
+    )
+
+    assert guarded["eligible"] is False
+    assert guarded["blocked_reason"] == "No providers match rollout provider scope"
 
 
 def test_maintenance_window_guardrail_allows_updates_when_window_is_disabled():
@@ -271,7 +292,11 @@ async def test_update_checker_reports_latest_release():
         current_version="0.4.0",
         enabled=True,
         repository="typelicious/FoundryGate",
-        auto_update={"enabled": True, "allow_major": False},
+        auto_update={
+            "enabled": True,
+            "allow_major": False,
+            "provider_scope": {"allow_providers": ["deepseek-chat"], "deny_providers": []},
+        },
     )
     checker._client = _FakeClient(
         _FakeResponse(
@@ -295,6 +320,10 @@ async def test_update_checker_reports_latest_release():
     assert status.auto_update["eligible"] is True
     assert status.release_channel == "stable"
     assert status.auto_update["allowed_update_types"] == ["patch", "minor"]
+    assert status.auto_update["provider_scope"] == {
+        "allow_providers": ["deepseek-chat"],
+        "deny_providers": [],
+    }
     assert status.release_url.endswith("/v0.5.0")
 
 

@@ -263,6 +263,28 @@ def _health_summary() -> dict[str, int]:
     }
 
 
+def _rollout_provider_summary(provider_scope: dict[str, Any] | None) -> dict[str, Any]:
+    """Return provider-health totals for the configured rollout scope."""
+    scope = dict(provider_scope or {})
+    allow = set(scope.get("allow_providers") or [])
+    deny = set(scope.get("deny_providers") or [])
+
+    rows = []
+    for name, provider in _providers.items():
+        if allow and name not in allow:
+            continue
+        if name in deny:
+            continue
+        rows.append((name, provider))
+
+    return {
+        "providers": [name for name, _ in rows],
+        "providers_total": len(rows),
+        "providers_healthy": sum(1 for _, provider in rows if provider.health.healthy),
+        "providers_unhealthy": sum(1 for _, provider in rows if not provider.health.healthy),
+    }
+
+
 def _estimate_request_dimensions(body: dict[str, Any]) -> dict[str, int | str]:
     """Return lightweight request-dimension estimates for debugging and routing preview."""
     messages = body.get("messages", [])
@@ -831,12 +853,21 @@ async def update_status(request: Request, force: bool = False):
     """Return cached or fresh release update metadata."""
     headers = _collect_routing_headers(request)
     status = await _update_checker.get_status(force=force)
+    rollout_summary = _rollout_provider_summary((status.auto_update or {}).get("provider_scope"))
     status.auto_update = apply_auto_update_guardrails(
         status.auto_update or {},
-        providers_healthy=_health_summary()["providers_healthy"],
-        providers_unhealthy=_health_summary()["providers_unhealthy"],
+        providers_total=rollout_summary["providers_total"],
+        providers_healthy=rollout_summary["providers_healthy"],
+        providers_unhealthy=rollout_summary["providers_unhealthy"],
     )
     status.auto_update = apply_maintenance_window_guardrail(status.auto_update or {})
+    status.auto_update.setdefault("provider_scope", {})
+    status.auto_update["provider_scope"]["matched_providers"] = rollout_summary["providers"]
+    status.auto_update["provider_scope"]["summary"] = {
+        "providers_total": rollout_summary["providers_total"],
+        "providers_healthy": rollout_summary["providers_healthy"],
+        "providers_unhealthy": rollout_summary["providers_unhealthy"],
+    }
     operator_action, client_tag = _collect_operator_context(headers)
     auto_update = status.auto_update or {}
     _metrics.log_operator_event(

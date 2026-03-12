@@ -918,6 +918,44 @@ def _normalize_auto_update(data: dict[str, Any]) -> dict[str, Any]:
     if min_release_age_hours < 0:
         raise ConfigError("'auto_update.min_release_age_hours' must be non-negative")
 
+    provider_scope = raw.get("provider_scope", {})
+    if provider_scope is None:
+        provider_scope = {}
+    if not isinstance(provider_scope, dict):
+        raise ConfigError("'auto_update.provider_scope' must be a mapping")
+
+    provider_names = set((data.get("providers") or {}).keys())
+    allow_providers = _normalize_string_list(
+        provider_scope.get("allow_providers", []),
+        field_name="allow_providers",
+        rule_name="auto_update.provider_scope",
+        allow_empty=True,
+    )
+    deny_providers = _normalize_string_list(
+        provider_scope.get("deny_providers", []),
+        field_name="deny_providers",
+        rule_name="auto_update.provider_scope",
+        allow_empty=True,
+    )
+    unknown_allowed = sorted(name for name in allow_providers if name not in provider_names)
+    if unknown_allowed:
+        raise ConfigError(
+            "'auto_update.provider_scope.allow_providers' references unknown providers: "
+            + ", ".join(unknown_allowed)
+        )
+    unknown_denied = sorted(name for name in deny_providers if name not in provider_names)
+    if unknown_denied:
+        raise ConfigError(
+            "'auto_update.provider_scope.deny_providers' references unknown providers: "
+            + ", ".join(unknown_denied)
+        )
+    overlap = sorted(set(allow_providers) & set(deny_providers))
+    if overlap:
+        raise ConfigError(
+            "'auto_update.provider_scope' cannot allow and deny the same providers: "
+            + ", ".join(overlap)
+        )
+
     maintenance_window = raw.get("maintenance_window", {})
     if maintenance_window is None:
         maintenance_window = {}
@@ -969,6 +1007,10 @@ def _normalize_auto_update(data: dict[str, Any]) -> dict[str, Any]:
         "require_healthy_providers": require_healthy_providers,
         "max_unhealthy_providers": max_unhealthy_providers,
         "min_release_age_hours": min_release_age_hours,
+        "provider_scope": {
+            "allow_providers": allow_providers,
+            "deny_providers": deny_providers,
+        },
         "maintenance_window": {
             "enabled": window_enabled,
             "timezone": timezone.strip(),
@@ -1070,6 +1112,10 @@ class Config:
                 "require_healthy_providers": True,
                 "max_unhealthy_providers": 0,
                 "min_release_age_hours": 0,
+                "provider_scope": {
+                    "allow_providers": [],
+                    "deny_providers": [],
+                },
                 "maintenance_window": {
                     "enabled": False,
                     "timezone": "UTC",
