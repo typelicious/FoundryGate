@@ -19,7 +19,21 @@ The foundation that used to be the near-term buildout is largely in place:
 
 This roadmap now shifts from "rename and foundation" to "deepen the gateway plane without bloating it".
 
-`v1.0.0` is the current release line: the focus now shifts from feature accretion to a stable gateway baseline, a completed security review gate, and a separate npm CLI surface for Node-facing integrations.
+`v1.0.0` is now shipped. The next block should stay disciplined: deepen AI-native client coverage, improve client-facing observability, and refine routing policy without turning FoundryGate into a sprawling platform.
+
+## Post-1.0 direction
+
+The first post-`1.0` block should stay narrow enough to ship as `v1.1.0`.
+
+Primary goals:
+
+- double-check and extend AI-native client support beyond the current OpenClaw, n8n, and CLI baseline
+- ship the next wave of integration starters for requested and high-signal agent frameworks
+- expose more useful per-client token and usage metrics in the operator surface
+- audit the routing-stage stack so the responsibility of each layer stays clear
+- keep a structured watch on ClawRouter-style product evolution without copying features blindly
+
+The current framework prioritization lives in [AI-NATIVE-MATRIX.md](./AI-NATIVE-MATRIX.md).
 
 ## Big Picture
 
@@ -90,6 +104,26 @@ Today the runtime already supports:
 - local worker contracts and health probes
 - route introspection and traces
 - client-aware routing defaults for OpenClaw, n8n, and CLI callers
+
+The next runtime gap to close is not “more core abstraction”. It is “more real clients with less glue”.
+
+## `v1.1.0`: AI-native client expansion and operator visibility
+
+Primary goals:
+
+- add the first post-`1.0` starter wave for requested and high-signal AI-native clients
+- add a curated framework matrix so external users can quickly see where FoundryGate fits
+- deepen client and token reporting in API and dashboard surfaces
+- review policy, static, heuristic, hook, client-profile, and classifier boundaries with clearer ownership and tests
+
+Recommended minimal slices:
+
+1. AI-native client matrix plus roadmap update
+2. first-wave starter templates for `SWE-AF`, `paperclip`, `ship-faster`, and the highest-fit external frameworks
+3. per-client token and usage reporting in stats and dashboard views
+4. routing-layer review plus targeted rule/test cleanup
+
+The plugin question should stay explicitly out of scope for `v1.1.0` and be revisited only after this release line lands.
 
 ## OpenClaw direction
 

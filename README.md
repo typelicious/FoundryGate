@@ -164,6 +164,7 @@ Start here for the deeper deployment details:
 ## More Resources
 
 - [Architecture](./docs/ARCHITECTURE.md)
+- [AI-native client matrix](./docs/AI-NATIVE-MATRIX.md)
 - [API reference](./docs/API.md)
 - [Configuration reference](./docs/CONFIGURATION.md)
 - [Operations guide](./docs/OPERATIONS.md)
