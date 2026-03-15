@@ -1,0 +1,21 @@
+client_profiles:
+  enabled: true
+  default: generic
+  profiles:
+    generic: {}
+    app-ops:
+      prefer_tiers: ["default", "cheap"]
+      capability_values:
+        local: false
+    app-private:
+      capability_values:
+        local: true
+  rules:
+    - profile: app-ops
+      match:
+        header_contains:
+          x-foundrygate-client: ["elementify", "ops-app"]
+    - profile: app-private
+      match:
+        header_contains:
+          x-foundrygate-profile: ["private", "local-only"]

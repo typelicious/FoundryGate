@@ -19,7 +19,7 @@ The foundation that used to be the near-term buildout is largely in place:
 
 This roadmap now shifts from "rename and foundation" to "deepen the gateway plane without bloating it".
 
-`v0.5.0` is the current operator-distribution release line: modality-aware image paths, publish workflows, onboarding helpers, community baselines, and release update checks are now in place on top of the `v0.4.x` routing foundation.
+`v0.8.x` is the current release line: many-provider and many-client onboarding is being tightened with validation helpers, starter templates, delegated-traffic examples, and shareable onboarding output on top of the already-shipped routing, modality, and ops foundation.
 
 ## Big Picture
 
@@ -229,6 +229,18 @@ Primary goals:
 - tighten integration coverage for delegated or many-agent traffic where headers identify sub-clients
 
 The target is faster adoption without custom glue for every client.
+
+Current `v0.8.x` baseline already includes:
+
+- onboarding report plus validation helpers
+- staged provider rollout reporting
+- client matrix reporting
+- starter templates for OpenClaw, n8n, CLI, cloud providers, local workers, and image providers
+- matching provider `.env` starter files
+- delegated OpenClaw request examples
+- starter custom-profile examples for future AI-native applications
+- doctor checks for missing provider env placeholders
+- JSON and Markdown onboarding exports
 
 ### `v0.9.x`: pre-1.0 hardening
 

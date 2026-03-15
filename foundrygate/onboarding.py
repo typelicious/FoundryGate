@@ -303,6 +303,22 @@ def build_onboarding_report(
                 "Use x-openclaw-source when you want sub-agent traffic to resolve differently.",
             ],
         },
+        "ai-native-app": {
+            "recommended": any(
+                name not in {"generic", "openclaw", "n8n", "cli", "local-only"}
+                for name in profile_names
+            ),
+            "header": "X-FoundryGate-Client: your-app",
+            "profile": "custom app profile",
+            "snippet": [
+                "client_profiles.rules -> match on X-FoundryGate-Client",
+                "client_profiles.profiles -> define app-specific prefer_tiers or locality",
+            ],
+            "notes": [
+                "Start with one stable client header before adding more than one app profile.",
+                "Keep app-private traffic on a dedicated profile instead of ad hoc hooks.",
+            ],
+        },
         "n8n": {
             "recommended": "n8n" in enabled_presets or "n8n" in profile_names,
             "header": "X-FoundryGate-Client: n8n",

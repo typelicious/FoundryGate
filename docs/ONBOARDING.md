@@ -124,6 +124,10 @@ OpenClaw:
 
 Starter file: [examples/openclaw-foundrygate.jsonc](./examples/openclaw-foundrygate.jsonc)
 
+Delegated / many-agent example:
+
+- [examples/openclaw-delegated-request.json](./examples/openclaw-delegated-request.json)
+
 n8n:
 
 ```text
@@ -143,6 +147,7 @@ Starter files:
 
 - [examples/n8n-foundrygate-http-request.json](./examples/n8n-foundrygate-http-request.json)
 - [examples/cli-foundrygate-env.sh](./examples/cli-foundrygate-env.sh)
+- [examples/client-ai-native-app-profile.yaml](./examples/client-ai-native-app-profile.yaml)
 
 ### 4. Add request hooks only if needed
 

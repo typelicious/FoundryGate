@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "x-openclaw-source": "delegate:planner",
+    "x-foundrygate-client": "openclaw"
+  },
+  "body": {
+    "model": "auto",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Break this task into sub-steps and assign the first one."
+      }
+    ]
+  }
+}

@@ -858,6 +858,11 @@ If you want to paste the current onboarding state into a ticket or PR, run:
 ```bash
 ./scripts/foundrygate-onboarding-report --markdown
 ```
+
+For delegated OpenClaw traffic and future AI-native app profiles, the new starters live here as well:
+
+- [openclaw-delegated-request.json](./docs/examples/openclaw-delegated-request.json)
+- [client-ai-native-app-profile.yaml](./docs/examples/client-ai-native-app-profile.yaml)
 | `foundrygate-install` | Installs the unit file, creates `/var/lib/foundrygate`, creates helper symlinks, reloads `systemd`, and starts the service |
 | `foundrygate-start` | Runs `systemctl start foundrygate.service` |
 | `foundrygate-stop` | Runs `systemctl stop foundrygate.service` |

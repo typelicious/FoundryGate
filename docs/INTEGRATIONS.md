@@ -34,6 +34,8 @@ Minimal direction:
 
 For a smaller starter snippet without the full alias block, use [examples/openclaw-foundrygate.jsonc](./examples/openclaw-foundrygate.jsonc).
 
+For delegated or many-agent traffic, start from [examples/openclaw-delegated-request.json](./examples/openclaw-delegated-request.json) and keep `x-openclaw-source` stable across sub-agents so traces stay attributable.
+
 ## n8n
 
 n8n can use FoundryGate as a stable local model gateway.
@@ -90,6 +92,20 @@ export OPENAI_API_KEY=local
 ```
 
 For a reusable shell starter, use [examples/cli-foundrygate-env.sh](./examples/cli-foundrygate-env.sh).
+
+## AI-native app clients
+
+For future app-specific clients, keep the same OpenAI-compatible base URL and add one stable app header before creating multiple custom profiles.
+
+Recommended pattern:
+
+- set `X-FoundryGate-Client: your-app`
+- create one explicit app profile
+- only split into `ops`, `private`, or `local-only` profiles when real routing differences emerge
+
+Starter snippet:
+
+- [examples/client-ai-native-app-profile.yaml](./examples/client-ai-native-app-profile.yaml)
 
 ## Provider onboarding
 

@@ -18,6 +18,7 @@ The format is intentionally lightweight and human-readable. Group entries by rel
 - Added matching provider `.env` starter files for cloud, local-worker, and image-provider onboarding flows
 - Added provider env placeholder checks to `foundrygate-doctor` so missing `.env` values are surfaced before rollout
 - Added `--markdown` output to `foundrygate-onboarding-report` so onboarding state can be pasted into issues, PRs, or hand-off notes
+- Added delegated OpenClaw request and generic AI-native app profile starters to round out the `v0.8.x` onboarding path
 
 ## v0.7.0 - 2026-03-12
 
