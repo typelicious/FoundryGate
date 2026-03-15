@@ -26,6 +26,8 @@ $EDITOR .env
 ./scripts/foundrygate-onboarding-report
 ```
 
+`foundrygate-doctor` now also checks whether provider env placeholders referenced in `config.yaml` are actually present in `.env`.
+
 `foundrygate-onboarding-report` now includes concrete OpenClaw, n8n, and CLI quickstart hints plus a staged provider-rollout view. Use it after every provider or client change to keep the deployment understandable for the next operator as well.
 
 It also prints a client matrix:

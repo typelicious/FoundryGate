@@ -96,6 +96,7 @@ $EDITOR .env
 ```
 
 The onboarding report now includes concrete OpenClaw, n8n, and CLI quickstart hints, a staged provider-rollout view, and a client matrix, so you can move from a generic health check to a real client and provider rollout path without leaving the terminal.
+`foundrygate-doctor` now also flags provider env placeholders from `config.yaml` that are still missing in `.env`.
 
 If you prefer the Linux service path instead of a manual Python run, jump to [Helper Scripts](#helper-scripts) and use `./scripts/foundrygate-install`.
 

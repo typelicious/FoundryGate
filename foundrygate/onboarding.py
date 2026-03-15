@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import yaml
 from dotenv import dotenv_values, load_dotenv
 
 from .config import load_config
@@ -21,6 +22,33 @@ def _is_unresolved_env(value: str) -> bool:
     """Return whether a config value still looks like an unresolved env placeholder."""
     stripped = value.strip()
     return stripped.startswith("${") and stripped.endswith("}")
+
+
+def collect_provider_env_requirements(
+    *,
+    config_path: str | Path | None = None,
+    env_file: str | Path | None = None,
+) -> dict[str, list[str]]:
+    """Return which provider env variables are configured and which are missing."""
+    resolved_config = Path(config_path) if config_path else Path.cwd() / "config.yaml"
+    resolved_env = _env_path(env_file)
+    env_values = dotenv_values(resolved_env) if resolved_env.exists() else {}
+
+    with resolved_config.open(encoding="utf-8") as handle:
+        raw = yaml.safe_load(handle) or {}
+
+    required: set[str] = set()
+    for provider in (raw.get("providers") or {}).values():
+        if not isinstance(provider, dict):
+            continue
+        for field in ("api_key", "base_url"):
+            value = provider.get(field, "")
+            if isinstance(value, str) and _is_unresolved_env(value):
+                required.add(value.strip()[2:-1].split(":-", 1)[0])
+
+    present = sorted(name for name in required if env_values.get(name))
+    missing = sorted(name for name in required if not env_values.get(name))
+    return {"required": sorted(required), "present": present, "missing": missing}
 
 
 def _provider_ready(provider: dict[str, Any]) -> tuple[bool, str]:
@@ -254,6 +282,10 @@ def build_onboarding_report(
         suggestions.append("Keep auto_update disabled until the provider and client set is stable.")
     provider_rollout = _build_provider_rollout(providers, list(config.fallback_chain))
     client_matrix = _build_client_matrix(client_profiles)
+    env_requirements = collect_provider_env_requirements(
+        config_path=config_path,
+        env_file=resolved_env,
+    )
 
     enabled_presets = set(client_profiles.get("presets", []))
     profile_names = set(client_profiles.get("profiles", {}).keys())
@@ -308,6 +340,7 @@ def build_onboarding_report(
         "env": {
             "exists": resolved_env.exists(),
             "provider_keys_present": sorted(key for key, value in env_values.items() if value),
+            "provider_requirements": env_requirements,
         },
         "providers": {
             "total": len(providers),

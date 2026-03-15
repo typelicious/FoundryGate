@@ -6,6 +6,9 @@ env_file="${FOUNDRYGATE_ENV_FILE:-$repo_root/.env}"
 config_file="${FOUNDRYGATE_CONFIG_FILE:-$repo_root/config.yaml}"
 status=0
 
+export FOUNDRYGATE_ENV_FILE="$env_file"
+export FOUNDRYGATE_CONFIG_FILE="$config_file"
+
 ok() {
   printf '[ok] %s\n' "$1"
 }
@@ -53,6 +56,22 @@ if [ -f "$env_file" ] && grep -Eq '^(DEEPSEEK_API_KEY|GEMINI_API_KEY|OPENROUTER_
 else
   warn "no provider API key detected in $env_file"
 fi
+
+python3 - <<'PY'
+import os
+
+from foundrygate.onboarding import collect_provider_env_requirements
+
+requirements = collect_provider_env_requirements(
+    config_path=os.environ.get("FOUNDRYGATE_CONFIG_FILE"),
+    env_file=os.environ.get("FOUNDRYGATE_ENV_FILE"),
+)
+
+for name in requirements["present"]:
+    print(f"[ok] provider env present: {name}")
+for name in requirements["missing"]:
+    print(f"[warn] provider env missing: {name}")
+PY
 
 if command -v curl >/dev/null 2>&1; then
   if curl -fsS -m 2 http://127.0.0.1:8090/health >/dev/null 2>&1; then

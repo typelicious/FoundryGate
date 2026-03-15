@@ -5,6 +5,7 @@ from pathlib import Path
 from foundrygate.onboarding import (
     build_onboarding_report,
     build_onboarding_validation,
+    collect_provider_env_requirements,
     render_onboarding_report,
     render_onboarding_validation,
 )
@@ -53,6 +54,7 @@ auto_update:
     assert report["providers"]["total"] == 1
     assert report["providers"]["ready"] == 0
     assert report["providers"]["missing_api_keys"] == ["deepseek-chat"]
+    assert report["env"]["provider_requirements"]["missing"] == ["DEEPSEEK_API_KEY"]
     assert report["clients"]["presets"] == ["openclaw"]
     assert report["integrations"]["openclaw"]["recommended"] is True
     assert report["integrations"]["n8n"]["recommended"] is False
@@ -260,6 +262,40 @@ auto_update:
     assert report["integrations"]["cli"]["recommended"] is True
     assert report["clients"]["matrix"][0]["name"] == "cli"
     assert report["clients"]["matrix"][0]["has_rule"] is True
+
+
+def test_collect_provider_env_requirements_tracks_present_and_missing(tmp_path: Path):
+    env_file = tmp_path / ".env"
+    env_file.write_text("DEEPSEEK_API_KEY=sk-demo\n", encoding="utf-8")
+
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(
+        """
+providers:
+  deepseek-chat:
+    backend: openai-compat
+    base_url: "https://api.deepseek.com/v1"
+    api_key: "${DEEPSEEK_API_KEY}"
+    model: "deepseek-chat"
+  image-worker:
+    contract: image-provider
+    backend: openai-compat
+    base_url: "${IMAGE_PROVIDER_BASE_URL}"
+    api_key: "${IMAGE_PROVIDER_API_KEY}"
+    model: "image-model"
+""".strip(),
+        encoding="utf-8",
+    )
+
+    requirements = collect_provider_env_requirements(config_path=config_file, env_file=env_file)
+
+    assert requirements["required"] == [
+        "DEEPSEEK_API_KEY",
+        "IMAGE_PROVIDER_API_KEY",
+        "IMAGE_PROVIDER_BASE_URL",
+    ]
+    assert requirements["present"] == ["DEEPSEEK_API_KEY"]
+    assert requirements["missing"] == ["IMAGE_PROVIDER_API_KEY", "IMAGE_PROVIDER_BASE_URL"]
 
 
 def test_onboarding_report_includes_client_matrix_and_unmatched_profile_warning(
