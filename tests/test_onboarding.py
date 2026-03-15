@@ -258,6 +258,66 @@ auto_update:
     assert report["integrations"]["openclaw"]["recommended"] is True
     assert report["integrations"]["n8n"]["recommended"] is True
     assert report["integrations"]["cli"]["recommended"] is True
+    assert report["clients"]["matrix"][0]["name"] == "cli"
+    assert report["clients"]["matrix"][0]["has_rule"] is True
+
+
+def test_onboarding_report_includes_client_matrix_and_unmatched_profile_warning(
+    tmp_path: Path,
+):
+    env_file = tmp_path / ".env"
+    env_file.write_text("DEEPSEEK_API_KEY=sk-demo\n", encoding="utf-8")
+
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(
+        """
+fallback_chain:
+  - deepseek-chat
+providers:
+  deepseek-chat:
+    backend: openai-compat
+    base_url: "https://api.deepseek.com/v1"
+    api_key: "${DEEPSEEK_API_KEY}"
+    model: "deepseek-chat"
+    tier: default
+client_profiles:
+  enabled: true
+  default: generic
+  presets: ["n8n"]
+  profiles:
+    generic: {}
+    local-only:
+      capability_values:
+        local: true
+  rules: []
+routing_policies:
+  enabled: false
+  rules: []
+request_hooks:
+  enabled: false
+  hooks: []
+update_check:
+  enabled: false
+auto_update:
+  enabled: false
+""".strip(),
+        encoding="utf-8",
+    )
+
+    report = build_onboarding_report(config_path=config_file, env_file=env_file)
+    validation = build_onboarding_validation(report)
+    text = render_onboarding_report(report)
+
+    local_only = next(row for row in report["clients"]["matrix"] if row["name"] == "local-only")
+
+    assert local_only["matched_by"] == "default or explicit override"
+    assert "capability values: local=True" in local_only["routing_intent"]
+    assert (
+        "Client profile 'local-only' has no match rule and only applies via explicit override."
+        in validation["warnings"]
+    )
+    assert "Client matrix" in text
+    assert "match: default or explicit override" in text
 
 
 def test_onboarding_report_includes_provider_rollout_stages_and_gaps(tmp_path: Path):

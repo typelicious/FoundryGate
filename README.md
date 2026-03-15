@@ -95,7 +95,7 @@ $EDITOR .env
 ./scripts/foundrygate-onboarding-report
 ```
 
-The onboarding report now includes concrete OpenClaw, n8n, and CLI quickstart hints plus a staged provider-rollout view, so you can move from a generic health check to a real client and provider rollout path without leaving the terminal.
+The onboarding report now includes concrete OpenClaw, n8n, and CLI quickstart hints, a staged provider-rollout view, and a client matrix, so you can move from a generic health check to a real client and provider rollout path without leaving the terminal.
 
 If you prefer the Linux service path instead of a manual Python run, jump to [Helper Scripts](#helper-scripts) and use `./scripts/foundrygate-install`.
 
@@ -839,7 +839,7 @@ Running `./scripts/foundrygate-install` also creates symlinks in `/usr/local/bin
 | --- | --- |
 | `foundrygate-bootstrap` | Creates `.env` from `.env.example` if needed, creates a local state dir, and appends a safe local `FOUNDRYGATE_DB_PATH` if none is set |
 | `foundrygate-doctor` | Checks for config/env presence, writable DB path, at least one configured provider key, and optional local health endpoints |
-| `foundrygate-onboarding-report` | Summarizes provider readiness, staged rollout readiness, client-profile coverage, routing layers, onboarding suggestions, and concrete OpenClaw/n8n/CLI quickstarts |
+| `foundrygate-onboarding-report` | Summarizes provider readiness, staged rollout readiness, client-profile coverage, client match intent, routing layers, onboarding suggestions, and concrete OpenClaw/n8n/CLI quickstarts |
 | `foundrygate-onboarding-validate` | Exits non-zero when onboarding blockers exist and prints warnings for common multi-provider and multi-client misconfigurations |
 | `foundrygate-install` | Installs the unit file, creates `/var/lib/foundrygate`, creates helper symlinks, reloads `systemd`, and starts the service |
 | `foundrygate-start` | Runs `systemctl start foundrygate.service` |

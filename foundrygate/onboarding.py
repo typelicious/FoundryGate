@@ -113,6 +113,83 @@ def _build_provider_rollout(
     }
 
 
+def _describe_client_match(match: dict[str, Any]) -> str:
+    """Return a compact text summary for one client-profile match rule."""
+    parts: list[str] = []
+    if match.get("header_present"):
+        parts.append("headers present: " + ", ".join(match["header_present"]))
+    if match.get("header_contains"):
+        header_parts = [
+            f"{header}~{', '.join(values)}"
+            for header, values in sorted(match["header_contains"].items())
+        ]
+        parts.append("header contains: " + "; ".join(header_parts))
+    if match.get("any"):
+        any_parts = []
+        for item in match["any"]:
+            summary = _describe_client_match(item)
+            if summary:
+                any_parts.append(summary)
+        if any_parts:
+            parts.append("any(" + " | ".join(any_parts) + ")")
+    if match.get("all"):
+        all_parts = []
+        for item in match["all"]:
+            summary = _describe_client_match(item)
+            if summary:
+                all_parts.append(summary)
+        if all_parts:
+            parts.append("all(" + " & ".join(all_parts) + ")")
+    return "; ".join(parts)
+
+
+def _summarize_profile_hints(profile: dict[str, Any]) -> list[str]:
+    """Return compact routing-intent text for one client profile."""
+    hints: list[str] = []
+    if profile.get("prefer_tiers"):
+        hints.append("prefer tiers: " + ", ".join(profile["prefer_tiers"]))
+    if profile.get("prefer_providers"):
+        hints.append("prefer providers: " + ", ".join(profile["prefer_providers"]))
+    if profile.get("allow_providers"):
+        hints.append("allow providers: " + ", ".join(profile["allow_providers"]))
+    if profile.get("deny_providers"):
+        hints.append("deny providers: " + ", ".join(profile["deny_providers"]))
+    if profile.get("require_capabilities"):
+        hints.append("require caps: " + ", ".join(profile["require_capabilities"]))
+    if profile.get("capability_values"):
+        value_parts = []
+        for name, value in sorted(profile["capability_values"].items()):
+            rendered = value
+            if isinstance(value, list) and len(value) == 1:
+                rendered = value[0]
+            value_parts.append(f"{name}={rendered}")
+        hints.append("capability values: " + ", ".join(value_parts))
+    return hints or ["no extra routing hints"]
+
+
+def _build_client_matrix(client_profiles: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return a report-friendly matrix of client profiles and match rules."""
+    presets = set(client_profiles.get("presets", []))
+    rules_by_profile = {rule["profile"]: rule["match"] for rule in client_profiles.get("rules", [])}
+
+    matrix = []
+    for name, profile in sorted(client_profiles.get("profiles", {}).items()):
+        match = rules_by_profile.get(name)
+        matrix.append(
+            {
+                "name": name,
+                "source": "preset" if name in presets else "custom",
+                "default": name == client_profiles.get("default", "generic"),
+                "matched_by": (
+                    _describe_client_match(match) if match else "default or explicit override"
+                ),
+                "routing_intent": _summarize_profile_hints(profile),
+                "has_rule": match is not None,
+            }
+        )
+    return matrix
+
+
 def build_onboarding_report(
     *,
     config_path: str | Path | None = None,
@@ -176,6 +253,7 @@ def build_onboarding_report(
     if update_check.get("enabled") and not auto_update.get("enabled"):
         suggestions.append("Keep auto_update disabled until the provider and client set is stable.")
     provider_rollout = _build_provider_rollout(providers, list(config.fallback_chain))
+    client_matrix = _build_client_matrix(client_profiles)
 
     enabled_presets = set(client_profiles.get("presets", []))
     profile_names = set(client_profiles.get("profiles", {}).keys())
@@ -246,6 +324,7 @@ def build_onboarding_report(
             "presets": list(client_profiles.get("presets", [])),
             "profile_count": len(client_profiles.get("profiles", {})),
             "rule_count": len(client_profiles.get("rules", [])),
+            "matrix": client_matrix,
         },
         "routing": {
             "fallback_chain": list(config.fallback_chain),
@@ -301,6 +380,14 @@ def build_onboarding_validation(report: dict[str, Any]) -> dict[str, Any]:
         warnings.append("Client profiles are disabled.")
     if clients["profiles_enabled"] and not clients["presets"]:
         warnings.append("No built-in client presets are enabled.")
+    if clients["profiles_enabled"] and clients["profile_count"] > 1 and clients["rule_count"] == 0:
+        warnings.append("Multiple client profiles are configured, but no client match rules exist.")
+    for row in clients.get("matrix", []):
+        if row["name"] != clients["default_profile"] and not row["has_rule"]:
+            warnings.append(
+                f"Client profile '{row['name']}' has no match rule and only applies"
+                " via explicit override."
+            )
     if routing["request_hooks_enabled"] and routing["request_hook_count"] == 0:
         warnings.append("Request hooks are enabled but no hooks are configured.")
 
@@ -359,6 +446,19 @@ def render_onboarding_report(report: dict[str, Any]) -> str:
             f"- presets: {preset_text}",
             f"- profiles: {client_block['profile_count']}",
             f"- rules: {client_block['rule_count']}",
+        ]
+    )
+
+    if client_block["matrix"]:
+        lines.extend(["", "Client matrix"])
+        for row in client_block["matrix"]:
+            default_text = " [default]" if row["default"] else ""
+            lines.append(f"- {row['name']}{default_text}: {row['source']}")
+            lines.append(f"  match: {row['matched_by']}")
+            lines.append(f"  intent: {'; '.join(row['routing_intent'])}")
+
+    lines.extend(
+        [
             "",
             "Routing",
             f"- fallback chain: {fallback_text}",

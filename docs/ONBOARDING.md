@@ -28,6 +28,13 @@ $EDITOR .env
 
 `foundrygate-onboarding-report` now includes concrete OpenClaw, n8n, and CLI quickstart hints plus a staged provider-rollout view. Use it after every provider or client change to keep the deployment understandable for the next operator as well.
 
+It also prints a client matrix:
+
+- which client profiles exist
+- whether they come from presets or custom config
+- how they match traffic
+- which routing hints they actually apply
+
 ### 1. Add one provider
 
 - define the provider in `config.yaml`
@@ -89,6 +96,8 @@ Start with:
 - `cli`
 
 Then tighten it only if the default is not good enough.
+
+When the client set grows, use the client matrix from `foundrygate-onboarding-report` to catch profiles that only work through explicit overrides and still have no real match rule.
 
 ### 3a. Start from one of the built-in quickstarts
 
