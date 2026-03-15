@@ -14,7 +14,11 @@ python3 - <<'PY'
 import json
 import os
 
-from foundrygate.onboarding import build_onboarding_report, render_onboarding_report
+from foundrygate.onboarding import (
+    build_onboarding_report,
+    render_onboarding_report,
+    render_onboarding_report_markdown,
+)
 
 report = build_onboarding_report(
     config_path=os.environ["FOUNDRYGATE_ONBOARDING_CONFIG"],
@@ -23,6 +27,8 @@ report = build_onboarding_report(
 
 if os.environ["FOUNDRYGATE_ONBOARDING_MODE"] == "--json":
     print(json.dumps(report, indent=2, sort_keys=True))
+elif os.environ["FOUNDRYGATE_ONBOARDING_MODE"] == "--markdown":
+    print(render_onboarding_report_markdown(report), end="")
 else:
     print(render_onboarding_report(report), end="")
 PY
