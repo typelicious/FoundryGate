@@ -22,11 +22,11 @@ This repo does not require a heavy release process. Use lightweight tags plus Gi
 ```bash
 git checkout main
 git pull --ff-only origin main
-git tag -a v0.8.0 -m "FoundryGate v0.8.0"
-git push origin v0.8.0
+git tag -a v0.9.0 -m "FoundryGate v0.9.0"
+git push origin v0.9.0
 ```
 
-Then open GitHub Releases and publish a release for `v0.8.0`.
+Then open GitHub Releases and publish a release for `v0.9.0`.
 
 ## Automation Baseline
 
