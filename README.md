@@ -842,6 +842,12 @@ Running `./scripts/foundrygate-install` also creates symlinks in `/usr/local/bin
 | `foundrygate-doctor` | Checks for config/env presence, writable DB path, at least one configured provider key, and optional local health endpoints |
 | `foundrygate-onboarding-report` | Summarizes provider readiness, staged rollout readiness, client-profile coverage, client match intent, routing layers, onboarding suggestions, and concrete OpenClaw/n8n/CLI quickstarts |
 | `foundrygate-onboarding-validate` | Exits non-zero when onboarding blockers exist and prints warnings for common multi-provider and multi-client misconfigurations |
+
+Provider starter snippets for the first rollout path live under [docs/examples](./docs/examples):
+
+- [provider-openai-compat.yaml](./docs/examples/provider-openai-compat.yaml)
+- [provider-local-worker.yaml](./docs/examples/provider-local-worker.yaml)
+- [provider-image-provider.yaml](./docs/examples/provider-image-provider.yaml)
 | `foundrygate-install` | Installs the unit file, creates `/var/lib/foundrygate`, creates helper symlinks, reloads `systemd`, and starts the service |
 | `foundrygate-start` | Runs `systemctl start foundrygate.service` |
 | `foundrygate-stop` | Runs `systemctl stop foundrygate.service` |

@@ -41,6 +41,12 @@ It also prints a client matrix:
 - set the required API key or local auth value in `.env`
 - keep the fallback chain simple
 
+Starter snippets:
+
+- [examples/provider-openai-compat.yaml](./examples/provider-openai-compat.yaml)
+- [examples/provider-local-worker.yaml](./examples/provider-local-worker.yaml)
+- [examples/provider-image-provider.yaml](./examples/provider-image-provider.yaml)
+
 ### 2. Verify provider health
 
 - check `GET /health`

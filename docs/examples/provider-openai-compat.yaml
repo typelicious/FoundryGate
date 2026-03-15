@@ -1,0 +1,13 @@
+providers:
+  deepseek-chat:
+    backend: openai-compat
+    base_url: "https://api.deepseek.com/v1"
+    api_key: "${DEEPSEEK_API_KEY}"
+    model: "deepseek-chat"
+    tier: default
+    capabilities:
+      local: false
+      cloud: true
+
+fallback_chain:
+  - deepseek-chat

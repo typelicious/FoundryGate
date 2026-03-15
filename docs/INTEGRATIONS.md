@@ -101,6 +101,12 @@ When onboarding a new provider:
 4. test routing with `POST /api/route`
 5. then route real traffic
 
+Starter snippets:
+
+- [examples/provider-openai-compat.yaml](./examples/provider-openai-compat.yaml)
+- [examples/provider-local-worker.yaml](./examples/provider-local-worker.yaml)
+- [examples/provider-image-provider.yaml](./examples/provider-image-provider.yaml)
+
 ## Client onboarding
 
 When onboarding a new client:

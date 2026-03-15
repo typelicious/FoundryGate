@@ -1,0 +1,18 @@
+providers:
+  image-provider:
+    contract: image-provider
+    backend: openai-compat
+    base_url: "http://127.0.0.1:9000/v1"
+    api_key: "${IMAGE_PROVIDER_API_KEY}"
+    model: "image-model"
+    tier: specialty
+    capabilities:
+      image_generation: true
+      image_editing: true
+    image:
+      policy_tags: ["editing", "balanced"]
+      max_outputs: 4
+      supported_sizes: ["1024x1024", "1536x1024"]
+
+fallback_chain:
+  - image-provider

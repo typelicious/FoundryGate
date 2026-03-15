@@ -1,0 +1,14 @@
+providers:
+  local-worker:
+    contract: local-worker
+    backend: openai-compat
+    base_url: "http://127.0.0.1:11434/v1"
+    api_key: "local"
+    model: "llama3"
+    tier: local
+    capabilities:
+      local: true
+      cloud: false
+
+fallback_chain:
+  - local-worker
