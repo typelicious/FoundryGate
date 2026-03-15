@@ -135,6 +135,33 @@ class TestStaticRouting:
         assert d.provider_name == "deepseek-chat"
         assert d.rule_name == "subagent"
 
+    def test_static_match_requires_all_fields_by_default(self, router):
+        ctx = types.SimpleNamespace(
+            model_requested="auto",
+            system_prompt="delegated task planner",
+            headers={"x-openclaw-source": "primary-agent"},
+        )
+        assert (
+            router._match_static(  # noqa: SLF001
+                {
+                    "system_prompt_contains": ["delegated task"],
+                    "header_contains": {"x-openclaw-source": ["subagent"]},
+                },
+                ctx,
+            )
+            is False
+        )
+        assert (
+            router._match_static(  # noqa: SLF001
+                {
+                    "system_prompt_contains": ["delegated task"],
+                    "header_contains": {"x-openclaw-source": ["primary-agent"]},
+                },
+                ctx,
+            )
+            is True
+        )
+
 
 # ── Heuristic routing ─────────────────────────────────────────
 
@@ -215,6 +242,33 @@ class TestHeuristicRouting:
         )
         # Should NOT be deepseek-reasoner despite system prompt keywords
         assert d.provider_name != "deepseek-reasoner"
+
+    def test_heuristic_match_requires_all_fields_by_default(self, router):
+        ctx = types.SimpleNamespace(
+            has_tools=True,
+            total_tokens=90,
+            last_user_message="search files and summarize the result",
+        )
+        assert (
+            router._match_heuristic(  # noqa: SLF001
+                {
+                    "has_tools": True,
+                    "estimated_tokens": {"greater_than": 100},
+                },
+                ctx,
+            )
+            is False
+        )
+        assert (
+            router._match_heuristic(  # noqa: SLF001
+                {
+                    "has_tools": True,
+                    "estimated_tokens": {"less_than": 100},
+                },
+                ctx,
+            )
+            is True
+        )
 
 
 # ── Health fallback ────────────────────────────────────────────

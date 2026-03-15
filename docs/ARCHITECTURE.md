@@ -43,6 +43,8 @@ The current chat path is:
 6. optional LLM classifier
 7. fallback chain if the chosen provider fails
 
+Within one `static` or `heuristic` match block, configured fields now behave as cumulative constraints. Use explicit `any:` only when you want OR behavior across subconditions. This keeps combined rules explainable and avoids accidental matches when only one of several intended constraints is present.
+
 Before a candidate is accepted, FoundryGate also scores and validates route fit against provider metadata such as context window, input/output token limits, cache hints, locality, health, latency, and recent failure state.
 
 ## Provider layer

@@ -10,6 +10,10 @@ The format is intentionally lightweight and human-readable. Group entries by rel
 
 - Added richer client usage reporting in `GET /api/stats` and the dashboard, including per-client tokens, failures, success rate, and aggregate client totals
 
+### Changed
+
+- Tightened `static` and `heuristic` match semantics so combined fields now behave as cumulative constraints unless `any:` is used explicitly
+
 ## v1.0.0 - 2026-03-15
 
 ### Added

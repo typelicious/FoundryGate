@@ -840,33 +840,34 @@ class Router:
         if "any" in match:
             return any(self._match_static(sub, ctx) for sub in match["any"])
 
+        matched_any = False
+
         # model_requested
         if "model_requested" in match:
+            matched_any = True
             patterns = match["model_requested"]
             if isinstance(patterns, str):
                 patterns = [patterns]
-            if any(p in ctx.model_requested for p in patterns):
-                return True
-            if match.keys() == {"model_requested"}:
+            if not any(p in ctx.model_requested for p in patterns):
                 return False
 
         # system_prompt_contains
         if "system_prompt_contains" in match:
+            matched_any = True
             keywords = match["system_prompt_contains"]
             lower_sys = ctx.system_prompt.lower()
-            if any(kw.lower() in lower_sys for kw in keywords):
-                return True
-            if match.keys() == {"system_prompt_contains"}:
+            if not any(kw.lower() in lower_sys for kw in keywords):
                 return False
 
         # header_contains
         if "header_contains" in match:
+            matched_any = True
             for header_name, patterns in match["header_contains"].items():
                 header_val = ctx.headers.get(header_name, "").lower()
-                if any(p.lower() in header_val for p in patterns):
-                    return True
+                if not any(p.lower() in header_val for p in patterns):
+                    return False
 
-        return False
+        return matched_any
 
     # ── Layer 2: Heuristic Rules ───────────────────────────────
 
@@ -896,23 +897,29 @@ class Router:
         if match.get("fallthrough"):
             return True
 
+        matched_any = False
+
         # has_tools
         if "has_tools" in match:
-            if match["has_tools"] == ctx.has_tools:
-                return True
-            return False
+            matched_any = True
+            if match["has_tools"] != ctx.has_tools:
+                return False
 
         # estimated_tokens
         if "estimated_tokens" in match:
+            matched_any = True
             tok_match = match["estimated_tokens"]
-            if "less_than" in tok_match and ctx.total_tokens < tok_match["less_than"]:
-                return True
-            if "greater_than" in tok_match and ctx.total_tokens > tok_match["greater_than"]:
-                return True
-            return False
+            token_ok = True
+            if "less_than" in tok_match:
+                token_ok = token_ok and ctx.total_tokens < tok_match["less_than"]
+            if "greater_than" in tok_match:
+                token_ok = token_ok and ctx.total_tokens > tok_match["greater_than"]
+            if not token_ok:
+                return False
 
         # message_keywords
         if "message_keywords" in match:
+            matched_any = True
             kw_cfg = match["message_keywords"]
             keywords = kw_cfg.get("any_of", [])
             min_matches = kw_cfg.get("min_matches", 1)
@@ -923,9 +930,10 @@ class Router:
             search_text = ctx.last_user_message.lower()
             hit_count = sum(1 for kw in keywords if kw.lower() in search_text)
 
-            return hit_count >= min_matches
+            if hit_count < min_matches:
+                return False
 
-        return False
+        return matched_any
 
     # ── Layer 3: LLM Classifier ────────────────────────────────
 
