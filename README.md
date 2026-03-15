@@ -852,6 +852,12 @@ Provider starter snippets for the first rollout path live under [docs/examples](
 - [provider-local-worker.env.example](./docs/examples/provider-local-worker.env.example)
 - [provider-image-provider.yaml](./docs/examples/provider-image-provider.yaml)
 - [provider-image-provider.env.example](./docs/examples/provider-image-provider.env.example)
+
+If you want to paste the current onboarding state into a ticket or PR, run:
+
+```bash
+./scripts/foundrygate-onboarding-report --markdown
+```
 | `foundrygate-install` | Installs the unit file, creates `/var/lib/foundrygate`, creates helper symlinks, reloads `systemd`, and starts the service |
 | `foundrygate-start` | Runs `systemctl start foundrygate.service` |
 | `foundrygate-stop` | Runs `systemctl stop foundrygate.service` |

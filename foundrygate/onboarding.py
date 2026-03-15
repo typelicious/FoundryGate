@@ -534,6 +534,121 @@ def render_onboarding_report(report: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def render_onboarding_report_markdown(report: dict[str, Any]) -> str:
+    """Render the onboarding report as Markdown."""
+    provider_block = report["providers"]
+    client_block = report["clients"]
+    routing_block = report["routing"]
+    rollout_block = report["provider_rollout"]
+    ops_block = report["operations"]
+    integration_block = report["integrations"]
+    env_block = report["env"]
+
+    lines = [
+        "# FoundryGate Onboarding Report",
+        "",
+        f"- Config: `{report['config_path']}`",
+        f"- Env: `{report['env_file']}`",
+        "",
+        "## Providers",
+        f"- Total: {provider_block['total']}",
+        f"- Ready: {provider_block['ready']}",
+        f"- Not ready: {provider_block['not_ready']}",
+        f"- Local workers: {provider_block['local_workers']}",
+        f"- Image-capable: {provider_block['image_capable']}",
+    ]
+
+    env_requirements = env_block.get("provider_requirements", {})
+    if env_requirements.get("missing"):
+        lines.append(
+            "- Missing provider env: "
+            + ", ".join(f"`{item}`" for item in env_requirements["missing"])
+        )
+
+    if provider_block["items"]:
+        lines.extend(["", "### Provider Inventory"])
+        for item in provider_block["items"]:
+            readiness = "ready" if item["ready"] else f"not ready ({item['readiness_reason']})"
+            lines.append(
+                f"- `{item['name']}`: {item['contract']} / {item['backend']} / "
+                f"{item['tier'] or 'default'} / {readiness}"
+            )
+
+    lines.extend(
+        [
+            "",
+            "## Clients",
+            f"- Profiles enabled: {client_block['profiles_enabled']}",
+            f"- Default profile: `{client_block['default_profile']}`",
+            "- Presets: "
+            + (", ".join(f"`{item}`" for item in client_block["presets"]) or "none"),
+            f"- Profiles: {client_block['profile_count']}",
+            f"- Rules: {client_block['rule_count']}",
+        ]
+    )
+
+    if client_block["matrix"]:
+        lines.extend(["", "### Client Matrix"])
+        for row in client_block["matrix"]:
+            default_text = " (default)" if row["default"] else ""
+            lines.append(f"- `{row['name']}`{default_text}: {row['source']}")
+            lines.append(f"  - Match: {row['matched_by']}")
+            lines.append(f"  - Intent: {'; '.join(row['routing_intent'])}")
+
+    lines.extend(
+        [
+            "",
+            "## Routing",
+            "- Fallback chain: "
+            + (", ".join(f"`{item}`" for item in routing_block["fallback_chain"]) or "none"),
+            f"- Policy layer: {routing_block['policy_layer_enabled']} "
+            f"({routing_block['policy_rule_count']} rules)",
+            f"- Request hooks: {routing_block['request_hooks_enabled']} "
+            f"({routing_block['request_hook_count']} hooks)",
+            "",
+            "## Provider Rollout",
+            "- Stage 1 primary: "
+            + (", ".join(f"`{item}`" for item in rollout_block["stage_1_primary"]) or "none"),
+            "- Stage 2 secondary: "
+            + (", ".join(f"`{item}`" for item in rollout_block["stage_2_secondary"]) or "none"),
+            "- Stage 3 modality: "
+            + (", ".join(f"`{item}`" for item in rollout_block["stage_3_modality"]) or "none"),
+        ]
+    )
+
+    if rollout_block["fallback_targets"]:
+        lines.append("- Fallback targets:")
+        for item in rollout_block["fallback_targets"]:
+            readiness = "ready" if item["ready"] else "not ready"
+            lines.append(f"  - `{item['name']}`: {readiness}")
+
+    lines.extend(
+        [
+            "",
+            "## Operations",
+            f"- Update checks: {ops_block['update_checks_enabled']}",
+            f"- Auto update: {ops_block['auto_update_enabled']}",
+            f"- Rollout ring: `{ops_block['rollout_ring']}`",
+            "",
+            "## Integration Quickstarts",
+        ]
+    )
+
+    for client_name, data in integration_block.items():
+        readiness = "ready" if data["recommended"] else "needs preset or custom profile"
+        lines.append(f"- `{client_name}`: {readiness}")
+        lines.append(f"  - Header: `{data['header']}`")
+        lines.append(f"  - Profile: `{data['profile']}`")
+        for snippet_line in data["snippet"]:
+            lines.append(f"  - Example: `{snippet_line}`")
+
+    if report["suggestions"]:
+        lines.extend(["", "## Suggestions"])
+        lines.extend(f"- {item}" for item in report["suggestions"])
+
+    return "\n".join(lines) + "\n"
+
+
 def render_onboarding_validation(validation: dict[str, Any]) -> str:
     """Render onboarding validation results as plain text."""
     lines = [

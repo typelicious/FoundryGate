@@ -7,6 +7,7 @@ from foundrygate.onboarding import (
     build_onboarding_validation,
     collect_provider_env_requirements,
     render_onboarding_report,
+    render_onboarding_report_markdown,
     render_onboarding_validation,
 )
 
@@ -113,6 +114,11 @@ auto_update:
     assert "- stage 1 primary: local-worker" in text
     assert "Integration quickstarts" in text
     assert "header: X-FoundryGate-Client: codex" in text
+
+    markdown = render_onboarding_report_markdown(report)
+    assert "# FoundryGate Onboarding Report" in markdown
+    assert "## Provider Rollout" in markdown
+    assert "`local-worker`" in markdown
 
 
 def test_onboarding_validation_blocks_missing_env_and_unready_providers(
