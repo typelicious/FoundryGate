@@ -106,6 +106,40 @@ class _MetricsStub:
     def get_client_breakdown(self, **_kwargs):
         return []
 
+    def get_client_totals(self, **_kwargs):
+        return [
+            {
+                "client_profile": "openclaw",
+                "client_tag": "agent-alpha",
+                "requests": 12,
+                "failures": 1,
+                "success_pct": 91.7,
+                "prompt_tokens": 1500,
+                "compl_tokens": 450,
+                "total_tokens": 1950,
+                "cost_usd": 0.1642,
+                "cost_per_request_usd": 0.0137,
+                "avg_latency_ms": 620.0,
+                "modalities": "chat",
+                "providers": "cloud-default",
+            },
+            {
+                "client_profile": "cli",
+                "client_tag": "batch-jobs",
+                "requests": 5,
+                "failures": 2,
+                "success_pct": 60.0,
+                "prompt_tokens": 4200,
+                "compl_tokens": 1200,
+                "total_tokens": 5400,
+                "cost_usd": 0.441,
+                "cost_per_request_usd": 0.0882,
+                "avg_latency_ms": 980.0,
+                "modalities": "chat,image_generation",
+                "providers": "cloud-default",
+            },
+        ]
+
     def get_operator_breakdown(self, **_kwargs):
         return []
 
@@ -181,6 +215,18 @@ def test_dashboard_sets_security_headers(api_client):
     assert "frame-ancestors 'none'" in csp
     assert "'unsafe-inline'" not in csp
     assert "sha256-" in csp
+
+
+def test_stats_includes_client_highlights(api_client):
+    response = api_client.get("/api/stats")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["client_highlights"]["top_requests"]["client_tag"] == "agent-alpha"
+    assert body["client_highlights"]["top_tokens"]["client_tag"] == "batch-jobs"
+    assert body["client_highlights"]["top_cost"]["client_tag"] == "batch-jobs"
+    assert body["client_highlights"]["highest_failure_rate"]["client_tag"] == "batch-jobs"
+    assert body["client_highlights"]["slowest_client"]["client_tag"] == "batch-jobs"
 
 
 def test_route_preview_rejects_large_json_payload(api_client):

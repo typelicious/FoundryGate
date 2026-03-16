@@ -10,6 +10,7 @@ The format is intentionally lightweight and human-readable. Group entries by rel
 
 - Added richer client usage reporting in `GET /api/stats` and the dashboard, including per-client tokens, failures, success rate, and aggregate client totals
 - Added a second wave of AI-native starter templates for Agno, Semantic Kernel, Haystack, Mastra, and Google ADK
+- Added client highlight summaries to `GET /api/stats` and the built-in dashboard for top request, token, cost, failure, and latency signals
 
 ### Changed
 

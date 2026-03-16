@@ -340,6 +340,47 @@ def _health_summary() -> dict[str, int]:
     }
 
 
+def _client_highlights(client_totals: list[dict[str, Any]]) -> dict[str, dict[str, Any] | None]:
+    """Return a small set of client-level highlights for the operator surface."""
+    if not client_totals:
+        return {
+            "top_requests": None,
+            "top_tokens": None,
+            "top_cost": None,
+            "highest_failure_rate": None,
+            "slowest_client": None,
+        }
+
+    rows = list(client_totals)
+    failure_rows = [row for row in rows if (row.get("failures") or 0) > 0]
+
+    return {
+        "top_requests": max(rows, key=lambda row: (row.get("requests") or 0, row.get("total_tokens") or 0)),
+        "top_tokens": max(
+            rows,
+            key=lambda row: (row.get("total_tokens") or 0, row.get("requests") or 0),
+        ),
+        "top_cost": max(rows, key=lambda row: (row.get("cost_usd") or 0, row.get("requests") or 0)),
+        "highest_failure_rate": (
+            max(
+                failure_rows,
+                key=lambda row: (
+                    row.get("success_pct") is not None,
+                    -(row.get("success_pct") or 0),
+                    row.get("failures") or 0,
+                    row.get("requests") or 0,
+                ),
+            )
+            if failure_rows
+            else None
+        ),
+        "slowest_client": max(
+            rows,
+            key=lambda row: (row.get("avg_latency_ms") or 0, row.get("requests") or 0),
+        ),
+    }
+
+
 def _rollout_provider_summary(provider_scope: dict[str, Any] | None) -> dict[str, Any]:
     """Return provider-health totals for the configured rollout scope."""
     scope = dict(provider_scope or {})
@@ -907,13 +948,15 @@ async def stats(
         "status": operator_status,
         "client_tag": client_tag,
     }
+    client_totals = _metrics.get_client_totals(**filters)
     return {
         "totals": _metrics.get_totals(**filters),
         "providers": _metrics.get_provider_summary(**filters),
         "modalities": _metrics.get_modality_breakdown(**filters),
         "routing": _metrics.get_routing_breakdown(**filters),
         "clients": _metrics.get_client_breakdown(**filters),
-        "client_totals": _metrics.get_client_totals(**filters),
+        "client_totals": client_totals,
+        "client_highlights": _client_highlights(client_totals),
         "operator_actions": _metrics.get_operator_breakdown(**operator_filters),
         "hourly": _metrics.get_hourly_series(24),
         "daily": _metrics.get_daily_totals(30),
@@ -1837,8 +1880,13 @@ async function load(){
 
     const operatorRows = stats.operator_actions || [];
     const clientTotalRows = stats.client_totals || [];
+    const clientHighlights = stats.client_highlights || {};
     const latestOperatorEvent = (operatorEvents.events || [])[0] || null;
-    const topClient = clientTotalRows.length ? clientTotalRows[0] : null;
+    const topClient = clientHighlights.top_requests || (clientTotalRows.length ? clientTotalRows[0] : null);
+    const topTokenClient = clientHighlights.top_tokens || null;
+    const topCostClient = clientHighlights.top_cost || null;
+    const highestFailureClient = clientHighlights.highest_failure_rate || null;
+    const slowestClient = clientHighlights.slowest_client || null;
     $('#cards').innerHTML = `
       <div class="card"><div class="label">Requests</div><div class="value">${fmtTok(totals.total_requests || 0)}</div></div>
       <div class="card"><div class="label">Cost</div><div class="value cost">${fmtUsd(totals.total_cost_usd || 0)}</div></div>
@@ -1849,7 +1897,11 @@ async function load(){
       <div class="card"><div class="label">Healthy Providers</div><div class="value">${healthyProviders}/${providers.length}</div><div class="detail">${unhealthyProviders} unhealthy</div></div>
       <div class="card"><div class="label">Capability Coverage</div><div class="value">${coverageEntries.length}</div><div class="detail">${coverageEntries.map(([name]) => name).slice(0,3).join(', ') || 'none'}</div></div>
       <div class="card"><div class="label">Top Modality</div><div class="value">${esc(topModality)}</div><div class="detail">${modalityRows.length} modality groups</div></div>
-      <div class="card"><div class="label">Top Client</div><div class="value">${esc(topClient ? (topClient.client_tag || topClient.client_profile || 'generic') : '—')}</div><div class="detail">${topClient ? `${fmtTok(topClient.total_tokens || 0)} tokens / ${fmtUsd(topClient.cost_usd || 0)}` : 'No client traffic yet'}</div></div>
+      <div class="card"><div class="label">Top Client</div><div class="value">${esc(topClient ? (topClient.client_tag || topClient.client_profile || 'generic') : '—')}</div><div class="detail">${topClient ? `${fmtTok(topClient.requests || 0)} requests / ${fmtTok(topClient.total_tokens || 0)} tokens` : 'No client traffic yet'}</div></div>
+      <div class="card"><div class="label">Top Token Client</div><div class="value">${esc(topTokenClient ? (topTokenClient.client_tag || topTokenClient.client_profile || 'generic') : '—')}</div><div class="detail">${topTokenClient ? `${fmtTok(topTokenClient.total_tokens || 0)} tokens / ${fmtUsd(topTokenClient.cost_usd || 0)}` : 'No client token data yet'}</div></div>
+      <div class="card"><div class="label">Top Cost Client</div><div class="value ${topCostClient && (topCostClient.cost_usd || 0) > 0 ? 'cost' : ''}">${esc(topCostClient ? (topCostClient.client_tag || topCostClient.client_profile || 'generic') : '—')}</div><div class="detail">${topCostClient ? `${fmtUsd(topCostClient.cost_usd || 0)} total / ${fmtUsd(topCostClient.cost_per_request_usd || 0)} per request` : 'No client cost data yet'}</div></div>
+      <div class="card"><div class="label">Highest Failure Client</div><div class="value ${(highestFailureClient && (highestFailureClient.failures || 0) > 0) ? 'err' : ''}">${esc(highestFailureClient ? (highestFailureClient.client_tag || highestFailureClient.client_profile || 'generic') : '—')}</div><div class="detail">${highestFailureClient ? `${fmt(100 - (highestFailureClient.success_pct || 0), 1)}% fail / ${highestFailureClient.failures || 0} failures` : 'No client failures yet'}</div></div>
+      <div class="card"><div class="label">Slowest Client</div><div class="value">${esc(slowestClient ? (slowestClient.client_tag || slowestClient.client_profile || 'generic') : '—')}</div><div class="detail">${slowestClient ? `${fmtMs(slowestClient.avg_latency_ms || 0)} avg / ${fmtTok(slowestClient.requests || 0)} requests` : 'No client latency data yet'}</div></div>
       <div class="card"><div class="label">Release Status</div><div class="value ${(update.alert_level === 'critical' || update.alert_level === 'warning') ? 'err' : update.update_available ? 'cost' : ''}">${esc(update.latest_version || update.current_version || 'n/a')}</div><div class="detail">${update.enabled ? (update.status === 'ok' ? `${esc(update.release_channel || 'stable')} / ${esc(update.update_type || 'current')} / ${esc(update.recommended_action || (update.update_available ? 'Upgrade recommended' : 'No action needed'))}${update.auto_update && update.auto_update.enabled ? ` / ring: ${esc(update.auto_update.rollout_ring || 'early')} / auto: ${esc(update.auto_update.eligible ? 'eligible' : (update.auto_update.blocked_reason || 'blocked'))}` : ''}` : esc(update.recommended_action || 'Update check unavailable')) : 'Update checks disabled'}</div></div>
       <div class="card"><div class="label">Operator Actions</div><div class="value">${fmtTok((operatorEvents.events || []).length)}</div><div class="detail">${latestOperatorEvent ? `${esc(latestOperatorEvent.action || 'update-check')} / ${esc(latestOperatorEvent.status || 'unknown')}` : 'No recent operator events'}</div></div>
     `;
