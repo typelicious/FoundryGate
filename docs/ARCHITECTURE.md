@@ -45,6 +45,15 @@ The current chat path is:
 
 Within one `static` or `heuristic` match block, configured fields now behave as cumulative constraints. Use explicit `any:` only when you want OR behavior across subconditions. This keeps combined rules explainable and avoids accidental matches when only one of several intended constraints is present.
 
+Policy matches follow the same discipline. `client_profile` is additive inside one policy match block, not a shortcut that bypasses the other configured fields. If one policy rule should match on either caller identity or a static/heuristic signal, express that explicitly with `any:`.
+
+In practice, the layers split into two categories:
+
+- hard decision layers: `policy`, `static`, and `heuristic`
+- soft preference layers: `request hooks`, `client profiles`, and the optional `llm-classify`
+
+The hard layers should carry governance, routing intent, and deterministic behavior. The soft layers should only add provider preference or narrow the candidate set when no harder layer has already made the decision.
+
 Before a candidate is accepted, FoundryGate also scores and validates route fit against provider metadata such as context window, input/output token limits, cache hints, locality, health, latency, and recent failure state.
 
 ## Provider layer

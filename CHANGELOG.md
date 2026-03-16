@@ -16,6 +16,7 @@ The format is intentionally lightweight and human-readable. Group entries by rel
 ### Changed
 
 - Tightened `static` and `heuristic` match semantics so combined fields now behave as cumulative constraints unless `any:` is used explicitly
+- Tightened `policy` match semantics so `client_profile` acts as an additive constraint inside one rule instead of bypassing sibling static or heuristic fields
 
 ## v1.0.0 - 2026-03-15
 

@@ -163,6 +163,114 @@ metrics:
         assert decision.layer == "policy"
         assert decision.provider_name == "tool-secondary"
 
+    @pytest.mark.asyncio
+    async def test_policy_client_profile_is_cumulative_with_other_fields(self, tmp_path):
+        cfg = load_config(
+            _write_config(
+                tmp_path,
+                """
+server:
+  host: "127.0.0.1"
+  port: 8090
+providers:
+  local-worker:
+    backend: openai-compat
+    base_url: "http://127.0.0.1:11434/v1"
+    api_key: "local"
+    model: "llama3"
+    tier: local
+    capabilities:
+      local: true
+  cloud-default:
+    backend: openai-compat
+    base_url: "https://api.example.com/v1"
+    api_key: "secret"
+    model: "cloud-chat"
+routing_policies:
+  enabled: true
+  rules:
+    - name: local-tools-only
+      match:
+        client_profile: ["openclaw"]
+        has_tools: true
+      select:
+        capability_values:
+          local: true
+fallback_chain:
+  - cloud-default
+metrics:
+  enabled: false
+""",
+            )
+        )
+        router = Router(cfg)
+
+        without_tools = await router.route(
+            [{"role": "user", "content": "hello"}],
+            model_requested="auto",
+            client_profile="openclaw",
+            has_tools=False,
+        )
+        with_tools = await router.route(
+            [{"role": "user", "content": "search files"}],
+            model_requested="auto",
+            client_profile="openclaw",
+            has_tools=True,
+        )
+
+        assert without_tools.layer != "policy"
+        assert with_tools.layer == "policy"
+        assert with_tools.rule_name == "local-tools-only"
+        assert with_tools.provider_name == "local-worker"
+
+    def test_policy_any_can_mix_client_profile_and_static_conditions(self, tmp_path):
+        cfg = load_config(
+            _write_config(
+                tmp_path,
+                """
+server:
+  host: "127.0.0.1"
+  port: 8090
+providers:
+  local-worker:
+    backend: openai-compat
+    base_url: "http://127.0.0.1:11434/v1"
+    api_key: "local"
+    model: "llama3"
+    tier: local
+    capabilities:
+      local: true
+fallback_chain:
+  - local-worker
+metrics:
+  enabled: false
+""",
+            )
+        )
+        router = Router(cfg)
+        ctx = types.SimpleNamespace(
+            client_profile="openclaw",
+            model_requested="auto",
+            system_prompt="",
+            headers={"x-foundrygate-client": "codex"},
+            has_tools=False,
+            total_tokens=20,
+            last_user_message="hello",
+        )
+
+        assert (
+            router._match_policy(  # noqa: SLF001
+                {
+                    "any": [
+                        {"client_profile": ["cli"]},
+                        {"header_contains": {"x-foundrygate-client": ["codex"]}},
+                    ]
+                },
+                ctx,
+            )
+            is True
+        )
+
 
 class TestPolicyValidation:
     def test_policy_rejects_unknown_provider_reference(self, tmp_path):

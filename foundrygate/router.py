@@ -435,11 +435,16 @@ class Router:
             return all(self._match_policy(sub, ctx) for sub in match["all"])
         if "any" in match:
             return any(self._match_policy(sub, ctx) for sub in match["any"])
+
+        matched_any = False
+
         if "client_profile" in match:
+            matched_any = True
             profiles = match["client_profile"]
             if isinstance(profiles, str):
                 profiles = [profiles]
-            return ctx.client_profile in profiles
+            if ctx.client_profile not in profiles:
+                return False
 
         static_keys = {"model_requested", "system_prompt_contains", "header_contains", "any"}
         heuristic_keys = {"has_tools", "estimated_tokens", "message_keywords", "fallthrough"}
@@ -447,12 +452,16 @@ class Router:
         static_match = {k: match[k] for k in static_keys if k in match}
         heuristic_match = {k: match[k] for k in heuristic_keys if k in match}
 
-        if static_match and not self._match_static(static_match, ctx):
-            return False
-        if heuristic_match and not self._match_heuristic(heuristic_match, ctx):
-            return False
+        if static_match:
+            matched_any = True
+            if not self._match_static(static_match, ctx):
+                return False
+        if heuristic_match:
+            matched_any = True
+            if not self._match_heuristic(heuristic_match, ctx):
+                return False
 
-        return bool(static_match or heuristic_match)
+        return matched_any
 
     def _select_policy_provider(
         self, select: dict, ctx: _RoutingContext
