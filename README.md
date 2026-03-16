@@ -31,7 +31,7 @@ FoundryGate gives OpenClaw, n8n, CLI tools, and custom apps one local endpoint a
 - Single local endpoint for many upstreams: cloud providers, proxy providers, and local workers can sit behind the same base URL.
 - OpenAI-compatible runtime: chat completions, model discovery, image generation, and image editing use familiar OpenAI-style paths.
 - Better routing than simple first-match proxying: policies, static rules, heuristics, client profiles, hooks, and route-fit scoring all participate.
-- Strong operator visibility: `/health`, provider inventory, route previews, traces, stats, update checks, and dashboard views are built in.
+- Strong operator visibility: `/health`, provider inventory, route previews, traces, stats, update checks, and dashboard views are built in, including per-client usage highlights.
 - Practical rollout controls: fallback chains, maintenance windows, rollout rings, provider scopes, and post-update verification gates are already there.
 - Copy/paste onboarding: OpenClaw, n8n, CLI, delegated-agent traffic, provider templates, and env starter files ship with the repo.
 
