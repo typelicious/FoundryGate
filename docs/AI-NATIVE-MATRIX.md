@@ -73,13 +73,21 @@ That set gives FoundryGate:
 
 ## Second-Wave Template Set
 
-Good candidates once the first wave is stable:
+This wave is now covered in the repo:
 
 - `Agno`
 - `Semantic Kernel`
 - `Haystack`
 - `Mastra`
 - `Google ADK`
+
+## Third-Wave Template Set
+
+The next clean bundle after the second wave is:
+
+- `AutoGen`
+- `LlamaIndex`
+- `CrewAI`
 - `PydanticAI`
 - `CAMEL`
 

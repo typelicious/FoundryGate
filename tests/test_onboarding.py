@@ -266,6 +266,11 @@ auto_update:
     assert report["integrations"]["openclaw"]["recommended"] is True
     assert report["integrations"]["n8n"]["recommended"] is True
     assert report["integrations"]["cli"]["recommended"] is True
+    assert "autogen" in report["integrations"]
+    assert "llamaindex" in report["integrations"]
+    assert "crewai" in report["integrations"]
+    assert "pydanticai" in report["integrations"]
+    assert "camel" in report["integrations"]
     assert report["clients"]["matrix"][0]["name"] == "cli"
     assert report["clients"]["matrix"][0]["has_rule"] is True
 

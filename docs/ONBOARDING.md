@@ -160,6 +160,11 @@ Starter files:
 - [examples/haystack-foundrygate.env.example](./examples/haystack-foundrygate.env.example)
 - [examples/mastra-foundrygate.env.example](./examples/mastra-foundrygate.env.example)
 - [examples/google-adk-foundrygate.env.example](./examples/google-adk-foundrygate.env.example)
+- [examples/autogen-foundrygate.env.example](./examples/autogen-foundrygate.env.example)
+- [examples/llamaindex-foundrygate.env.example](./examples/llamaindex-foundrygate.env.example)
+- [examples/crewai-foundrygate.env.example](./examples/crewai-foundrygate.env.example)
+- [examples/pydanticai-foundrygate.env.example](./examples/pydanticai-foundrygate.env.example)
+- [examples/camel-foundrygate.env.example](./examples/camel-foundrygate.env.example)
 
 ### 3b. First-wave framework starters
 
@@ -184,6 +189,18 @@ The second post-`1.0` starter wave extends the same pattern to:
 - `Google ADK` -> `X-FoundryGate-Client: google-adk`
 
 Keep these on the shared OpenAI-compatible path first. The right time to split them into more specialized profiles is after traces and stats show a real difference in locality, fallback, or cost behavior.
+
+### 3d. Third-wave framework starters
+
+The third post-`1.0` starter wave closes the biggest remaining framework gaps from the matrix:
+
+- `AutoGen` -> `X-FoundryGate-Client: autogen`
+- `LlamaIndex` -> `X-FoundryGate-Client: llamaindex`
+- `CrewAI` -> `X-FoundryGate-Client: crewai`
+- `PydanticAI` -> `X-FoundryGate-Client: pydanticai`
+- `CAMEL` -> `X-FoundryGate-Client: camel`
+
+Treat these the same way as the earlier waves: stay on the shared OpenAI-compatible endpoint first, then split profiles only when traces and route previews show a real need.
 
 ### 4. Add request hooks only if needed
 

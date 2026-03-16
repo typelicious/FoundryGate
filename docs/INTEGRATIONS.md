@@ -188,6 +188,40 @@ The second wave keeps the same integration discipline while extending FoundryGat
 - recommended header: `X-FoundryGate-Client: google-adk`
 - recommended profile name: `google-adk`
 
+## Third-wave framework starters
+
+The third wave rounds out the most visible remaining framework set from the AI-native matrix.
+
+### AutoGen
+
+- starter: [examples/autogen-foundrygate.env.example](./examples/autogen-foundrygate.env.example)
+- recommended header: `X-FoundryGate-Client: autogen`
+- recommended profile name: `autogen`
+
+### LlamaIndex
+
+- starter: [examples/llamaindex-foundrygate.env.example](./examples/llamaindex-foundrygate.env.example)
+- recommended header: `X-FoundryGate-Client: llamaindex`
+- recommended profile name: `llamaindex`
+
+### CrewAI
+
+- starter: [examples/crewai-foundrygate.env.example](./examples/crewai-foundrygate.env.example)
+- recommended header: `X-FoundryGate-Client: crewai`
+- recommended profile name: `crewai`
+
+### PydanticAI
+
+- starter: [examples/pydanticai-foundrygate.env.example](./examples/pydanticai-foundrygate.env.example)
+- recommended header: `X-FoundryGate-Client: pydanticai`
+- recommended profile name: `pydanticai`
+
+### CAMEL
+
+- starter: [examples/camel-foundrygate.env.example](./examples/camel-foundrygate.env.example)
+- recommended header: `X-FoundryGate-Client: camel`
+- recommended profile name: `camel`
+
 ## Provider onboarding
 
 When onboarding a new provider:

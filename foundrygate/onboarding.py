@@ -503,6 +503,89 @@ def build_onboarding_report(
                 ),
             ],
         },
+        "autogen": {
+            "recommended": "autogen" in profile_names,
+            "header": "X-FoundryGate-Client: autogen",
+            "profile": "autogen",
+            "snippet": [
+                "export OPENAI_BASE_URL=http://127.0.0.1:8090/v1",
+                "export OPENAI_API_KEY=local",
+            ],
+            "notes": [
+                "Keep AutoGen on the shared OpenAI-compatible path first.",
+                (
+                    "Split assistant families into separate profiles only when traces "
+                    "show a real locality or cost split."
+                ),
+            ],
+        },
+        "llamaindex": {
+            "recommended": "llamaindex" in profile_names,
+            "header": "X-FoundryGate-Client: llamaindex",
+            "profile": "llamaindex",
+            "snippet": [
+                "export OPENAI_BASE_URL=http://127.0.0.1:8090/v1",
+                "export OPENAI_API_KEY=local",
+            ],
+            "notes": [
+                "Keep retrieval and generation on one gateway surface to start with.",
+                (
+                    "Add dedicated routing only when one index or workflow class needs "
+                    "different provider behavior."
+                ),
+            ],
+        },
+        "crewai": {
+            "recommended": "crewai" in profile_names,
+            "header": "X-FoundryGate-Client: crewai",
+            "profile": "crewai",
+            "snippet": [
+                "export OPENAI_BASE_URL=http://127.0.0.1:8090/v1",
+                "export OPENAI_API_KEY=local",
+            ],
+            "notes": [
+                "Use one stable client tag for CrewAI orchestration before splitting roles.",
+                (
+                    "Only add profile-specific routing when crew classes need distinct "
+                    "fallback, locality, or cost constraints."
+                ),
+            ],
+        },
+        "pydanticai": {
+            "recommended": "pydanticai" in profile_names,
+            "header": "X-FoundryGate-Client: pydanticai",
+            "profile": "pydanticai",
+            "snippet": [
+                "export OPENAI_BASE_URL=http://127.0.0.1:8090/v1",
+                "export OPENAI_API_KEY=local",
+            ],
+            "notes": [
+                (
+                    "Keep PydanticAI on the common OpenAI-compatible path unless a "
+                    "model API gap appears."
+                ),
+                (
+                    "Use client profiles only when tool or validation-heavy traffic "
+                    "deserves a different provider set."
+                ),
+            ],
+        },
+        "camel": {
+            "recommended": "camel" in profile_names,
+            "header": "X-FoundryGate-Client: camel",
+            "profile": "camel",
+            "snippet": [
+                "export OPENAI_BASE_URL=http://127.0.0.1:8090/v1",
+                "export OPENAI_API_KEY=local",
+            ],
+            "notes": [
+                "Start CAMEL traffic on the shared gateway path and keep one stable client tag.",
+                (
+                    "Only add narrower policies when multi-agent workloads need stronger "
+                    "provider isolation."
+                ),
+            ],
+        },
     }
 
     return {
