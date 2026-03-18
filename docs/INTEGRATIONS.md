@@ -22,6 +22,7 @@ Use:
 
 - [openclaw-integration.jsonc](../openclaw-integration.jsonc)
 - [examples/openclaw-foundrygate.jsonc](./examples/openclaw-foundrygate.jsonc)
+- [examples/openclaw-foundrygate-full.jsonc](./examples/openclaw-foundrygate-full.jsonc)
 - `client_profiles.presets: ["openclaw"]` for a standard starting point
 
 Important rule:
@@ -138,6 +139,16 @@ For a reusable shell starter, use [examples/cli-foundrygate-env.sh](./examples/c
 As with other clients, prefer token-like client tags over long free-form values so the bounded header surface remains readable in traces and operator views.
 
 If you want a small Node-facing helper instead of shell aliases, the separate npm package lives in [packages/foundrygate-cli](../packages/foundrygate-cli).
+
+### opencode
+
+`opencode` can use FoundryGate as a custom OpenAI-compatible provider through its `provider` config.
+
+- starter: [examples/opencode-foundrygate.json](./examples/opencode-foundrygate.json)
+- recommended header: `X-FoundryGate-Client: opencode`
+- recommended model: pick one of the FoundryGate model ids exposed by `GET /v1/models`, usually `auto`
+
+The current opencode docs recommend `@ai-sdk/openai-compatible` for custom OpenAI-compatible providers and a custom `provider.<id>.options.baseURL` value for the gateway endpoint. This FoundryGate starter follows that pattern and keeps the provider-local model ids aligned with `GET /v1/models`.
 
 ## AI-native app clients
 
@@ -280,6 +291,11 @@ Starter snippets:
 - [examples/provider-local-worker.env.example](./examples/provider-local-worker.env.example)
 - [examples/provider-image-provider.yaml](./examples/provider-image-provider.yaml)
 - [examples/provider-image-provider.env.example](./examples/provider-image-provider.env.example)
+- [examples/provider-kilocode.yaml](./examples/provider-kilocode.yaml)
+- [examples/provider-kilocode.env.example](./examples/provider-kilocode.env.example)
+- [examples/provider-blackbox.yaml](./examples/provider-blackbox.yaml)
+- [examples/provider-blackbox.env.example](./examples/provider-blackbox.env.example)
+- [examples/foundrygate-multi-provider-stack.yaml](./examples/foundrygate-multi-provider-stack.yaml)
 
 ## Client onboarding
 

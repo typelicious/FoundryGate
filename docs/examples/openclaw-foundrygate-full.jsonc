@@ -1,0 +1,129 @@
+// Full OpenClaw example for FoundryGate as the primary chat gateway.
+// Merge the relevant blocks into ~/.openclaw/openclaw.json.
+//
+// Notes:
+// - The ids under providers.foundrygate.models must match GET /v1/models
+//   from FoundryGate.
+// - Keep direct providers only when you still want manual overrides outside
+//   the gateway.
+// - If FoundryGate does not yet expose a real image-capable provider, keep
+//   imageModel on one direct provider until it does.
+{
+  "models": {
+    "mode": "merge",
+    "providers": {
+      "foundrygate": {
+        "baseUrl": "http://127.0.0.1:8090/v1",
+        "apiKey": "local",
+        "auth": "api-key",
+        "api": "openai-completions",
+        "models": [
+          {
+            "id": "auto",
+            "name": "FoundryGate Auto-Router",
+            "contextWindow": 128000,
+            "maxTokens": 8000
+          },
+          {
+            "id": "deepseek-chat",
+            "name": "DeepSeek Chat (via FoundryGate)",
+            "contextWindow": 128000,
+            "maxTokens": 8000
+          },
+          {
+            "id": "deepseek-reasoner",
+            "name": "DeepSeek Reasoner (via FoundryGate)",
+            "contextWindow": 128000,
+            "maxTokens": 8000
+          },
+          {
+            "id": "gemini-flash-lite",
+            "name": "Gemini Flash-Lite (via FoundryGate)",
+            "contextWindow": 1000000,
+            "maxTokens": 8000
+          },
+          {
+            "id": "gemini-flash",
+            "name": "Gemini Flash (via FoundryGate)",
+            "contextWindow": 1000000,
+            "maxTokens": 8000
+          },
+          {
+            "id": "openrouter-fallback",
+            "name": "OpenRouter Fallback (via FoundryGate)",
+            "contextWindow": 128000,
+            "maxTokens": 8000
+          }
+        ]
+      },
+      "google": {
+        "baseUrl": "https://generativelanguage.googleapis.com/v1beta",
+        "apiKey": "${GEMINI_API_KEY}",
+        "auth": "api-key",
+        "api": "google-generative-ai",
+        "models": [
+          {
+            "id": "gemini-2.5-flash",
+            "name": "Gemini 2.5 Flash",
+            "contextWindow": 1000000,
+            "maxTokens": 8000
+          }
+        ]
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "foundrygate/auto",
+        "fallbacks": []
+      },
+      "imageModel": {
+        "primary": "google/gemini-2.5-flash",
+        "fallbacks": []
+      },
+      "models": {
+        "foundrygate/auto": {
+          "alias": "auto"
+        },
+        "foundrygate/deepseek-chat": {
+          "alias": "ds"
+        },
+        "foundrygate/deepseek-reasoner": {
+          "alias": "r1"
+        },
+        "foundrygate/gemini-flash-lite": {
+          "alias": "lite"
+        },
+        "foundrygate/gemini-flash": {
+          "alias": "flash"
+        },
+        "foundrygate/openrouter-fallback": {
+          "alias": "or"
+        },
+        "google/gemini-2.5-flash": {
+          "alias": "img"
+        }
+      },
+      "contextTokens": 200000,
+      "heartbeat": {
+        "every": "12h",
+        "model": "foundrygate/gemini-flash-lite",
+        "suppressToolErrorWarnings": true
+      },
+      "subagents": {
+        "maxConcurrent": 6,
+        "model": "foundrygate/auto"
+      }
+    }
+  },
+  "commands": {
+    "native": "auto",
+    "nativeSkills": "auto",
+    "restart": true,
+    "ownerDisplay": "raw"
+  },
+  "gateway": {
+    "mode": "local"
+  }
+}

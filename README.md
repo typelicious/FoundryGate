@@ -172,6 +172,8 @@ Start here for the deeper deployment details:
 - [Onboarding](./docs/ONBOARDING.md)
 - [Examples](./docs/examples)
 - [OpenClaw integration starter](./openclaw-integration.jsonc)
+- [Full OpenClaw example](./docs/examples/openclaw-foundrygate-full.jsonc)
+- [Multi-provider stack example](./docs/examples/foundrygate-multi-provider-stack.yaml)
 - [First-wave AI-native starters](./docs/AI-NATIVE-MATRIX.md#first-wave-template-set-for-v110)
 - [Second-wave AI-native starters](./docs/AI-NATIVE-MATRIX.md#second-wave-template-set)
 - [Third-wave AI-native starters](./docs/AI-NATIVE-MATRIX.md#third-wave-template-set)

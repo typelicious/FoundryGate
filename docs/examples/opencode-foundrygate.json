@@ -1,0 +1,60 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "foundrygate": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "FoundryGate (local gateway)",
+      "options": {
+        "baseURL": "http://127.0.0.1:8090/v1",
+        "apiKey": "local",
+        "headers": {
+          "X-FoundryGate-Client": "opencode"
+        }
+      },
+      "models": {
+        "auto": {
+          "name": "FoundryGate Auto-Router",
+          "limit": {
+            "context": 128000,
+            "output": 8000
+          }
+        },
+        "deepseek-chat": {
+          "name": "DeepSeek Chat (via FoundryGate)",
+          "limit": {
+            "context": 128000,
+            "output": 8000
+          }
+        },
+        "deepseek-reasoner": {
+          "name": "DeepSeek Reasoner (via FoundryGate)",
+          "limit": {
+            "context": 128000,
+            "output": 8000
+          }
+        },
+        "gemini-flash-lite": {
+          "name": "Gemini Flash-Lite (via FoundryGate)",
+          "limit": {
+            "context": 1000000,
+            "output": 8000
+          }
+        },
+        "gemini-flash": {
+          "name": "Gemini Flash (via FoundryGate)",
+          "limit": {
+            "context": 1000000,
+            "output": 8000
+          }
+        },
+        "openrouter-fallback": {
+          "name": "OpenRouter Fallback (via FoundryGate)",
+          "limit": {
+            "context": 128000,
+            "output": 8000
+          }
+        }
+      }
+    }
+  }
+}

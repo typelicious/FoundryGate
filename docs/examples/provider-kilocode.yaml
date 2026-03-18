@@ -1,0 +1,11 @@
+providers:
+  kilocode:
+    backend: openai-compat
+    base_url: "${KILOCODE_BASE_URL:-https://api.kilo.ai/api/gateway/v1}"
+    api_key: "${KILOCODE_API_KEY}"
+    model: "z-ai/glm-5:free"
+    max_tokens: 8000
+    tier: fallback
+
+fallback_chain:
+  - kilocode

@@ -51,6 +51,11 @@ Starter snippets:
 - [examples/provider-local-worker.env.example](./examples/provider-local-worker.env.example)
 - [examples/provider-image-provider.yaml](./examples/provider-image-provider.yaml)
 - [examples/provider-image-provider.env.example](./examples/provider-image-provider.env.example)
+- [examples/provider-kilocode.yaml](./examples/provider-kilocode.yaml)
+- [examples/provider-kilocode.env.example](./examples/provider-kilocode.env.example)
+- [examples/provider-blackbox.yaml](./examples/provider-blackbox.yaml)
+- [examples/provider-blackbox.env.example](./examples/provider-blackbox.env.example)
+- [examples/foundrygate-multi-provider-stack.yaml](./examples/foundrygate-multi-provider-stack.yaml)
 
 ### 2. Verify provider health
 
@@ -67,6 +72,8 @@ Starter snippets:
 ### 4. Only then add another provider
 
 Repeat the same path before introducing more routing complexity.
+
+If you want a fuller multi-provider starting point instead of enabling one block at a time, use [examples/foundrygate-multi-provider-stack.yaml](./examples/foundrygate-multi-provider-stack.yaml) as a copy source and then trim it down to the providers that are actually available in your environment.
 
 For many-provider rollouts, run the onboarding report after every provider change:
 
@@ -126,6 +133,7 @@ OpenClaw:
 
 Starter file: [examples/openclaw-foundrygate.jsonc](./examples/openclaw-foundrygate.jsonc)
 
+Fuller deployment example: [examples/openclaw-foundrygate-full.jsonc](./examples/openclaw-foundrygate-full.jsonc)
 Full reference block: [../openclaw-integration.jsonc](../openclaw-integration.jsonc)
 
 Important:
@@ -157,6 +165,7 @@ Starter files:
 
 - [examples/n8n-foundrygate-http-request.json](./examples/n8n-foundrygate-http-request.json)
 - [examples/cli-foundrygate-env.sh](./examples/cli-foundrygate-env.sh)
+- [examples/opencode-foundrygate.json](./examples/opencode-foundrygate.json)
 - [examples/client-ai-native-app-profile.yaml](./examples/client-ai-native-app-profile.yaml)
 - [examples/swe-af-foundrygate.env.example](./examples/swe-af-foundrygate.env.example)
 - [examples/paperclip-foundrygate.env.example](./examples/paperclip-foundrygate.env.example)

@@ -42,6 +42,13 @@ Optional base URL overrides in `.env.example`:
 
 Additional optional provider entries in `config.yaml` reference further env vars when you uncomment them.
 
+Examples in `docs/examples` also cover optional provider API keys such as:
+
+- `KILOCODE_API_KEY`
+- `BLACKBOX_API_KEY`
+
+ClawRouter / BlockRun is different: its current public path is wallet-/x402-oriented rather than a normal API-key field, so it is better treated as a separate integration model instead of another `*_API_KEY` example.
+
 ## Security Settings
 
 `config.yaml` exposes explicit security controls for the request surface:
@@ -162,6 +169,8 @@ The repo ships ready-to-copy examples under [`docs/examples`](./examples):
 - cloud provider starter YAML
 - local-worker starter YAML
 - image-provider starter YAML
+- Kilo Gateway starter YAML
+- BLACKBOX AI starter YAML
 - matching provider `.env` examples
 
 ## Validation Helpers

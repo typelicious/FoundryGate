@@ -1,0 +1,128 @@
+# Example FoundryGate stack for a local-first deployment with:
+# - cloud chat providers
+# - one local worker
+# - one image-capable provider
+# - OpenClaw, n8n, and CLI presets enabled
+#
+# Copy the relevant blocks into config.yaml rather than replacing the whole file.
+
+providers:
+  deepseek-chat:
+    backend: openai-compat
+    base_url: "${DEEPSEEK_BASE_URL:-https://api.deepseek.com/v1}"
+    api_key: "${DEEPSEEK_API_KEY}"
+    model: "deepseek-chat"
+    max_tokens: 8000
+    tier: default
+
+  deepseek-reasoner:
+    backend: openai-compat
+    base_url: "${DEEPSEEK_BASE_URL:-https://api.deepseek.com/v1}"
+    api_key: "${DEEPSEEK_API_KEY}"
+    model: "deepseek-reasoner"
+    max_tokens: 8000
+    tier: reasoning
+
+  gemini-flash-lite:
+    backend: google-genai
+    base_url: "${GEMINI_BASE_URL:-https://generativelanguage.googleapis.com/v1beta}"
+    api_key: "${GEMINI_API_KEY}"
+    model: "gemini-2.5-flash-lite"
+    max_tokens: 8000
+    tier: cheap
+
+  gemini-flash:
+    backend: google-genai
+    base_url: "${GEMINI_BASE_URL:-https://generativelanguage.googleapis.com/v1beta}"
+    api_key: "${GEMINI_API_KEY}"
+    model: "gemini-2.5-flash"
+    max_tokens: 8000
+    tier: mid
+
+  openrouter-fallback:
+    backend: openai-compat
+    base_url: "${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}"
+    api_key: "${OPENROUTER_API_KEY}"
+    model: "deepseek/deepseek-chat"
+    max_tokens: 8000
+    tier: fallback
+
+  local-worker:
+    contract: local-worker
+    backend: openai-compat
+    base_url: "http://127.0.0.1:11434/v1"
+    api_key: "local"
+    model: "llama3"
+    tier: local
+    capabilities:
+      local: true
+      cloud: false
+
+  image-provider:
+    contract: image-provider
+    backend: openai-compat
+    base_url: "http://127.0.0.1:9000/v1"
+    api_key: "${IMAGE_PROVIDER_API_KEY}"
+    model: "image-model"
+    tier: specialty
+    capabilities:
+      image_generation: true
+      image_editing: true
+    image:
+      policy_tags: ["editing", "balanced"]
+      max_outputs: 4
+      supported_sizes: ["1024x1024", "1536x1024"]
+
+fallback_chain:
+  - deepseek-chat
+  - deepseek-reasoner
+  - gemini-flash
+  - openrouter-fallback
+  # - kilocode
+  # - blackbox-free
+
+client_profiles:
+  enabled: true
+  default: generic
+  presets: ["openclaw", "n8n", "cli"]
+  profiles:
+    generic: {}
+    openclaw:
+      prefer_tiers: ["default", "reasoning"]
+    n8n:
+      prefer_tiers: ["cheap", "default"]
+    local-only:
+      capability_values:
+        local: true
+  rules: []
+
+routing_policies:
+  enabled: true
+  rules:
+    - name: n8n-cheap-default
+      match:
+        any:
+          - header_contains:
+              x-foundrygate-client: ["n8n"]
+          - client_profile: ["n8n"]
+      select:
+        prefer_tiers: ["cheap", "default"]
+
+# Optional additional fallback providers with free-tier or free-model paths:
+#
+# providers:
+#   kilocode:
+#     backend: openai-compat
+#     base_url: "${KILOCODE_BASE_URL:-https://api.kilo.ai/api/gateway/v1}"
+#     api_key: "${KILOCODE_API_KEY}"
+#     model: "z-ai/glm-5:free"
+#     max_tokens: 8000
+#     tier: fallback
+#
+#   blackbox-free:
+#     backend: openai-compat
+#     base_url: "${BLACKBOX_BASE_URL:-https://api.blackbox.ai}"
+#     api_key: "${BLACKBOX_API_KEY}"
+#     model: "blackboxai/x-ai/grok-code-fast-1:free"
+#     max_tokens: 8000
+#     tier: fallback
