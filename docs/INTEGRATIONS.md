@@ -16,6 +16,7 @@ Current coverage:
 - many-agent or delegated traffic when `x-openclaw-source` is present
 - direct model aliases via the OpenClaw-side config
 - caller-aware defaults through the `openclaw` client preset or explicit profile rules
+- image generation and image editing through the same FoundryGate provider entry
 
 Use:
 
@@ -23,6 +24,12 @@ Use:
 - [examples/openclaw-foundrygate.jsonc](./examples/openclaw-foundrygate.jsonc)
 - [examples/openclaw-foundrygate-full.jsonc](./examples/openclaw-foundrygate-full.jsonc)
 - `client_profiles.presets: ["openclaw"]` for a standard starting point
+
+Important rule:
+
+- the model ids under `models.providers.foundrygate.models` in OpenClaw must match the provider ids returned by `GET /v1/models` from FoundryGate
+- that means OpenClaw should use ids such as `auto`, `deepseek-chat`, `local-worker`, or `image-provider`
+- it should not guess raw upstream ids unless FoundryGate itself exposes those exact provider ids
 
 Minimal direction:
 
@@ -35,9 +42,42 @@ Minimal direction:
 
 For a smaller starter snippet without the full alias block, use [examples/openclaw-foundrygate.jsonc](./examples/openclaw-foundrygate.jsonc).
 
+Recommended OpenClaw defaults:
+
+- `model.primary: "foundrygate/auto"`
+- `imageModel.primary: "foundrygate/auto"` when FoundryGate should choose among image-capable providers
+- `subagents.model: "foundrygate/auto"` when delegated traffic should stay inside the same routing plane
+
+Use an explicit image provider only when OpenClaw should pin image traffic:
+
+```json
+{
+  "imageModel": {
+    "primary": "foundrygate/image-provider",
+    "fallbacks": []
+  }
+}
+```
+
+FoundryGate-side config that helps OpenClaw most:
+
+- readable, stable provider ids because those become OpenClaw model ids
+- `client_profiles.presets: ["openclaw"]`
+- `contract: local-worker` for local LLM workers
+- `contract: image-provider` for image-capable backends
+- `capabilities.image_editing: true` only when edits really work upstream
+- `image.policy_tags`, `supported_sizes`, and `max_outputs` for stronger image routing
+
 For delegated or many-agent traffic, start from [examples/openclaw-delegated-request.json](./examples/openclaw-delegated-request.json) and keep `x-openclaw-source` stable across sub-agents so traces stay attributable.
 
 Keep delegated/client headers short and stable. The runtime now bounds routing-header values before they reach traces, metrics, and rollout logic.
+
+Validate OpenClaw wiring in this order:
+
+1. `GET /v1/models` to confirm the provider ids OpenClaw should reference
+2. `POST /api/route` for chat routing previews
+3. `POST /api/route/image` for image routing previews
+4. only then send real `POST /v1/chat/completions`, `POST /v1/images/generations`, or `POST /v1/images/edits` traffic
 
 ## n8n
 
@@ -268,11 +308,11 @@ When onboarding a new client:
 5. use `/api/route` and `/api/traces` to validate behavior
 6. only add a dedicated adapter if the client cannot cleanly use the common API surface
 
-## Planned integration directions
+## Integration extensions
 
-These are roadmap items or early foundations:
+These are the main extension seams beyond the common client starters:
 
-- image generation and image editing routing through `POST /v1/images/generations` and `POST /v1/images/edits` for providers that declare `contract: image-provider`
+- image generation and image editing through `POST /v1/images/generations` and `POST /v1/images/edits` for providers that declare `contract: image-provider`
 - optional request hooks for context or optimization
 - richer CLI-sidecar adapters
 - provider and client onboarding helpers

@@ -8,6 +8,8 @@ metadata: {"openclaw":{"requires":{"bins":["curl"]},"emoji":"🚪","homepage":"h
 
 FoundryGate is a local routing proxy that sits between OpenClaw and your model providers (chat and image-capable backends).
 
+OpenClaw note: when OpenClaw talks to FoundryGate, the model ids in the OpenClaw config must match the provider ids returned by `GET /v1/models` from FoundryGate. Those ids are local FoundryGate ids such as `auto`, `deepseek-chat`, `local-worker`, or `image-provider`, not raw upstream model names.
+
 ## Available Commands
 
 ### /foundrygate stats
@@ -63,8 +65,24 @@ curl -s http://127.0.0.1:8090/api/route \
 
 Show the selected provider, routing layer, rule, resolved profile, and attempt order. If relevant headers matter for routing, include them in the dry-run request.
 
+### /foundrygate image-route <prompt>
+Dry-run image routing without calling an upstream provider.
+
+```bash
+curl -s http://127.0.0.1:8090/api/route/image \
+  -H "Content-Type: application/json" \
+  -d '{
+    "operation": "generation",
+    "model": "auto",
+    "prompt": "PROMPT_HERE",
+    "size": "1024x1024"
+  }' | python3 -m json.tool
+```
+
+Show the selected provider, routing layer, rule, and candidate ranking for image traffic.
+
 ### /foundrygate image <prompt>
-Dry-run one image-generation request shape by calling the image endpoint directly.
+Send one real image-generation request through FoundryGate.
 
 ```bash
 curl -s http://127.0.0.1:8090/v1/images/generations \
@@ -125,6 +143,14 @@ FoundryGate uses 6 routing stages for chat requests (evaluated in order, first d
 6. **LLM classifier** (optional): Cheapest model classifies the task when heuristics are uncertain
 
 Key insight: Only user messages are scored, never the system prompt. OpenClaw's system prompt is large and keyword-rich — scoring it would route everything to the expensive reasoning tier.
+
+## OpenClaw Integration Notes
+
+- Prefer one OpenClaw provider named `foundrygate` that points to `http://127.0.0.1:8090/v1`.
+- Use `foundrygate/auto` as the default `model.primary` unless you want to pin one explicit FoundryGate provider.
+- Use `foundrygate/auto` for `imageModel.primary` when FoundryGate should pick among image-capable providers. Pin `foundrygate/<provider-id>` only when the image backend must be fixed.
+- If many-agent traffic should be distinguishable, keep `x-openclaw-source` short and stable.
+- If you want FoundryGate to classify OpenClaw traffic automatically, enable `client_profiles.presets: ["openclaw"]` in `config.yaml`.
 
 ## Prompt Caching
 

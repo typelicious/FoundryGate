@@ -1,5 +1,11 @@
 // Example OpenClaw provider block for FoundryGate.
 // Merge this into ~/.openclaw/openclaw.json.
+//
+// Important:
+// - The ids listed under providers.foundrygate.models must match
+//   GET /v1/models from FoundryGate.
+// - Use foundrygate/auto for normal chat routing and, if desired, also for
+//   imageModel so FoundryGate can choose among image-capable providers.
 {
   "models": {
     "mode": "merge",
@@ -15,6 +21,18 @@
             "name": "FoundryGate Auto-Router",
             "contextWindow": 128000,
             "maxTokens": 8000
+          },
+          {
+            "id": "local-worker",
+            "name": "Local Worker (via FoundryGate)",
+            "contextWindow": 128000,
+            "maxTokens": 8000
+          },
+          {
+            "id": "image-provider",
+            "name": "Image Provider (via FoundryGate)",
+            "contextWindow": 128000,
+            "maxTokens": 8000
           }
         ]
       }
@@ -25,6 +43,15 @@
       "model": {
         "primary": "foundrygate/auto",
         "fallbacks": []
+      },
+      "imageModel": {
+        "primary": "foundrygate/auto",
+        "fallbacks": []
+      },
+      "models": {
+        "foundrygate/auto": { "alias": "auto" },
+        "foundrygate/local-worker": { "alias": "local" },
+        "foundrygate/image-provider": { "alias": "img" }
       },
       "subagents": {
         "model": "foundrygate/auto"

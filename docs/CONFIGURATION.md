@@ -82,6 +82,18 @@ Each provider entry can include:
 
 The comments in [`config.yaml`](../config.yaml) are the source of truth for the current schema.
 
+## OpenClaw-Oriented Baseline
+
+If OpenClaw is one of the main clients, these settings give the cleanest fit:
+
+- keep provider ids readable and stable because `GET /v1/models` exposes them directly to OpenClaw
+- enable `client_profiles.presets: ["openclaw"]`
+- keep `auto` in the fallback path so OpenClaw can stay on one stable primary model id
+- use `contract: local-worker` for local chat workers
+- use `contract: image-provider` plus `image` metadata for image-capable backends
+
+That gives OpenClaw one provider entry, one primary model id, and optional explicit aliases without mirroring every upstream directly in the OpenClaw config.
+
 ## Provider Contracts
 
 ### `generic`
@@ -109,6 +121,11 @@ Useful `image` metadata:
 - `max_side_px`
 - `supported_sizes`
 - `policy_tags`
+
+If OpenClaw should route image traffic through FoundryGate, pair this with:
+
+- `imageModel.primary: "foundrygate/auto"` for automatic image-provider selection
+- or `imageModel.primary: "foundrygate/<provider-id>"` for one fixed image backend
 
 ## Client Profiles And Request Hooks
 

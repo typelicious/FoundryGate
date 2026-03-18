@@ -8,6 +8,8 @@ FoundryGate keeps the client-facing surface intentionally small: OpenAI-compatib
 
 Returns the virtual `auto` model plus one entry for every provider that actually loaded at startup.
 
+This is also the source of truth for OpenClaw-side model ids under a `foundrygate` provider entry.
+
 ```bash
 curl -fsS http://127.0.0.1:8090/v1/models
 ```
@@ -38,6 +40,7 @@ Routes image-generation requests to providers with `capabilities.image_generatio
 
 - validates `prompt`, `n`, and `size` before any provider call
 - supports image-policy hints via `metadata.image_policy` or `X-FoundryGate-Image-Policy`
+- works well with OpenClaw when `imageModel.primary` is `foundrygate/auto` or one explicit `foundrygate/<provider-id>`
 
 ```bash
 curl -fsS http://127.0.0.1:8090/v1/images/generations \
@@ -57,6 +60,7 @@ Routes image-editing requests to providers with `capabilities.image_editing: tru
 - currently supports one required `image` and one optional `mask`
 - rejects uploads above `security.max_upload_bytes`
 - accepts image-policy hints via `image_policy`, `metadata.image_policy`, or `X-FoundryGate-Image-Policy`
+- requires at least one loaded provider with `capabilities.image_editing: true`
 
 ```bash
 curl -fsS http://127.0.0.1:8090/v1/images/edits \

@@ -141,6 +141,24 @@ Check whether `x-openclaw-source` is present.
 
 That header is the current signal used for OpenClaw sub-agent differentiation in the stock config and built-in presets.
 
+## OpenClaw says the model does not exist
+
+This usually means the OpenClaw-side provider ids do not match FoundryGate's loaded provider ids.
+
+Check:
+
+```bash
+curl -fsS http://127.0.0.1:8090/v1/models
+```
+
+Then update the ids under `models.providers.foundrygate.models` in `~/.openclaw/openclaw.json` so they match exactly.
+
+Remember:
+
+- `auto` is always valid
+- the other ids come from FoundryGate provider names
+- they are not automatically the raw upstream model ids
+
 ## Database path is wrong or unwritable
 
 Use an absolute path outside the repo checkout:

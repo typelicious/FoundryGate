@@ -3,6 +3,12 @@
 //
 // Add this block to your ~/.openclaw/openclaw.json.
 //
+// Important:
+// - Under "providers.foundrygate.models", the ids must match GET /v1/models from
+//   FoundryGate. Those ids are FoundryGate provider ids, not raw upstream ids.
+// - "auto" is always available.
+// - Only keep provider ids here that your current FoundryGate config actually loads.
+//
 // Option A: FoundryGate as your primary provider (recommended)
 // ---------------------------------------------------------
 // FoundryGate handles routing, fallback, and model selection.
@@ -49,6 +55,18 @@
             "maxTokens": 8000
           },
           {
+            "id": "local-worker",
+            "name": "Local Worker (via FoundryGate)",
+            "contextWindow": 128000,
+            "maxTokens": 8000
+          },
+          {
+            "id": "image-provider",
+            "name": "Image Provider (via FoundryGate)",
+            "contextWindow": 128000,
+            "maxTokens": 8000
+          },
+          {
             "id": "openrouter-fallback",
             "name": "OpenRouter Fallback (via FoundryGate)",
             "contextWindow": 128000,
@@ -70,12 +88,18 @@
         "foundrygate/deepseek-reasoner": { "alias": "r1" },
         "foundrygate/gemini-flash-lite": { "alias": "lite" },
         "foundrygate/gemini-flash": { "alias": "flash" },
+        "foundrygate/local-worker": { "alias": "local" },
+        "foundrygate/image-provider": { "alias": "img" },
         "foundrygate/openrouter-fallback": { "alias": "or" }
       },
       "imageModel": {
+        // Use foundrygate/auto when FoundryGate should choose among
+        // image-capable providers. Pin to foundrygate/image-provider only when
+        // OpenClaw should always use one explicit image backend.
         "primary": "foundrygate/auto",
         "fallbacks": []
       },
+      "contextTokens": 200000,
       "heartbeat": {
         "every": "12h",
         "model": "foundrygate/gemini-flash-lite",
@@ -100,3 +124,14 @@
 // Then set "agents.defaults.model":
 //   "primary": "foundrygate/auto",
 //   "fallbacks": ["deepseek/deepseek-chat", "google/gemini-2.5-flash"]
+//
+// Recommended FoundryGate-side settings for OpenClaw:
+// - keep provider ids stable and readable because OpenClaw will reference them
+// - enable client_profiles.presets: ["openclaw"]
+// - use contract: local-worker for local OpenAI-compatible workers
+// - use contract: image-provider plus image.policy_tags / supported_sizes for
+//   image-capable providers
+// - validate with:
+//     GET /v1/models
+//     POST /api/route
+//     POST /api/route/image
