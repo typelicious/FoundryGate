@@ -228,9 +228,7 @@ _PROVIDER_FACTORIES: dict[str, ProviderFactory] = {
 def _load_env_values(env_file: str | Path | None = None) -> dict[str, str]:
     """Return environment values from one env file, ignoring empty entries."""
     values = {
-        key: value
-        for key, value in os.environ.items()
-        if isinstance(value, str) and value.strip()
+        key: value for key, value in os.environ.items() if isinstance(value, str) and value.strip()
     }
     if env_file is None:
         path = Path.cwd() / ".env"
