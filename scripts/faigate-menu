@@ -207,6 +207,7 @@ configure_menu() {
     printf "    1)  Config Wizard    Providers, routing modes, client profiles\n"
     printf "    2)  API Keys         Update provider keys in the env file\n"
     printf "    3)  HTTP Settings    Host, port, and log level in config.yaml\n"
+    printf "    4)  Routing Modes    Global default mode and client profile modes\n"
     printf "\n"
     printf "    c)  Cancel\n"
     printf "    q)  Quit\n\n"
@@ -216,6 +217,7 @@ configure_menu() {
       1) run_config_wizard ;;
       2) run_and_pause bash "${script_dir}/faigate-api-keys" ;;
       3) run_and_pause bash "${script_dir}/faigate-server-settings" ;;
+      4) run_and_pause bash "${script_dir}/faigate-routing-settings" ;;
       c|C|"") return 0 ;;
       q|Q) exit 0 ;;
       *) faigate_ui_warn "Invalid choice."; faigate_ui_pause ;;
@@ -326,7 +328,7 @@ update_menu() {
 while true; do
   faigate_ui_header "fusionAIze Gate Control Center" "Standalone operations menu"
   printf "    1)  Status       Version, paths, service state, and models\n"
-  printf "    2)  Configure    Wizard, API keys, and HTTP settings\n"
+  printf "    2)  Configure    Wizard, API keys, HTTP settings, routing modes\n"
   printf "    3)  Explore      Provider discovery and exposed models\n"
   printf "    4)  Validate     Doctor, onboarding report, validation\n"
   printf "    5)  Control      Start, stop, restart, status, logs\n"

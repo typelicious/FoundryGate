@@ -37,19 +37,31 @@ current_port="$(faigate_port)"
 current_log_level="$(faigate_log_level)"
 
 faigate_ui_header "fusionAIze Gate HTTP Settings" "$config_file"
-faigate_ui_info "Press Enter to keep the current value."
+faigate_ui_info "Press Enter to keep the current value. Type :c to cancel or :q to quit."
 printf "\n"
 
 printf "  %-18s [%s]: " "Host" "$current_host"
 read -r new_host
+case "$new_host" in
+  :q) exit 0 ;;
+  :c) faigate_ui_warn "Cancelled."; exit 0 ;;
+esac
 new_host="${new_host:-$current_host}"
 
 printf "  %-18s [%s]: " "Port" "$current_port"
 read -r new_port
+case "$new_port" in
+  :q) exit 0 ;;
+  :c) faigate_ui_warn "Cancelled."; exit 0 ;;
+esac
 new_port="${new_port:-$current_port}"
 
 printf "  %-18s [%s]: " "Log level" "$current_log_level"
 read -r new_log_level
+case "$new_log_level" in
+  :q) exit 0 ;;
+  :c) faigate_ui_warn "Cancelled."; exit 0 ;;
+esac
 new_log_level="${new_log_level:-$current_log_level}"
 
 if ! [[ "$new_port" =~ ^[0-9]+$ ]] || [ "$new_port" -lt 1 ] || [ "$new_port" -gt 65535 ]; then

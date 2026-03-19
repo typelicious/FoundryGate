@@ -63,13 +63,17 @@ prompt_value() {
   else
     read -r value
   fi
+  case "$value" in
+    :q) exit 0 ;;
+    :c) faigate_ui_warn "Cancelled."; exit 0 ;;
+  esac
   if [ -n "$value" ]; then
     set_value "$key" "$value"
   fi
 }
 
 faigate_ui_header "fusionAIze Gate API Keys" "$env_file"
-faigate_ui_info "Press Enter to keep the current value."
+faigate_ui_info "Press Enter to keep the current value. Type :c to cancel or :q to quit."
 printf "\n"
 
 printf "  %bLLM Providers%b\n" "$FAIGATE_UI_BOLD" "$FAIGATE_UI_RESET"

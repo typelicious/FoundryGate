@@ -99,3 +99,57 @@ def test_faigate_api_keys_updates_env_file(tmp_path: Path):
 
     assert "ANTHROPIC_API_KEY=sk-ant-demo" in written
     assert "API key env updated" in result.stdout
+
+
+def test_faigate_routing_settings_updates_default_and_profile_modes(tmp_path: Path):
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(
+        """
+routing_modes:
+  enabled: true
+  default: auto
+  modes:
+    auto: {}
+    eco: {}
+    premium: {}
+client_profiles:
+  enabled: true
+  profiles:
+    generic:
+      routing_mode: auto
+    n8n:
+      routing_mode: eco
+model_shortcuts:
+  enabled: true
+  shortcuts:
+    ds:
+      target: deepseek-chat
+      aliases: [chat]
+providers: {}
+fallback_chain: []
+""".strip(),
+        encoding="utf-8",
+    )
+
+    env = os.environ.copy()
+    env["FAIGATE_CONFIG_FILE"] = str(config_file)
+    env["FAIGATE_PYTHON"] = sys.executable
+
+    result = subprocess.run(
+        ["bash", "scripts/faigate-routing-settings"],
+        cwd=REPO_ROOT,
+        env=env,
+        input="premium\n\npremium\n",
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    updated = yaml.safe_load(config_file.read_text(encoding="utf-8"))
+    backups = list(tmp_path.glob("config.yaml.*.bak"))
+
+    assert updated["routing_modes"]["default"] == "premium"
+    assert updated["client_profiles"]["profiles"]["generic"]["routing_mode"] == "auto"
+    assert updated["client_profiles"]["profiles"]["n8n"]["routing_mode"] == "premium"
+    assert backups
+    assert "Updated routing settings" in result.stdout

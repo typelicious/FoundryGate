@@ -83,6 +83,8 @@ Then use the onboarding helpers to move from “the server starts” to “real 
 ./scripts/faigate-onboarding-validate
 ```
 
+`./scripts/faigate-menu` now also gives you one Gate-native shell entrypoint for API keys, HTTP settings, routing modes, validation helpers, service control, and update checks.
+
 To review and selectively adopt multiple candidates during first setup or a later update:
 
 ```bash

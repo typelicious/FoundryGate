@@ -28,7 +28,7 @@ $EDITOR .env
 ./scripts/faigate-onboarding-report
 ```
 
-If you prefer a guided shell flow over remembering individual helper names, start with `./scripts/faigate-menu`. It wraps the wizard, API-key editing, HTTP settings, validation helpers, service control, and update checks behind one consistent control-center layout.
+If you prefer a guided shell flow over remembering individual helper names, start with `./scripts/faigate-menu`. It wraps the wizard, API-key editing, HTTP settings, routing-mode editing, validation helpers, service control, and update checks behind one consistent control-center layout.
 
 `faigate-doctor` now also checks whether provider env placeholders referenced in `config.yaml` are actually present in `.env`.
 

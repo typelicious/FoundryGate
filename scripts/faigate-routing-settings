@@ -1,0 +1,208 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/faigate-service-lib.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/faigate-ui-lib.sh"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  ./scripts/faigate-routing-settings
+
+Interactive helper to review and update the global routing mode plus
+client-profile default routing modes in config.yaml. A timestamped backup
+is created automatically before changes are written.
+
+Env resolution:
+  FAIGATE_CONFIG_FILE   config path (defaults to repo config.yaml or packaged override)
+  FAIGATE_PYTHON        python interpreter used for YAML updates
+EOF
+}
+
+if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+  usage
+  exit 0
+fi
+
+config_file="$(faigate_config_file)"
+python_bin="$(faigate_python_bin)"
+backup_file="${config_file}.$(date +%Y%m%d%H%M%S).bak"
+
+if [ ! -f "$config_file" ]; then
+  faigate_ui_error "Config not found: $config_file"
+  exit 1
+fi
+
+summary_output="$(
+  FAIGATE_ROUTING_CONFIG="$config_file" "$python_bin" - <<'PY'
+from pathlib import Path
+import os
+
+import yaml
+
+config_path = Path(os.environ["FAIGATE_ROUTING_CONFIG"])
+with config_path.open(encoding="utf-8") as handle:
+    raw = yaml.safe_load(handle) or {}
+
+routing = raw.get("routing_modes") or {}
+default_mode = routing.get("default", "auto")
+modes = routing.get("modes") or {}
+profiles = ((raw.get("client_profiles") or {}).get("profiles") or {})
+shortcuts = ((raw.get("model_shortcuts") or {}).get("shortcuts") or {})
+
+print(f"default={default_mode}")
+print("modes=" + ",".join(sorted(str(name) for name in modes)))
+print("profiles=" + ",".join(sorted(str(name) for name in profiles)))
+for name, profile in sorted(profiles.items()):
+    mode = ""
+    if isinstance(profile, dict):
+      mode = str(profile.get("routing_mode", "") or "")
+    print(f"profile:{name}={mode}")
+for name, spec in sorted(shortcuts.items()):
+    target = ""
+    aliases = []
+    if isinstance(spec, dict):
+        target = str(spec.get("target", "") or "")
+        aliases = [str(v) for v in spec.get("aliases") or []]
+    print(f"shortcut:{name}={target}|{','.join(aliases)}")
+PY
+)"
+
+default_mode="auto"
+modes_csv=""
+profiles_csv=""
+profile_pairs=()
+shortcut_lines=()
+
+while IFS= read -r line; do
+  case "$line" in
+    default=*) default_mode="${line#default=}" ;;
+    modes=*) modes_csv="${line#modes=}" ;;
+    profiles=*) profiles_csv="${line#profiles=}" ;;
+    profile:*)
+      key="${line%%=*}"
+      key="${key#profile:}"
+      value="${line#*=}"
+      profile_pairs+=("${key}=${value}")
+      ;;
+    shortcut:*)
+      shortcut_lines+=("${line#shortcut:}")
+      ;;
+  esac
+done <<EOF
+$summary_output
+EOF
+
+profile_mode_for() {
+  local wanted="$1"
+  local item
+  for item in "${profile_pairs[@]}"; do
+    if [ "${item%%=*}" = "$wanted" ]; then
+      printf '%s\n' "${item#*=}"
+      return 0
+    fi
+  done
+  printf '%s\n' ""
+}
+
+faigate_ui_header "fusionAIze Gate Routing Settings" "$config_file"
+printf "  %bRouting modes%b\n" "$FAIGATE_UI_BOLD" "$FAIGATE_UI_RESET"
+printf "  Global default: %s\n" "${default_mode:-auto}"
+printf "  Available modes: %s\n" "${modes_csv:-auto,eco,premium,free}"
+printf "\n"
+printf "  %bClient profiles%b\n" "$FAIGATE_UI_BOLD" "$FAIGATE_UI_RESET"
+if [ -n "$profiles_csv" ]; then
+  IFS=',' read -r -a profiles <<<"$profiles_csv"
+  for profile in "${profiles[@]}"; do
+    [ -z "$profile" ] && continue
+    current_mode="$(profile_mode_for "$profile")"
+    printf "  - %-14s %s\n" "$profile" "${current_mode:-(inherit)}"
+  done
+else
+  printf "  - none configured\n"
+fi
+
+if [ "${#shortcut_lines[@]}" -gt 0 ]; then
+  printf "\n"
+  printf "  %bModel shortcuts%b\n" "$FAIGATE_UI_BOLD" "$FAIGATE_UI_RESET"
+  for item in "${shortcut_lines[@]}"; do
+    name="${item%%=*}"
+    payload="${item#*=}"
+    target="${payload%%|*}"
+    aliases="${payload#*|}"
+    printf "  - %-14s -> %-20s %s\n" "$name" "$target" "${aliases:+aliases: $aliases}"
+  done
+fi
+
+printf "\n"
+faigate_ui_info "Press Enter to keep the current value. Type :c to cancel or :q to quit."
+printf "\n"
+printf "  %-18s [%s]: " "Global mode" "$default_mode"
+read -r new_default_mode
+case "$new_default_mode" in
+  :q) exit 0 ;;
+  :c) faigate_ui_warn "Cancelled."; exit 0 ;;
+esac
+new_default_mode="${new_default_mode:-$default_mode}"
+
+updated_profile_payload=""
+if [ -n "$profiles_csv" ]; then
+  for profile in "${profiles[@]}"; do
+    [ -z "$profile" ] && continue
+    current="$(profile_mode_for "$profile")"
+    printf "  %-18s [%s]: " "${profile} mode" "${current:-(inherit)}"
+    read -r new_value
+    case "$new_value" in
+      :q) exit 0 ;;
+      :c) faigate_ui_warn "Cancelled."; exit 0 ;;
+    esac
+    if [ -z "$new_value" ]; then
+      updated_profile_payload+="${profile}=${current}"$'\n'
+    elif [ "$new_value" = "-" ] || [ "$new_value" = "inherit" ]; then
+      updated_profile_payload+="${profile}=__CLEAR__"$'\n'
+    else
+      updated_profile_payload+="${profile}=${new_value}"$'\n'
+    fi
+  done
+fi
+
+cp "$config_file" "$backup_file"
+
+FAIGATE_ROUTING_CONFIG="$config_file" \
+FAIGATE_ROUTING_DEFAULT="$new_default_mode" \
+FAIGATE_ROUTING_PROFILE_PAYLOAD="$updated_profile_payload" \
+"$python_bin" - <<'PY'
+from pathlib import Path
+import os
+
+import yaml
+
+config_path = Path(os.environ["FAIGATE_ROUTING_CONFIG"])
+default_mode = os.environ["FAIGATE_ROUTING_DEFAULT"]
+profile_payload = os.environ.get("FAIGATE_ROUTING_PROFILE_PAYLOAD", "")
+
+with config_path.open(encoding="utf-8") as handle:
+    raw = yaml.safe_load(handle) or {}
+
+routing = raw.setdefault("routing_modes", {})
+routing["default"] = default_mode
+
+client_profiles = raw.setdefault("client_profiles", {})
+profiles = client_profiles.setdefault("profiles", {})
+
+for line in profile_payload.splitlines():
+    if not line.strip():
+        continue
+    profile, value = line.split("=", 1)
+    profile_cfg = profiles.setdefault(profile, {})
+    if value == "__CLEAR__":
+        profile_cfg.pop("routing_mode", None)
+    else:
+        profile_cfg["routing_mode"] = value
+
+with config_path.open("w", encoding="utf-8") as handle:
+    yaml.safe_dump(raw, handle, sort_keys=False, allow_unicode=False)
+PY
+
+faigate_ui_success "Updated routing settings in $config_file"
+faigate_ui_info "Backup written to $backup_file"
