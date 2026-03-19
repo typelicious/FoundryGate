@@ -645,10 +645,7 @@ def build_initial_config(
         client=client,
         selected_providers=selected_providers,
     )
-    providers = {
-        name: _clone(_PROVIDER_FACTORIES[name]["provider"])
-        for name in selected
-    }
+    providers = {name: _clone(_PROVIDER_FACTORIES[name]["provider"]) for name in selected}
     shortcuts = _available_shortcuts(selected)
     fallback_chain = _preferred_fallback_chain(selected, purpose=purpose)
 
