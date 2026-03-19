@@ -178,6 +178,74 @@ run_config_wizard() {
   fi
 }
 
+run_client_wizard() {
+  local client="$1"
+  local purpose="${2:-general}"
+  local selection apply_mode backup_suffix
+  local -a cmd_args
+
+  faigate_ui_header "fusionAIze Gate Client Wizard" "Scoped to client profile: ${client}"
+  faigate_ui_info "Fetching provider candidates for purpose=${purpose} client=${client}..."
+  echo ""
+  FAIGATE_PYTHON="$python_bin" FAIGATE_ENV_FILE="$env_file" \
+    bash "${script_dir}/faigate-config-wizard" \
+      --env-file "$env_file" \
+      --purpose "$purpose" \
+      --client "$client" \
+      --current-config "$config_file" \
+      --list-candidates || true
+
+  echo ""
+  printf "  %bSelect providers%b  %s\n" "$FAIGATE_UI_BOLD" "$FAIGATE_UI_RESET" "(comma-separated IDs, 'all', Enter = recommendations)"
+  printf "  q) Quit\n"
+  printf "  c) Cancel\n"
+  printf "  ▸ Selection: "
+  read -r selection
+  case "$selection" in
+    q|Q) exit 0 ;;
+    c|C) return 0 ;;
+  esac
+
+  echo ""
+  printf "  %bApply mode%b\n" "$FAIGATE_UI_BOLD"
+  printf "    1)  Dry-run only    Preview changes, no writes\n"
+  printf "    2)  Write config    Update config.yaml (backup created automatically)\n"
+  printf "    c)  Cancel\n"
+  printf "    q)  Quit\n"
+  printf "  ▸ [1]: "
+  read -r apply_mode
+  case "${apply_mode:-1}" in
+    q|Q) exit 0 ;;
+    c|C) return 0 ;;
+  esac
+
+  cmd_args=(
+    --env-file "$env_file"
+    --purpose "$purpose"
+    --client "$client"
+    --current-config "$config_file"
+    --merge-existing
+  )
+  if [ "${apply_mode:-1}" = "2" ]; then
+    cmd_args+=(--apply recommended_add,recommended_replace,recommended_mode_changes)
+    cmd_args+=(--select-profiles "$client")
+  fi
+  if [ -n "$selection" ] && [ "$selection" != "all" ]; then
+    cmd_args+=(--select "$selection")
+  fi
+
+  if [ "${apply_mode:-1}" = "2" ]; then
+    backup_suffix=".client-${client}-$(date +%Y%m%d%H%M%S)"
+    cmd_args+=(--write "$config_file" --write-backup --backup-suffix "$backup_suffix")
+    run_and_pause env FAIGATE_PYTHON="$python_bin" FAIGATE_ENV_FILE="$env_file" \
+      bash "${script_dir}/faigate-config-wizard" "${cmd_args[@]}"
+  else
+    cmd_args+=(--dry-run-summary)
+    run_and_pause env FAIGATE_PYTHON="$python_bin" FAIGATE_ENV_FILE="$env_file" \
+      bash "${script_dir}/faigate-config-wizard" "${cmd_args[@]}"
+  fi
+}
+
 status_menu() {
   while true; do
     show_status_overview
@@ -242,6 +310,34 @@ explore_menu() {
       2) run_and_pause bash "${script_dir}/faigate-provider-discovery" --json ;;
       3) run_and_pause show_models ;;
       4) run_and_pause bash "${script_dir}/faigate-health" ;;
+      c|C|"") return 0 ;;
+      q|Q) exit 0 ;;
+      *) faigate_ui_warn "Invalid choice."; faigate_ui_pause ;;
+    esac
+  done
+}
+
+clients_menu() {
+  while true; do
+    faigate_ui_header "fusionAIze Gate Clients" "Client quickstarts, matrix, and client-scoped wizard flows"
+    printf "    1)  Quickstarts        Show all client quickstarts\n"
+    printf "    2)  Client Matrix      Show active client profiles and match intent\n"
+    printf "    3)  OpenClaw Wizard    Run a client-scoped wizard for OpenClaw\n"
+    printf "    4)  n8n Wizard         Run a client-scoped wizard for n8n\n"
+    printf "    5)  opencode Wizard    Run a client-scoped wizard for opencode\n"
+    printf "    6)  CLI Wizard         Run a client-scoped wizard for cli callers\n"
+    printf "\n"
+    printf "    c)  Cancel\n"
+    printf "    q)  Quit\n\n"
+    printf "  ▸ Choice: "
+    read -r choice
+    case "$choice" in
+      1) run_and_pause bash "${script_dir}/faigate-client-integrations" ;;
+      2) run_and_pause bash "${script_dir}/faigate-client-integrations" --matrix ;;
+      3) run_client_wizard "openclaw" "general" ;;
+      4) run_client_wizard "n8n" "free" ;;
+      5) run_client_wizard "opencode" "coding" ;;
+      6) run_client_wizard "cli" "general" ;;
       c|C|"") return 0 ;;
       q|Q) exit 0 ;;
       *) faigate_ui_warn "Invalid choice."; faigate_ui_pause ;;
@@ -329,10 +425,11 @@ while true; do
   faigate_ui_header "fusionAIze Gate Control Center" "Standalone operations menu"
   printf "    1)  Status       Version, paths, service state, and models\n"
   printf "    2)  Configure    Wizard, API keys, HTTP settings, routing modes\n"
-  printf "    3)  Explore      Provider discovery and exposed models\n"
-  printf "    4)  Validate     Doctor, onboarding report, validation\n"
-  printf "    5)  Control      Start, stop, restart, status, logs\n"
-  printf "    6)  Update       Release checks and auto-update flows\n"
+  printf "    3)  Clients      Quickstarts, matrix, and client-scoped wizard flows\n"
+  printf "    4)  Explore      Provider discovery and exposed models\n"
+  printf "    5)  Validate     Doctor, onboarding report, validation\n"
+  printf "    6)  Control      Start, stop, restart, status, logs\n"
+  printf "    7)  Update       Release checks and auto-update flows\n"
   printf "\n"
   printf "    q)  Quit\n\n"
   printf "  ▸ Choice: "
@@ -340,10 +437,11 @@ while true; do
   case "$choice" in
     1) status_menu ;;
     2) configure_menu ;;
-    3) explore_menu ;;
-    4) validate_menu ;;
-    5) control_menu ;;
-    6) update_menu ;;
+    3) clients_menu ;;
+    4) explore_menu ;;
+    5) validate_menu ;;
+    6) control_menu ;;
+    7) update_menu ;;
     q|Q) exit 0 ;;
     *) faigate_ui_warn "Invalid choice."; faigate_ui_pause ;;
   esac

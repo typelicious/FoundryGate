@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/faigate-service-lib.sh"
+
+config_file="$(faigate_config_file)"
+env_file="$(faigate_env_file)"
+python_bin="$(faigate_python_bin)"
+mode="text"
+client_name=""
+include_matrix="0"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  ./scripts/faigate-client-integrations [--json|--text] [--client NAME] [--matrix]
+
+Show client quickstarts and the current client-profile matrix from the active
+fusionAIze Gate config.
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --json)
+      mode="json"
+      shift
+      ;;
+    --text)
+      mode="text"
+      shift
+      ;;
+    --client)
+      client_name="${2:-}"
+      shift 2
+      ;;
+    --matrix)
+      include_matrix="1"
+      shift
+      ;;
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    *)
+      usage >&2
+      exit 2
+      ;;
+  esac
+done
+
+FAIGATE_INTEGRATION_CONFIG="$config_file" \
+FAIGATE_INTEGRATION_ENV="$env_file" \
+FAIGATE_INTEGRATION_MODE="$mode" \
+FAIGATE_INTEGRATION_CLIENT="$client_name" \
+FAIGATE_INTEGRATION_MATRIX="$include_matrix" \
+"$python_bin" - <<'PY'
+import json
+import os
+
+from faigate.onboarding import build_onboarding_report
+
+report = build_onboarding_report(
+    config_path=os.environ["FAIGATE_INTEGRATION_CONFIG"],
+    env_file=os.environ["FAIGATE_INTEGRATION_ENV"],
+)
+
+client_name = os.environ.get("FAIGATE_INTEGRATION_CLIENT", "").strip()
+include_matrix = os.environ.get("FAIGATE_INTEGRATION_MATRIX") == "1"
+
+integrations = report["integrations"]
+if client_name:
+    integrations = {
+        name: data for name, data in integrations.items() if name.lower() == client_name.lower()
+    }
+
+payload = {
+    "config": report["config_path"],
+    "env": report["env_file"],
+    "integrations": integrations,
+}
+if include_matrix:
+    payload["client_matrix"] = report["clients"]["matrix"]
+
+if os.environ["FAIGATE_INTEGRATION_MODE"] == "json":
+    print(json.dumps(payload, indent=2, sort_keys=True))
+else:
+    print("fusionAIze Gate Client Integrations")
+    print("")
+    print(f"Config: {payload['config']}")
+    print(f"Env   : {payload['env']}")
+    if include_matrix:
+        print("")
+        print("Client matrix")
+        for row in payload.get("client_matrix", []):
+            default_text = " [default]" if row.get("default") else ""
+            print(f"- {row['name']}{default_text}: {row['source']}")
+            print(f"  match: {row['matched_by']}")
+            print(f"  intent: {'; '.join(row['routing_intent'])}")
+    print("")
+    print("Integration quickstarts")
+    for name, data in integrations.items():
+        readiness = "ready" if data["recommended"] else "needs preset or custom profile"
+        print(f"- {name}: {readiness}")
+        print(f"  header: {data['header']}")
+        print(f"  profile: {data['profile']}")
+        for snippet in data.get("snippet", []):
+            print(f"  example: {snippet}")
+        for note in data.get("notes", []):
+            print(f"  note: {note}")
+PY

@@ -28,7 +28,7 @@ $EDITOR .env
 ./scripts/faigate-onboarding-report
 ```
 
-If you prefer a guided shell flow over remembering individual helper names, start with `./scripts/faigate-menu`. It wraps the wizard, API-key editing, HTTP settings, routing-mode editing, validation helpers, service control, and update checks behind one consistent control-center layout.
+If you prefer a guided shell flow over remembering individual helper names, start with `./scripts/faigate-menu`. It wraps the wizard, API-key editing, HTTP settings, routing-mode editing, client quickstarts, validation helpers, service control, and update checks behind one consistent control-center layout.
 
 `faigate-doctor` now also checks whether provider env placeholders referenced in `config.yaml` are actually present in `.env`.
 
@@ -93,6 +93,14 @@ It also prints a client matrix:
 - whether they come from presets or custom config
 - how they match traffic
 - which routing hints they actually apply
+
+If you want that client view without the full onboarding report, use:
+
+```bash
+./scripts/faigate-client-integrations
+./scripts/faigate-client-integrations --matrix
+./scripts/faigate-client-integrations --json --client n8n
+```
 
 ### 1. Add one provider
 

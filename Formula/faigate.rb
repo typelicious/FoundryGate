@@ -46,6 +46,7 @@ class Faigate < Formula
     %w[
       faigate-menu
       faigate-api-keys
+      faigate-client-integrations
       faigate-routing-settings
       faigate-server-settings
       faigate-doctor

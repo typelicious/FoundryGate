@@ -11,6 +11,7 @@ The format is intentionally lightweight and human-readable. Group entries by rel
 - Added a first `faigate-menu` control center with a shared terminal UI, the new fusionAIze Gate header, and consistent `q`/`c` navigation across status, configure, explore, validate, control, and update menus
 - Added `faigate-api-keys` and `faigate-server-settings` so API keys, host, port, and log-level changes have a Gate-native interactive path instead of living only in external orchestration layers
 - Added `faigate-routing-settings` so the global default routing mode and client-profile routing defaults can be reviewed and adjusted from the same Gate-native control flow
+- Added `faigate-client-integrations` plus a `Clients` section in `faigate-menu` so OpenClaw, n8n, opencode, and generic CLI quickstarts can be reviewed and driven through client-scoped wizard flows
 
 ### Changed
 

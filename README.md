@@ -83,7 +83,15 @@ Then use the onboarding helpers to move from “the server starts” to “real 
 ./scripts/faigate-onboarding-validate
 ```
 
-`./scripts/faigate-menu` now also gives you one Gate-native shell entrypoint for API keys, HTTP settings, routing modes, validation helpers, service control, and update checks.
+`./scripts/faigate-menu` now also gives you one Gate-native shell entrypoint for API keys, HTTP settings, routing modes, client quickstarts, client-scoped wizard flows, validation helpers, service control, and update checks.
+
+If you want the client quickstarts or the current profile matrix without stepping through the full menu, use:
+
+```bash
+./scripts/faigate-client-integrations
+./scripts/faigate-client-integrations --matrix
+./scripts/faigate-client-integrations --json --client openclaw
+```
 
 To review and selectively adopt multiple candidates during first setup or a later update:
 

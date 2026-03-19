@@ -23,6 +23,91 @@ def test_faigate_menu_help_lists_primary_sections():
     assert "Interactive control center" in result.stdout
 
 
+def test_faigate_client_integrations_help_lists_usage():
+    result = subprocess.run(
+        ["bash", "scripts/faigate-client-integrations", "--help"],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert "faigate-client-integrations" in result.stdout
+    assert "--client NAME" in result.stdout
+    assert "--matrix" in result.stdout
+
+
+def test_faigate_client_integrations_json_filters_one_client(tmp_path: Path):
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(
+        """
+server:
+  host: "127.0.0.1"
+  port: 8090
+  log_level: "info"
+providers:
+  deepseek-chat:
+    backend: openai-compat
+    api_key: "${DEEPSEEK_API_KEY}"
+    base_url: "https://api.deepseek.com/v1"
+    model: "deepseek-chat"
+    tier: default
+routing_modes:
+  enabled: true
+  default: auto
+  modes:
+    auto: {}
+    eco: {}
+client_profiles:
+  enabled: true
+  default: generic
+  presets: [openclaw, n8n, cli]
+  profiles:
+    generic: {}
+    openclaw:
+      routing_mode: auto
+    n8n:
+      routing_mode: eco
+  rules:
+    - profile: openclaw
+      match:
+        header_present: [x-openclaw-source]
+fallback_chain: [deepseek-chat]
+""".strip(),
+        encoding="utf-8",
+    )
+    env_file = tmp_path / ".env"
+    env_file.write_text("DEEPSEEK_API_KEY=test-key\n", encoding="utf-8")
+
+    env = os.environ.copy()
+    env["FAIGATE_CONFIG_FILE"] = str(config_file)
+    env["FAIGATE_ENV_FILE"] = str(env_file)
+    env["FAIGATE_PYTHON"] = sys.executable
+
+    result = subprocess.run(
+        [
+            "bash",
+            "scripts/faigate-client-integrations",
+            "--json",
+            "--client",
+            "openclaw",
+            "--matrix",
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    payload = yaml.safe_load(result.stdout)
+
+    assert set(payload["integrations"]) == {"openclaw"}
+    assert payload["integrations"]["openclaw"]["profile"] == "openclaw"
+    assert payload["client_matrix"]
+    assert any(row["name"] == "openclaw" for row in payload["client_matrix"])
+
+
 def test_faigate_server_settings_updates_config_and_creates_backup(tmp_path: Path):
     config_file = tmp_path / "config.yaml"
     config_file.write_text(
