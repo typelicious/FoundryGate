@@ -23,11 +23,11 @@ This repo does not require a heavy release process. Use lightweight tags plus Gi
 ```bash
 git checkout main
 git pull --ff-only origin main
-git tag -a v1.2.2 -m "FoundryGate v1.2.2"
-git push origin v1.2.2
+git tag -a v1.2.3 -m "FoundryGate v1.2.3"
+git push origin v1.2.3
 ```
 
-Then open GitHub Releases and publish a release for `v1.2.2`.
+Then open GitHub Releases and publish a release for `v1.2.3`.
 
 ## Automation Baseline
 
@@ -65,6 +65,7 @@ The repo also includes [publish-dry-run](./.github/workflows/publish-dry-run.yml
 - `v1.2.0` establishes the workstation and packaging baseline: Linux/macOS/Windows workstation guidance, macOS-aware runtime helpers, Windows startup examples, explicit config-path support for packaged installs, and a project-owned Homebrew formula path.
 - `v1.2.1` is the first packaging follow-up on top of that baseline: the Homebrew formula now prefers `python@3.12` for a cleaner macOS install path and the docs now explicitly cover unqualified `brew install foundrygate` after tapping the project-owned tap.
 - `v1.2.2` hardens the macOS packaging path further: the Homebrew formula now builds `pydantic-core` from source with explicit header padding, validates the wrapped binary in its formula test, and documents how virtualenvs can shadow the Brew-installed CLI.
+- `v1.2.3` finishes the immediate Brew runtime stabilization pass: the Brew-managed wrapper now invokes the correct Python module entrypoint and the formula also builds `watchfiles` from source to avoid the next macOS linkage fixup failure.
 
 ## Planned Publishing Path
 
@@ -77,6 +78,7 @@ The repo also includes [publish-dry-run](./.github/workflows/publish-dry-run.yml
 - `v1.2.0`: add the project-owned Homebrew packaging path for macOS workstations while keeping Docker, GitHub Releases, Python artifacts, and the separate npm CLI package.
 - `v1.2.1`: harden the Homebrew path with a more stable Python baseline and clearer tap/install guidance for macOS users.
 - `v1.2.2`: finish the first macOS packaging hardening pass by targeting the `pydantic-core` linkage warning directly and tightening the wrapper-level install checks.
+- `v1.2.3`: complete the immediate Brew-runtime stabilization work by fixing the packaged entrypoint path and broadening the native-wheel source-build policy on macOS.
 
 The npm package stays separate from the Python gateway core. It is meant for CLI-facing integrations, not for rewriting the service runtime.
 

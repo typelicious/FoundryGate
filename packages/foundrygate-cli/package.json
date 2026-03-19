@@ -1,6 +1,6 @@
 {
   "name": "@foundrygate/cli",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "Small npm CLI for checking and previewing a FoundryGate gateway.",
   "license": "Apache-2.0",
   "type": "module",

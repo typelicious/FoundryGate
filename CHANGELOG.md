@@ -6,7 +6,7 @@ The format is intentionally lightweight and human-readable. Group entries by rel
 
 ## Unreleased
 
-## v1.2.2 - 2026-03-19
+## v1.2.3 - 2026-03-19
 
 ### Changed
 
