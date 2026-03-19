@@ -19,7 +19,9 @@ The foundation that used to be the near-term buildout is largely in place:
 
 This roadmap now shifts from "rename and foundation" to "deepen the gateway plane without bloating it".
 
-`v1.1.0` is now shipped. The next block should stay disciplined: improve workstation operations, keep adoption friction low across macOS and Windows, and extend runtime packaging guidance without turning FoundryGate into a sprawling platform.
+`v1.2.0` is now shipped. The workstation baseline is in place: Linux, macOS, and Windows runtime guidance is documented, macOS helpers now auto-detect `launchd`, and a project-owned Homebrew path exists for packaged macOS installs.
+
+The next block should stay disciplined: build on the workstation baseline, keep packaging practical, and avoid turning FoundryGate into a sprawling platform.
 
 ## `v1.2.0`: workstation operations baseline
 
