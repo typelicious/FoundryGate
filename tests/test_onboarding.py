@@ -280,8 +280,7 @@ auto_update:
     assert "openrouter-fallback: disclosed link -> https://go.example.test/openrouter" in text
     assert "Policy: payout affects ranking = `False`" in markdown
     assert (
-        "`openrouter-fallback`: disclosed link -> `https://go.example.test/openrouter`"
-        in markdown
+        "`openrouter-fallback`: disclosed link -> `https://go.example.test/openrouter`" in markdown
     )
 
 
