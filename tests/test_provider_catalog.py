@@ -156,9 +156,7 @@ metrics:
     assert report["items"][0]["official_source_url"].startswith("https://blockrun.ai/")
 
 
-def test_provider_catalog_report_exposes_discovery_policy_and_links(
-    tmp_path: Path, monkeypatch
-):
+def test_provider_catalog_report_exposes_discovery_policy_and_links(tmp_path: Path, monkeypatch):
     monkeypatch.setenv(
         "FOUNDRYGATE_PROVIDER_LINK_OPENROUTER_FALLBACK_URL",
         "https://go.example.test/openrouter",

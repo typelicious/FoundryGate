@@ -204,8 +204,8 @@ def _build_discovery_metadata(provider_name: str, catalog_entry: dict[str, Any])
     env_var = _discovery_env_var(provider_name)
     operator_url = str(os.environ.get(env_var, "") or "").strip()
     signup_url = str(catalog_entry.get("signup_url", "") or "").strip()
-    discovery_url = operator_url or signup_url or str(
-        catalog_entry.get("official_source_url", "") or ""
+    discovery_url = (
+        operator_url or signup_url or str(catalog_entry.get("official_source_url", "") or "")
     )
 
     return {
