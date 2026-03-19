@@ -239,6 +239,16 @@ def test_security_defaults_are_exposed():
     }
 
 
+def test_provider_catalog_check_defaults_are_exposed():
+    cfg = load_config(Path(__file__).parent.parent / "config.yaml")
+    assert cfg.provider_catalog_check == {
+        "enabled": True,
+        "warn_on_untracked": True,
+        "warn_on_model_drift": True,
+        "max_catalog_age_days": 30,
+    }
+
+
 def test_security_rejects_invalid_limit_values(tmp_path):
     path = tmp_path / "config.yaml"
     path.write_text(

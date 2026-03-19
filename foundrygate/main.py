@@ -27,6 +27,7 @@ from . import __version__
 from .config import Config, load_config
 from .hooks import AppliedHooks, HookExecutionError, RequestHookContext, apply_request_hooks
 from .metrics import MetricsStore, calc_cost
+from .provider_catalog import build_provider_catalog_report
 from .providers import ProviderBackend, ProviderError
 from .router import Router, RoutingDecision
 from .updates import (
@@ -1096,6 +1097,12 @@ async def provider_inventory(
         "providers": rows,
         "coverage": _build_capability_coverage(),
     }
+
+
+@app.get("/api/provider-catalog")
+async def provider_catalog():
+    """Return curated provider-catalog drift and freshness alerts."""
+    return build_provider_catalog_report(_config)
 
 
 @app.get("/v1/models")

@@ -38,6 +38,12 @@ $EDITOR .env
 
 `foundrygate-onboarding-report` now includes concrete OpenClaw, n8n, and CLI quickstart hints plus a staged provider-rollout view. Use it after every provider or client change to keep the deployment understandable for the next operator as well.
 
+It now also includes provider-catalog alerts for:
+
+- configured models that drift away from the curated recommendation
+- providers that are not tracked yet
+- catalog entries that have gone stale and need review
+
 It also prints a client matrix:
 
 - which client profiles exist

@@ -50,6 +50,7 @@ from foundrygate.main import (
     health,
     list_models,
     preview_image_route,
+    provider_catalog,
     provider_inventory,
 )
 from foundrygate.router import Router
@@ -408,6 +409,15 @@ async def test_list_models_includes_modes_and_shortcuts(preview_config):
     assert "premium" in model_ids
     assert "local" in model_ids
     assert "img" in model_ids
+
+
+@pytest.mark.asyncio
+async def test_provider_catalog_endpoint_reports_alerts(preview_config):
+    payload = await provider_catalog()
+
+    assert payload["total_providers"] >= 1
+    assert payload["alert_count"] >= 1
+    assert "alerts" in payload
 
 
 class TestRoutePreview:

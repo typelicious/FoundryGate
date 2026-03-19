@@ -9,6 +9,7 @@ import yaml
 from dotenv import dotenv_values, load_dotenv
 
 from .config import load_config
+from .provider_catalog import build_provider_catalog_report
 
 
 def _env_path(env_file: str | Path | None = None) -> Path:
@@ -284,6 +285,7 @@ def build_onboarding_report(
         suggestions.append("Keep auto_update disabled until the provider and client set is stable.")
     provider_rollout = _build_provider_rollout(providers, list(config.fallback_chain))
     client_matrix = _build_client_matrix(client_profiles)
+    provider_catalog = build_provider_catalog_report(config)
     env_requirements = collect_provider_env_requirements(
         config_path=config_path,
         env_file=resolved_env,
@@ -623,6 +625,7 @@ def build_onboarding_report(
             "request_hook_count": len(request_hooks.get("hooks", [])),
         },
         "provider_rollout": provider_rollout,
+        "provider_catalog": provider_catalog,
         "operations": {
             "update_checks_enabled": bool(update_check.get("enabled")),
             "auto_update_enabled": bool(auto_update.get("enabled")),
@@ -639,6 +642,7 @@ def build_onboarding_validation(report: dict[str, Any]) -> dict[str, Any]:
     clients = report["clients"]
     routing = report["routing"]
     provider_rollout = report["provider_rollout"]
+    provider_catalog = report["provider_catalog"]
     env = report["env"]
 
     blockers: list[str] = []
@@ -664,6 +668,8 @@ def build_onboarding_validation(report: dict[str, Any]) -> dict[str, Any]:
             + ", ".join(item["name"] for item in providers["items"] if not item["ready"])
         )
     warnings.extend(provider_rollout["gaps"])
+    for alert in provider_catalog.get("alerts", []):
+        warnings.append(alert["message"])
 
     if not clients["profiles_enabled"]:
         warnings.append("Client profiles are disabled.")
@@ -693,6 +699,7 @@ def render_onboarding_report(report: dict[str, Any]) -> str:
     client_block = report["clients"]
     routing_block = report["routing"]
     rollout_block = report["provider_rollout"]
+    catalog_block = report["provider_catalog"]
     ops_block = report["operations"]
     integration_block = report["integrations"]
     preset_text = ", ".join(client_block["presets"]) if client_block["presets"] else "none"
@@ -761,6 +768,11 @@ def render_onboarding_report(report: dict[str, Any]) -> str:
             "- stage 2 secondary: " + (", ".join(rollout_block["stage_2_secondary"]) or "none"),
             "- stage 3 modality: " + (", ".join(rollout_block["stage_3_modality"]) or "none"),
             "",
+            "Provider catalog",
+            f"- tracked providers: {catalog_block['tracked_providers']} / "
+            f"{catalog_block['total_providers']}",
+            f"- alerts: {catalog_block['alert_count']}",
+            "",
             "Operations",
             f"- update checks: {ops_block['update_checks_enabled']}",
             f"- auto update: {ops_block['auto_update_enabled']}",
@@ -773,6 +785,10 @@ def render_onboarding_report(report: dict[str, Any]) -> str:
         for item in rollout_block["fallback_targets"]:
             readiness = "ready" if item["ready"] else "not ready"
             lines.append(f"  - {item['name']}: {readiness}")
+    if catalog_block["alerts"]:
+        lines.append("- catalog alerts:")
+        for alert in catalog_block["alerts"]:
+            lines.append(f"  - {alert['provider']}: {alert['message']}")
 
     lines.extend(["", "Integration quickstarts"])
     for client_name, data in integration_block.items():
@@ -796,6 +812,7 @@ def render_onboarding_report_markdown(report: dict[str, Any]) -> str:
     client_block = report["clients"]
     routing_block = report["routing"]
     rollout_block = report["provider_rollout"]
+    catalog_block = report["provider_catalog"]
     ops_block = report["operations"]
     integration_block = report["integrations"]
     env_block = report["env"]
@@ -868,6 +885,11 @@ def render_onboarding_report_markdown(report: dict[str, Any]) -> str:
             + (", ".join(f"`{item}`" for item in rollout_block["stage_2_secondary"]) or "none"),
             "- Stage 3 modality: "
             + (", ".join(f"`{item}`" for item in rollout_block["stage_3_modality"]) or "none"),
+            "",
+            "## Provider Catalog",
+            f"- Tracked providers: {catalog_block['tracked_providers']} / "
+            f"{catalog_block['total_providers']}",
+            f"- Alerts: {catalog_block['alert_count']}",
         ]
     )
 
@@ -876,6 +898,10 @@ def render_onboarding_report_markdown(report: dict[str, Any]) -> str:
         for item in rollout_block["fallback_targets"]:
             readiness = "ready" if item["ready"] else "not ready"
             lines.append(f"  - `{item['name']}`: {readiness}")
+    if catalog_block["alerts"]:
+        lines.append("- Catalog alerts:")
+        for alert in catalog_block["alerts"]:
+            lines.append(f"  - `{alert['provider']}`: {alert['message']}")
 
     lines.extend(
         [

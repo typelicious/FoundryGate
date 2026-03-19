@@ -62,6 +62,8 @@ fi
 import os
 
 from foundrygate.onboarding import collect_provider_env_requirements
+from foundrygate.provider_catalog import build_provider_catalog_report
+from foundrygate.config import load_config
 
 requirements = collect_provider_env_requirements(
     config_path=os.environ.get("FOUNDRYGATE_CONFIG_FILE"),
@@ -72,6 +74,14 @@ for name in requirements["present"]:
     print(f"[ok] provider env present: {name}")
 for name in requirements["missing"]:
     print(f"[warn] provider env missing: {name}")
+
+config = load_config(os.environ.get("FOUNDRYGATE_CONFIG_FILE"))
+catalog = build_provider_catalog_report(config)
+if catalog["alert_count"] == 0:
+    print("[ok] provider catalog shows no model-drift or freshness alerts")
+else:
+    for alert in catalog["alerts"]:
+        print(f"[warn] provider catalog: {alert['message']}")
 PY
 
 if command -v curl >/dev/null 2>&1; then

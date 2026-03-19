@@ -95,6 +95,14 @@ Returns the loaded provider inventory plus the same capability-coverage summary 
 curl -fsS 'http://127.0.0.1:8090/api/providers?capability=image_generation'
 ```
 
+### `GET /api/provider-catalog`
+
+Returns the curated provider-catalog view with drift and freshness alerts for configured providers.
+
+```bash
+curl -fsS http://127.0.0.1:8090/api/provider-catalog
+```
+
 ### `GET /api/stats`
 
 Returns aggregate request counters, token usage, per-client breakdowns, aggregate client totals, client highlight summaries, cost data, and operator-action summaries.

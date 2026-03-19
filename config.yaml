@@ -19,6 +19,16 @@ security:
   max_upload_bytes: 10485760
   max_header_value_chars: 160
 
+
+# ── Provider Catalog Checks ───────────────────────────────────────────────
+# Curated model guidance for known providers. This does not edit config.yaml
+# automatically; it only powers doctor/onboarding/API alerts.
+provider_catalog_check:
+  enabled: true
+  warn_on_untracked: true
+  warn_on_model_drift: true
+  max_catalog_age_days: 30
+
 # ── Provider Definitions ───────────────────────────────────────────────────
 #
 # Fields:

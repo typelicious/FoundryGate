@@ -61,6 +61,23 @@ ClawRouter / BlockRun is different: its current public path is wallet-/x402-orie
 
 These settings drive the bounded JSON, upload, and routing-header behavior that ships in `v0.9.0+`.
 
+## Provider Catalog Checks
+
+`provider_catalog_check` controls a curated drift/freshness check for known providers.
+
+- `enabled`
+- `warn_on_untracked`
+- `warn_on_model_drift`
+- `max_catalog_age_days`
+
+This does not rewrite `config.yaml` automatically. It powers:
+
+- `foundrygate-doctor`
+- `foundrygate-onboarding-report`
+- `GET /api/provider-catalog`
+
+The intent is simple: if a configured provider drifts away from the curated model recommendation, or the catalog guidance has not been reviewed recently enough, operators get a visible warning before the setup silently rots.
+
 ## Provider Fields
 
 Each provider entry can include:

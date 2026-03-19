@@ -1309,6 +1309,30 @@ def _normalize_security(data: dict[str, Any]) -> dict[str, Any]:
     return normalized
 
 
+def _normalize_provider_catalog_check(data: dict[str, Any]) -> dict[str, Any]:
+    """Validate provider-catalog drift/freshness checks."""
+    raw = data.get("provider_catalog_check") or {}
+    if raw in (None, ""):
+        raw = {}
+    if not isinstance(raw, dict):
+        raise ConfigError("'provider_catalog_check' must be a mapping")
+
+    max_catalog_age_days = raw.get("max_catalog_age_days", 30)
+    if isinstance(max_catalog_age_days, bool) or not isinstance(max_catalog_age_days, int):
+        raise ConfigError("'provider_catalog_check.max_catalog_age_days' must be an integer")
+    if max_catalog_age_days < 0:
+        raise ConfigError("'provider_catalog_check.max_catalog_age_days' must be non-negative")
+
+    normalized = dict(data)
+    normalized["provider_catalog_check"] = {
+        "enabled": bool(raw.get("enabled", True)),
+        "warn_on_untracked": bool(raw.get("warn_on_untracked", True)),
+        "warn_on_model_drift": bool(raw.get("warn_on_model_drift", True)),
+        "max_catalog_age_days": max_catalog_age_days,
+    }
+    return normalized
+
+
 class Config:
     """Holds the parsed and expanded configuration."""
 
@@ -1446,6 +1470,18 @@ class Config:
             },
         )
 
+    @property
+    def provider_catalog_check(self) -> dict:
+        return self._data.get(
+            "provider_catalog_check",
+            {
+                "enabled": True,
+                "warn_on_untracked": True,
+                "warn_on_model_drift": True,
+                "max_catalog_age_days": 30,
+            },
+        )
+
     def provider(self, name: str) -> dict | None:
         return self.providers.get(name)
 
@@ -1478,16 +1514,18 @@ def load_config(path: str | Path | None = None) -> Config:
     with path.open() as f:
         raw = yaml.safe_load(f)
 
-    expanded = _normalize_security(
-        _normalize_auto_update(
-            _normalize_update_check(
-                _normalize_request_hooks(
-                    _validate_routing_mode_references(
-                        _normalize_model_shortcuts(
-                            _normalize_routing_modes(
-                                _normalize_client_profiles(
-                                    _normalize_routing_policies(
-                                        _normalize_providers(_walk_expand(raw))
+    expanded = _normalize_provider_catalog_check(
+        _normalize_security(
+            _normalize_auto_update(
+                _normalize_update_check(
+                    _normalize_request_hooks(
+                        _validate_routing_mode_references(
+                            _normalize_model_shortcuts(
+                                _normalize_routing_modes(
+                                    _normalize_client_profiles(
+                                        _normalize_routing_policies(
+                                            _normalize_providers(_walk_expand(raw))
+                                        )
                                     )
                                 )
                             )

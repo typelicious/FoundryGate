@@ -63,6 +63,7 @@ auto_update:
     assert report["clients"]["presets"] == ["openclaw"]
     assert report["integrations"]["openclaw"]["recommended"] is True
     assert report["integrations"]["n8n"]["recommended"] is False
+    assert report["provider_catalog"]["alert_count"] == 0
     assert (
         "Keep auto_update disabled until the provider and client set is stable."
         in report["suggestions"]
@@ -182,6 +183,51 @@ auto_update:
     assert "Client profiles are disabled." in validation["warnings"]
     assert "Request hooks are enabled but no hooks are configured." in validation["warnings"]
     assert "Status: blocked" in text
+
+
+def test_onboarding_report_includes_provider_catalog_alerts(tmp_path: Path):
+    env_file = tmp_path / ".env"
+    env_file.write_text("DEEPSEEK_API_KEY=sk-demo\n", encoding="utf-8")
+
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(
+        """
+fallback_chain:
+  - deepseek-chat
+providers:
+  deepseek-chat:
+    backend: openai-compat
+    base_url: "https://api.deepseek.com/v1"
+    api_key: "${DEEPSEEK_API_KEY}"
+    model: "deepseek-chat-v2"
+client_profiles:
+  enabled: true
+  default: generic
+  profiles:
+    generic: {}
+  rules: []
+routing_policies:
+  enabled: false
+  rules: []
+request_hooks:
+  enabled: false
+  hooks: []
+update_check:
+  enabled: false
+auto_update:
+  enabled: false
+""".strip(),
+        encoding="utf-8",
+    )
+
+    report = build_onboarding_report(config_path=config_file, env_file=env_file)
+    validation = build_onboarding_validation(report)
+    text = render_onboarding_report(report)
+
+    assert report["provider_catalog"]["alert_count"] == 1
+    assert report["provider_catalog"]["alerts"][0]["code"] == "model-drift"
+    assert "Provider catalog" in text
+    assert any("curated catalog recommends" in warning for warning in validation["warnings"])
 
 
 def test_onboarding_validation_passes_for_ready_multi_provider_setup(tmp_path: Path):
