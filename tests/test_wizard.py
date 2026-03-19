@@ -4,6 +4,7 @@ from pathlib import Path
 
 from foundrygate.wizard import (
     build_initial_config,
+    build_update_suggestions,
     detect_wizard_providers,
     list_provider_candidates,
     merge_initial_config,
@@ -196,3 +197,55 @@ fallback_chain: []
 
     assert "kilocode:" in rendered
     assert "warn_on_volatile_offers: true" in rendered
+
+
+def test_build_update_suggestions_returns_add_replace_keep_groups(tmp_path: Path):
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "\n".join(
+            [
+                "DEEPSEEK_API_KEY=sk-demo",
+                "OPENROUTER_API_KEY=or-demo",
+                "KILOCODE_API_KEY=kilo-demo",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        """
+server:
+  host: "127.0.0.1"
+  port: 8090
+providers:
+  deepseek-chat:
+    backend: openai-compat
+    base_url: "https://api.deepseek.com/v1"
+    api_key: "${DEEPSEEK_API_KEY}"
+    model: "deepseek-chat"
+  openrouter-fallback:
+    backend: openai-compat
+    base_url: "https://openrouter.ai/api/v1"
+    api_key: "${OPENROUTER_API_KEY}"
+    model: "openrouter/wrong"
+fallback_chain:
+  - deepseek-chat
+  - openrouter-fallback
+""",
+        encoding="utf-8",
+    )
+
+    suggestions = build_update_suggestions(
+        env_file=env_file,
+        purpose="free",
+        client="generic",
+        config_path=config_path,
+    )
+
+    add_names = {item["provider"] for item in suggestions["recommended_add"]}
+    replace_names = {item["provider"] for item in suggestions["recommended_replace"]}
+    keep_names = {item["provider"] for item in suggestions["recommended_keep"]}
+
+    assert "kilocode" in add_names
+    assert "openrouter-fallback" in replace_names
+    assert "deepseek-chat" in keep_names

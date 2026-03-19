@@ -259,6 +259,24 @@ def _load_existing_provider_names(config_path: str | Path | None = None) -> set[
     return set(providers.keys())
 
 
+def _load_existing_provider_models(config_path: str | Path | None = None) -> dict[str, str]:
+    if config_path is None:
+        return {}
+    path = Path(config_path)
+    if not path.exists():
+        return {}
+    with path.open(encoding="utf-8") as handle:
+        raw = yaml.safe_load(handle) or {}
+    providers = raw.get("providers") or {}
+    if not isinstance(providers, dict):
+        return {}
+    result: dict[str, str] = {}
+    for name, provider in providers.items():
+        if isinstance(provider, dict):
+            result[str(name)] = str(provider.get("model", "") or "").strip()
+    return result
+
+
 def detect_wizard_providers(*, env_file: str | Path | None = None) -> list[str]:
     """Return provider names that can be configured from the current env file."""
     env_values = _load_env_values(env_file)
@@ -401,6 +419,50 @@ def list_provider_candidates(
             }
         )
     return rows
+
+
+def build_update_suggestions(
+    *,
+    env_file: str | Path | None = None,
+    purpose: str = "general",
+    client: str = "generic",
+    config_path: str | Path | None = None,
+) -> dict[str, list[dict[str, Any]]]:
+    """Return config-aware provider suggestions grouped by add/replace/keep."""
+    candidates = list_provider_candidates(
+        env_file=env_file,
+        purpose=purpose,
+        client=client,
+        config_path=config_path,
+    )
+    existing_models = _load_existing_provider_models(config_path)
+    recommended_add: list[dict[str, Any]] = []
+    recommended_replace: list[dict[str, Any]] = []
+    recommended_keep: list[dict[str, Any]] = []
+
+    for candidate in candidates:
+        provider = candidate["provider"]
+        entry = dict(candidate)
+        if not candidate["configured"]:
+            if candidate["selected_by_default"]:
+                entry["reason"] = "preferred by current purpose/client recommendation"
+                recommended_add.append(entry)
+            continue
+
+        configured_model = existing_models.get(provider, "")
+        if configured_model and configured_model != candidate["model"]:
+            entry["configured_model"] = configured_model
+            entry["reason"] = "configured model differs from the current curated default"
+            recommended_replace.append(entry)
+        else:
+            entry["reason"] = "already configured and aligned with the current recommendation"
+            recommended_keep.append(entry)
+
+    return {
+        "recommended_add": recommended_add,
+        "recommended_replace": recommended_replace,
+        "recommended_keep": recommended_keep,
+    }
 
 
 def _resolve_selected_providers(

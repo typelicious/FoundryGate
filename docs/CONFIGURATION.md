@@ -100,13 +100,14 @@ The config wizard can use this catalog metadata during first setup and later upd
 
 ```bash
 ./scripts/foundrygate-config-wizard --purpose general --client generic --list-candidates
+./scripts/foundrygate-config-wizard --current-config config.yaml --purpose general --client generic
 ./scripts/foundrygate-config-wizard --purpose free --client n8n \
   --select kilocode,blackbox-free,gemini-flash-lite > config.yaml
 ./scripts/foundrygate-config-wizard --current-config config.yaml --merge-existing \
   --select openrouter-fallback --write config.yaml
 ```
 
-That gives operators one purpose-aware candidate list, the ability to pick multiple providers at once, and a safer merge path for incremental catalog-driven updates.
+That gives operators one purpose-aware candidate list, config-aware update suggestions (`recommended_add`, `recommended_replace`, `recommended_keep`), the ability to pick multiple providers at once, and a safer merge path for incremental catalog-driven updates.
 
 ## Provider Fields
 

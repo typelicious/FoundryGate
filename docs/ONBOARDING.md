@@ -42,6 +42,7 @@ Useful flows:
 
 ```bash
 ./scripts/foundrygate-config-wizard --purpose coding --client opencode --list-candidates
+./scripts/foundrygate-config-wizard --current-config config.yaml --purpose coding --client opencode
 ./scripts/foundrygate-config-wizard --purpose coding --client opencode \
   --select deepseek-chat,deepseek-reasoner,anthropic-claude > config.yaml
 ./scripts/foundrygate-config-wizard --current-config config.yaml --merge-existing \

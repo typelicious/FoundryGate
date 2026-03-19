@@ -85,6 +85,7 @@ import yaml
 
 from foundrygate.wizard import (
     build_initial_config,
+    build_update_suggestions,
     list_provider_candidates,
     merge_initial_config,
     render_initial_config_yaml,
@@ -106,6 +107,22 @@ if list_candidates_only:
         "purpose": purpose,
         "client": client,
         "candidates": list_provider_candidates(
+            env_file=env_file,
+            purpose=purpose,
+            client=client,
+            config_path=current_config,
+        ),
+    }
+    rendered = (
+        json.dumps(payload, indent=2)
+        if render_format == "json"
+        else yaml.safe_dump(payload, sort_keys=False, allow_unicode=False)
+    )
+elif current_config is not None and not selected:
+    payload = {
+        "purpose": purpose,
+        "client": client,
+        "suggestions": build_update_suggestions(
             env_file=env_file,
             purpose=purpose,
             client=client,

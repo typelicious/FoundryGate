@@ -81,6 +81,7 @@ To review and selectively adopt multiple candidates during first setup or a late
 
 ```bash
 ./scripts/foundrygate-config-wizard --purpose free --client n8n --list-candidates
+./scripts/foundrygate-config-wizard --current-config config.yaml --purpose free --client n8n
 ./scripts/foundrygate-config-wizard --purpose free --client n8n \
   --select kilocode,blackbox-free,gemini-flash-lite > config.yaml
 ./scripts/foundrygate-config-wizard --current-config config.yaml --merge-existing \
