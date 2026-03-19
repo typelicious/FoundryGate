@@ -121,6 +121,15 @@ The formula is intentionally project-owned rather than targeted at `homebrew/cor
 
 The fully qualified install path is the safest first-run example. Once the tap is added, `brew install foundrygate` also resolves cleanly as long as no conflicting formula name is introduced by another tap.
 
+If you are testing from a shell that already has an active Python virtualenv, confirm that the Brew-installed binary is the one being called:
+
+```bash
+which -a foundrygate
+/opt/homebrew/bin/foundrygate --version
+```
+
+The virtualenv binary can appear first on `PATH`, which makes it look like the Homebrew install is missing features when you are actually calling the wrong executable.
+
 ## Windows
 
 Recommended baseline:

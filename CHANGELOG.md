@@ -6,6 +6,12 @@ The format is intentionally lightweight and human-readable. Group entries by rel
 
 ## Unreleased
 
+### Changed
+
+- Hardened the Homebrew formula so `pydantic-core` is built from source with extra Mach-O header padding on macOS instead of relying on the vendored wheel layout
+- Strengthened the formula test so it validates the wrapped `foundrygate --version` entrypoint instead of only importing the package inside `libexec`
+- Clarified in the README, workstation guide, and troubleshooting docs that active Python virtualenvs can shadow the Brew-installed `foundrygate` binary
+
 ## v1.2.1 - 2026-03-19
 
 ### Changed

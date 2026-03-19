@@ -6,10 +6,17 @@ class Foundrygate < Formula
   license "Apache-2.0"
   head "https://github.com/typelicious/FoundryGate.git", branch: "main"
 
+  depends_on "rust" => :build
   depends_on "python@3.12"
 
   def install
     python = Formula["python@3.12"].opt_bin/"python3.12"
+
+    # Build pydantic-core from source with extra Mach-O header space so
+    # Homebrew's linkage fixups do not trip over the vendored extension.
+    ENV["PIP_NO_BINARY"] = "pydantic-core"
+    ENV.append "RUSTFLAGS", " -C link-arg=-Wl,-headerpad_max_install_names"
+    ENV.append "LDFLAGS", " -Wl,-headerpad_max_install_names"
 
     system python, "-m", "venv", libexec
     system libexec/"bin/pip", "install", "--upgrade", "pip", "setuptools", "wheel"
@@ -81,6 +88,6 @@ class Foundrygate < Formula
   end
 
   test do
-    assert_match version.to_s, shell_output("#{libexec}/bin/python -c 'import foundrygate; print(foundrygate.__version__)'")
+    assert_match "foundrygate #{version}", shell_output("#{bin}/foundrygate --version")
   end
 end

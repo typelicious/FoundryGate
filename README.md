@@ -87,6 +87,13 @@ brew install foundrygate
 brew services start typelicious/foundrygate/foundrygate
 ```
 
+If you already have an active Python virtualenv, check which binary you are calling before testing the Brew install:
+
+```bash
+which -a foundrygate
+/opt/homebrew/bin/foundrygate --version
+```
+
 ## How It Works
 
 ```text

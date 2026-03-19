@@ -182,6 +182,29 @@ foundrygate-health
 
 If you use `foundrygate-update`, remember that it is meant for deployment checkouts and removes local untracked changes.
 
+## Homebrew install warns about `pydantic_core` linkage or `foundrygate --version` looks wrong
+
+Separate the two failure modes first:
+
+- a Homebrew linkage warning during install is a packaging problem
+- an empty or unexpected `foundrygate --version` can simply mean an active virtualenv is shadowing the Brew binary
+
+Check which executable is first on `PATH`:
+
+```bash
+which -a foundrygate
+/opt/homebrew/bin/foundrygate --version
+```
+
+If the Brew binary works but plain `foundrygate` does not, leave the service running and fix your shell path or deactivate the virtualenv before testing the Homebrew install again.
+
+If Homebrew still warns about `pydantic_core`, update the tap and reinstall:
+
+```bash
+brew update
+brew reinstall typelicious/foundrygate/foundrygate
+```
+
 ## Update checks fail or show unavailable
 
 Check the cached runtime view first:
