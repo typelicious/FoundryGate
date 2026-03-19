@@ -785,6 +785,15 @@ def render_onboarding_report(report: dict[str, Any]) -> str:
         for item in rollout_block["fallback_targets"]:
             readiness = "ready" if item["ready"] else "not ready"
             lines.append(f"  - {item['name']}: {readiness}")
+    tracked_items = [item for item in catalog_block.get("items", []) if item.get("tracked")]
+    if tracked_items:
+        lines.append("- catalog inventory:")
+        for item in tracked_items:
+            lines.append(
+                "  - "
+                + f"{item['provider']}: {item['provider_type']} / {item['offer_track']} / "
+                + f"{item['evidence_level']} / {item['volatility']}"
+            )
     if catalog_block["alerts"]:
         lines.append("- catalog alerts:")
         for alert in catalog_block["alerts"]:
@@ -898,6 +907,15 @@ def render_onboarding_report_markdown(report: dict[str, Any]) -> str:
         for item in rollout_block["fallback_targets"]:
             readiness = "ready" if item["ready"] else "not ready"
             lines.append(f"  - `{item['name']}`: {readiness}")
+    tracked_items = [item for item in catalog_block.get("items", []) if item.get("tracked")]
+    if tracked_items:
+        lines.append("- Catalog inventory:")
+        for item in tracked_items:
+            lines.append(
+                "  - "
+                + f"`{item['provider']}`: {item['provider_type']} / {item['offer_track']} / "
+                + f"{item['evidence_level']} / {item['volatility']}"
+            )
     if catalog_block["alerts"]:
         lines.append("- Catalog alerts:")
         for alert in catalog_block["alerts"]:

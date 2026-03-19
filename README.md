@@ -37,7 +37,7 @@ Runs locally on Linux, macOS, and Windows, with first-class workstation guidance
 - Strong operator visibility: `/health`, provider inventory, route previews, traces, stats, update checks, and dashboard views are built in, including per-client usage highlights.
 - Practical rollout controls: fallback chains, maintenance windows, rollout rings, provider scopes, and post-update verification gates are already there.
 - Copy/paste onboarding: OpenClaw, n8n, CLI, delegated-agent traffic, provider templates, and env starter files ship with the repo.
-- Curated provider-catalog checks catch stale model choices and drift before local configs quietly age out.
+- Curated provider-catalog checks catch stale model choices, volatile free-tier picks, and source-confidence gaps before local configs quietly age out.
 
 ## Quickstart
 

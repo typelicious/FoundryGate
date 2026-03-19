@@ -1328,6 +1328,8 @@ def _normalize_provider_catalog_check(data: dict[str, Any]) -> dict[str, Any]:
         "enabled": bool(raw.get("enabled", True)),
         "warn_on_untracked": bool(raw.get("warn_on_untracked", True)),
         "warn_on_model_drift": bool(raw.get("warn_on_model_drift", True)),
+        "warn_on_unofficial_sources": bool(raw.get("warn_on_unofficial_sources", True)),
+        "warn_on_volatile_offers": bool(raw.get("warn_on_volatile_offers", True)),
         "max_catalog_age_days": max_catalog_age_days,
     }
     return normalized

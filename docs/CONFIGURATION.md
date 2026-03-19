@@ -68,6 +68,8 @@ These settings drive the bounded JSON, upload, and routing-header behavior that 
 - `enabled`
 - `warn_on_untracked`
 - `warn_on_model_drift`
+- `warn_on_unofficial_sources`
+- `warn_on_volatile_offers`
 - `max_catalog_age_days`
 
 This does not rewrite `config.yaml` automatically. It powers:
@@ -76,7 +78,23 @@ This does not rewrite `config.yaml` automatically. It powers:
 - `foundrygate-onboarding-report`
 - `GET /api/provider-catalog`
 
-The intent is simple: if a configured provider drifts away from the curated model recommendation, or the catalog guidance has not been reviewed recently enough, operators get a visible warning before the setup silently rots.
+The catalog now carries a little more structure than just one recommended model:
+
+- `provider_type` such as `direct`, `aggregator`, or `wallet-router`
+- `auth_modes` such as `api_key`, `byok`, or `wallet_x402`
+- `offer_track` such as `direct`, `free`, `byok`, or `marketplace`
+- `evidence_level` to distinguish fully official guidance from mixed/community-supported entries
+- `official_source_url` plus optional watchlist sources for faster re-review
+
+The intent is still simple: if a configured provider drifts away from the curated model recommendation, sits on a volatile free-tier track, or relies on less-than-fully-official guidance, operators get a visible warning before the setup silently rots.
+
+For fast-moving offers, the current preferred review inputs are:
+
+- official provider docs first
+- OpenRouter BYOK and provider-routing docs
+- Kilo gateway docs
+- BlockRun / ClawRouter docs for wallet-routed traffic
+- community watchlists such as `free-llm-api-resources` only as secondary signals
 
 ## Provider Fields
 

@@ -27,6 +27,8 @@ provider_catalog_check:
   enabled: true
   warn_on_untracked: true
   warn_on_model_drift: true
+  warn_on_unofficial_sources: true
+  warn_on_volatile_offers: true
   max_catalog_age_days: 30
 
 # ── Provider Definitions ───────────────────────────────────────────────────

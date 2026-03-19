@@ -43,6 +43,8 @@ It now also includes provider-catalog alerts for:
 - configured models that drift away from the curated recommendation
 - providers that are not tracked yet
 - catalog entries that have gone stale and need review
+- volatile free-/BYOK-/marketplace-backed offer tracks
+- mixed/community-backed catalog entries that deserve faster review
 
 It also prints a client matrix:
 

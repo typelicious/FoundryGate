@@ -7,11 +7,23 @@ from typing import Any
 
 from .config import Config
 
+_COMMUNITY_WATCHLIST = {
+    "label": "free-llm-api-resources",
+    "url": "https://github.com/cheahjs/free-llm-api-resources",
+}
+
 _CATALOG: dict[str, dict[str, Any]] = {
     "deepseek-chat": {
         "recommended_model": "deepseek-chat",
         "aliases": ["deepseek-chat"],
         "track": "stable",
+        "offer_track": "direct",
+        "provider_type": "direct",
+        "auth_modes": ["api_key"],
+        "volatility": "low",
+        "evidence_level": "official",
+        "official_source_url": "https://api-docs.deepseek.com/",
+        "watch_sources": [],
         "notes": "Balanced DeepSeek chat default",
         "last_reviewed": "2026-03-19",
     },
@@ -19,6 +31,13 @@ _CATALOG: dict[str, dict[str, Any]] = {
         "recommended_model": "deepseek-reasoner",
         "aliases": ["deepseek-reasoner"],
         "track": "stable",
+        "offer_track": "direct",
+        "provider_type": "direct",
+        "auth_modes": ["api_key"],
+        "volatility": "low",
+        "evidence_level": "official",
+        "official_source_url": "https://api-docs.deepseek.com/",
+        "watch_sources": [],
         "notes": "Reasoning-heavy DeepSeek path",
         "last_reviewed": "2026-03-19",
     },
@@ -26,6 +45,13 @@ _CATALOG: dict[str, dict[str, Any]] = {
         "recommended_model": "gemini-2.5-flash-lite",
         "aliases": ["gemini-2.5-flash-lite"],
         "track": "stable",
+        "offer_track": "direct",
+        "provider_type": "direct",
+        "auth_modes": ["api_key"],
+        "volatility": "low",
+        "evidence_level": "official",
+        "official_source_url": "https://ai.google.dev/gemini-api/docs/models",
+        "watch_sources": [],
         "notes": "Cheap Gemini default",
         "last_reviewed": "2026-03-19",
     },
@@ -33,6 +59,13 @@ _CATALOG: dict[str, dict[str, Any]] = {
         "recommended_model": "gemini-2.5-flash",
         "aliases": ["gemini-2.5-flash"],
         "track": "stable",
+        "offer_track": "direct",
+        "provider_type": "direct",
+        "auth_modes": ["api_key"],
+        "volatility": "low",
+        "evidence_level": "official",
+        "official_source_url": "https://ai.google.dev/gemini-api/docs/models",
+        "watch_sources": [],
         "notes": "Balanced Gemini default",
         "last_reviewed": "2026-03-19",
     },
@@ -40,27 +73,58 @@ _CATALOG: dict[str, dict[str, Any]] = {
         "recommended_model": "openrouter/auto",
         "aliases": ["openrouter/auto"],
         "track": "stable",
-        "notes": "Marketplace fallback path",
+        "offer_track": "byok",
+        "provider_type": "aggregator",
+        "auth_modes": ["api_key", "byok"],
+        "volatility": "medium",
+        "evidence_level": "official",
+        "official_source_url": "https://openrouter.ai/docs/features/provider-routing",
+        "watch_sources": [],
+        "notes": "Marketplace fallback path with official provider routing and BYOK support",
         "last_reviewed": "2026-03-19",
     },
     "kilocode": {
         "recommended_model": "z-ai/glm-5:free",
         "aliases": ["z-ai/glm-5:free"],
         "track": "free",
-        "notes": "Current curated free-tier Kilo model",
+        "offer_track": "free",
+        "provider_type": "aggregator",
+        "auth_modes": ["api_key", "byok"],
+        "volatility": "high",
+        "evidence_level": "official",
+        "official_source_url": "https://kilo.ai/docs/gateway/models-and-providers",
+        "watch_sources": [_COMMUNITY_WATCHLIST],
+        "notes": "Current curated Kilo free-tier model; free and budget tracks can move quickly",
         "last_reviewed": "2026-03-19",
     },
     "blackbox-free": {
         "recommended_model": "blackboxai/x-ai/grok-code-fast-1:free",
         "aliases": ["blackboxai/x-ai/grok-code-fast-1:free"],
         "track": "free",
-        "notes": "Current curated BLACKBOX free-tier model",
+        "offer_track": "free",
+        "provider_type": "aggregator",
+        "auth_modes": ["api_key"],
+        "volatility": "high",
+        "evidence_level": "mixed",
+        "official_source_url": "https://docs.blackbox.ai/api-reference/authentication",
+        "watch_sources": [_COMMUNITY_WATCHLIST],
+        "notes": (
+            "Current curated BLACKBOX free-tier path; verify often because free "
+            "offerings can rotate"
+        ),
         "last_reviewed": "2026-03-19",
     },
     "openai-gpt4o": {
         "recommended_model": "gpt-4o",
         "aliases": ["gpt-4o"],
         "track": "stable",
+        "offer_track": "direct",
+        "provider_type": "direct",
+        "auth_modes": ["api_key"],
+        "volatility": "low",
+        "evidence_level": "official",
+        "official_source_url": "https://platform.openai.com/docs/models",
+        "watch_sources": [],
         "notes": "Balanced OpenAI multimodal path",
         "last_reviewed": "2026-03-19",
     },
@@ -68,6 +132,13 @@ _CATALOG: dict[str, dict[str, Any]] = {
         "recommended_model": "gpt-image-1",
         "aliases": ["gpt-image-1"],
         "track": "stable",
+        "offer_track": "direct",
+        "provider_type": "direct",
+        "auth_modes": ["api_key"],
+        "volatility": "low",
+        "evidence_level": "official",
+        "official_source_url": "https://platform.openai.com/docs/models",
+        "watch_sources": [],
         "notes": "OpenAI image generation and editing",
         "last_reviewed": "2026-03-19",
     },
@@ -75,10 +146,82 @@ _CATALOG: dict[str, dict[str, Any]] = {
         "recommended_model": "claude-opus-4-6",
         "aliases": ["claude-opus-4-6"],
         "track": "stable",
+        "offer_track": "direct",
+        "provider_type": "direct",
+        "auth_modes": ["api_key"],
+        "volatility": "low",
+        "evidence_level": "official",
+        "official_source_url": "https://docs.anthropic.com/en/docs/about-claude/models",
+        "watch_sources": [],
         "notes": "Quality-first Anthropic default",
         "last_reviewed": "2026-03-19",
     },
+    "clawrouter": {
+        "recommended_model": "auto",
+        "aliases": ["auto", "eco", "premium", "free"],
+        "track": "stable",
+        "offer_track": "marketplace",
+        "provider_type": "wallet-router",
+        "auth_modes": ["wallet_x402"],
+        "volatility": "medium",
+        "evidence_level": "official",
+        "official_source_url": "https://blockrun.ai/docs/products/routing/clawrouter",
+        "watch_sources": [],
+        "notes": "BlockRun ClawRouter uses wallet/x402 routing modes rather than a classic API key",
+        "last_reviewed": "2026-03-19",
+    },
 }
+
+
+def _alert(
+    *,
+    provider: str,
+    severity: str,
+    code: str,
+    message: str,
+    **extra: Any,
+) -> dict[str, Any]:
+    payload = {
+        "provider": provider,
+        "severity": severity,
+        "code": code,
+        "message": message,
+    }
+    payload.update(extra)
+    return payload
+
+
+def _tracked_item(
+    provider_name: str,
+    provider: dict[str, Any],
+    catalog_entry: dict[str, Any],
+    *,
+    today: date,
+) -> dict[str, Any]:
+    model = str(provider.get("model", "") or "").strip()
+    recommended_model = str(catalog_entry["recommended_model"])
+    aliases = list(catalog_entry.get("aliases", []))
+    reviewed_on = date.fromisoformat(catalog_entry["last_reviewed"])
+    age_days = (today - reviewed_on).days
+    return {
+        "provider": provider_name,
+        "configured_model": model,
+        "tracked": True,
+        "status": "tracked",
+        "recommended_model": recommended_model,
+        "track": catalog_entry.get("track", "stable"),
+        "offer_track": catalog_entry.get("offer_track", "direct"),
+        "provider_type": catalog_entry.get("provider_type", "direct"),
+        "auth_modes": list(catalog_entry.get("auth_modes", ["api_key"])),
+        "volatility": catalog_entry.get("volatility", "low"),
+        "evidence_level": catalog_entry.get("evidence_level", "official"),
+        "official_source_url": catalog_entry.get("official_source_url", ""),
+        "watch_sources": list(catalog_entry.get("watch_sources", [])),
+        "notes": catalog_entry.get("notes", ""),
+        "last_reviewed": catalog_entry["last_reviewed"],
+        "catalog_age_days": age_days,
+        "model_matches_recommendation": model == recommended_model or model in aliases,
+    }
 
 
 def build_provider_catalog_report(config: Config) -> dict[str, Any]:
@@ -104,35 +247,20 @@ def build_provider_catalog_report(config: Config) -> dict[str, Any]:
             items.append(item)
             if check_cfg.get("enabled") and check_cfg.get("warn_on_untracked"):
                 alerts.append(
-                    {
-                        "provider": provider_name,
-                        "severity": "warning",
-                        "code": "untracked-provider",
-                        "message": (
+                    _alert(
+                        provider=provider_name,
+                        severity="warning",
+                        code="untracked-provider",
+                        message=(
                             f"Provider '{provider_name}' is not in the curated provider "
                             "catalog yet."
                         ),
-                    }
+                    )
                 )
             continue
 
         tracked += 1
-        recommended_model = str(catalog_entry["recommended_model"])
-        aliases = list(catalog_entry.get("aliases", []))
-        reviewed_on = date.fromisoformat(catalog_entry["last_reviewed"])
-        age_days = (today - reviewed_on).days
-
-        item.update(
-            {
-                "status": "tracked",
-                "recommended_model": recommended_model,
-                "track": catalog_entry.get("track", "stable"),
-                "notes": catalog_entry.get("notes", ""),
-                "last_reviewed": catalog_entry["last_reviewed"],
-                "catalog_age_days": age_days,
-                "model_matches_recommendation": model == recommended_model or model in aliases,
-            }
-        )
+        item = _tracked_item(provider_name, provider, catalog_entry, today=today)
         items.append(item)
 
         if (
@@ -141,30 +269,70 @@ def build_provider_catalog_report(config: Config) -> dict[str, Any]:
             and not item["model_matches_recommendation"]
         ):
             alerts.append(
-                {
-                    "provider": provider_name,
-                    "severity": "warning",
-                    "code": "model-drift",
-                    "message": (
-                        f"Provider '{provider_name}' uses model '{model}',"
-                        f" while the curated catalog recommends '{recommended_model}'."
+                _alert(
+                    provider=provider_name,
+                    severity="warning",
+                    code="model-drift",
+                    message=(
+                        f"Provider '{provider_name}' uses model '{model}', while the curated "
+                        f"catalog recommends '{item['recommended_model']}'."
                     ),
-                    "recommended_model": recommended_model,
-                }
+                    recommended_model=item["recommended_model"],
+                )
+            )
+
+        if (
+            check_cfg.get("enabled")
+            and check_cfg.get("warn_on_unofficial_sources")
+            and item["evidence_level"] != "official"
+        ):
+            alerts.append(
+                _alert(
+                    provider=provider_name,
+                    severity="notice",
+                    code="catalog-source-unofficial",
+                    message=(
+                        f"Catalog guidance for provider '{provider_name}' is backed by "
+                        f"{item['evidence_level']} evidence; review the configured "
+                        "model more often."
+                    ),
+                    official_source_url=item["official_source_url"],
+                )
+            )
+
+        if (
+            check_cfg.get("enabled")
+            and check_cfg.get("warn_on_volatile_offers")
+            and item["volatility"] in {"medium", "high"}
+            and item["offer_track"] in {"free", "credit", "byok", "marketplace"}
+        ):
+            alerts.append(
+                _alert(
+                    provider=provider_name,
+                    severity="notice",
+                    code="volatile-offer-configured",
+                    message=(
+                        f"Provider '{provider_name}' is on the '{item['offer_track']}' track "
+                        f"with {item['volatility']} volatility; limits, models, or "
+                        "pricing may change quickly."
+                    ),
+                    offer_track=item["offer_track"],
+                )
             )
 
         max_age_days = int(check_cfg.get("max_catalog_age_days", 30))
-        if check_cfg.get("enabled") and age_days > max_age_days:
+        if check_cfg.get("enabled") and item["catalog_age_days"] > max_age_days:
             alerts.append(
-                {
-                    "provider": provider_name,
-                    "severity": "notice",
-                    "code": "catalog-stale",
-                    "message": (
-                        f"Catalog guidance for provider '{provider_name}' is {age_days} days old."
+                _alert(
+                    provider=provider_name,
+                    severity="notice",
+                    code="catalog-stale",
+                    message=(
+                        f"Catalog guidance for provider '{provider_name}' is "
+                        f"{item['catalog_age_days']} days old."
                     ),
-                    "last_reviewed": catalog_entry["last_reviewed"],
-                }
+                    last_reviewed=item["last_reviewed"],
+                )
             )
 
     return {

@@ -97,7 +97,7 @@ curl -fsS 'http://127.0.0.1:8090/api/providers?capability=image_generation'
 
 ### `GET /api/provider-catalog`
 
-Returns the curated provider-catalog view with drift and freshness alerts for configured providers.
+Returns the curated provider-catalog view with drift, freshness, volatility, auth-mode, and source-confidence metadata for configured providers.
 
 ```bash
 curl -fsS http://127.0.0.1:8090/api/provider-catalog

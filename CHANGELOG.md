@@ -15,7 +15,8 @@ The format is intentionally lightweight and human-readable. Group entries by rel
 
 - `client_profiles` can now choose a default `routing_mode`, letting one client keep the global mode while another uses a different or custom mode by default
 - `GET /v1/models`, route previews, and runtime response headers now expose configured routing modes and resolved shortcut/mode metadata
-- `foundrygate-doctor`, onboarding reports, and a new provider-catalog API now surface curated model-drift and catalog-freshness alerts for configured providers
+- `foundrygate-doctor`, onboarding reports, and the provider-catalog API now surface curated model-drift, source-confidence, volatility, and catalog-freshness alerts for configured providers
+- Provider catalog entries now distinguish direct providers from aggregators and wallet routers, track auth modes such as `api_key`, `byok`, and `wallet_x402`, and keep community watchlists explicitly secondary to official sources
 
 ## v1.2.3 - 2026-03-19
 

@@ -418,6 +418,7 @@ async def test_provider_catalog_endpoint_reports_alerts(preview_config):
     assert payload["total_providers"] >= 1
     assert payload["alert_count"] >= 1
     assert "alerts" in payload
+    assert "items" in payload
 
 
 class TestRoutePreview:

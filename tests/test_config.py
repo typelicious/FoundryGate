@@ -245,6 +245,8 @@ def test_provider_catalog_check_defaults_are_exposed():
         "enabled": True,
         "warn_on_untracked": True,
         "warn_on_model_drift": True,
+        "warn_on_unofficial_sources": True,
+        "warn_on_volatile_offers": True,
         "max_catalog_age_days": 30,
     }
 
