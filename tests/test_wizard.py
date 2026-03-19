@@ -231,6 +231,14 @@ providers:
 fallback_chain:
   - deepseek-chat
   - openrouter-fallback
+client_profiles:
+  enabled: true
+  default: generic
+  profiles:
+    generic:
+      routing_mode: premium
+    n8n:
+      routing_mode: premium
 """,
         encoding="utf-8",
     )
@@ -245,7 +253,10 @@ fallback_chain:
     add_names = {item["provider"] for item in suggestions["recommended_add"]}
     replace_names = {item["provider"] for item in suggestions["recommended_replace"]}
     keep_names = {item["provider"] for item in suggestions["recommended_keep"]}
+    mode_profiles = {item["profile"] for item in suggestions["recommended_mode_changes"]}
 
     assert "kilocode" in add_names
     assert "openrouter-fallback" in replace_names
     assert "deepseek-chat" in keep_names
+    assert "generic" in mode_profiles
+    assert "n8n" in mode_profiles

@@ -277,6 +277,27 @@ def _load_existing_provider_models(config_path: str | Path | None = None) -> dic
     return result
 
 
+def _load_existing_profile_modes(config_path: str | Path | None = None) -> dict[str, str]:
+    if config_path is None:
+        return {}
+    path = Path(config_path)
+    if not path.exists():
+        return {}
+    with path.open(encoding="utf-8") as handle:
+        raw = yaml.safe_load(handle) or {}
+    client_profiles = raw.get("client_profiles") or {}
+    if not isinstance(client_profiles, dict):
+        return {}
+    profiles = client_profiles.get("profiles") or {}
+    if not isinstance(profiles, dict):
+        return {}
+    result: dict[str, str] = {}
+    for name, profile in profiles.items():
+        if isinstance(profile, dict) and profile.get("routing_mode"):
+            result[str(name)] = str(profile.get("routing_mode"))
+    return result
+
+
 def detect_wizard_providers(*, env_file: str | Path | None = None) -> list[str]:
     """Return provider names that can be configured from the current env file."""
     env_values = _load_env_values(env_file)
@@ -375,6 +396,22 @@ def _preferred_provider_set(available: list[str], *, purpose: str, client: str) 
     return selected
 
 
+def _suggested_profile_modes(*, purpose: str) -> dict[str, str]:
+    default_mode = {
+        "general": "auto",
+        "coding": "auto",
+        "quality": "premium",
+        "free": "free",
+    }[purpose]
+    return {
+        "generic": default_mode,
+        "openclaw": "auto",
+        "cli": "auto",
+        "opencode": "auto",
+        "n8n": "eco" if purpose != "quality" else "auto",
+    }
+
+
 def list_provider_candidates(
     *,
     env_file: str | Path | None = None,
@@ -436,9 +473,11 @@ def build_update_suggestions(
         config_path=config_path,
     )
     existing_models = _load_existing_provider_models(config_path)
+    existing_profile_modes = _load_existing_profile_modes(config_path)
     recommended_add: list[dict[str, Any]] = []
     recommended_replace: list[dict[str, Any]] = []
     recommended_keep: list[dict[str, Any]] = []
+    recommended_mode_changes: list[dict[str, Any]] = []
 
     for candidate in candidates:
         provider = candidate["provider"]
@@ -458,10 +497,23 @@ def build_update_suggestions(
             entry["reason"] = "already configured and aligned with the current recommendation"
             recommended_keep.append(entry)
 
+    for profile, suggested_mode in _suggested_profile_modes(purpose=purpose).items():
+        current_mode = existing_profile_modes.get(profile)
+        if current_mode and current_mode != suggested_mode:
+            recommended_mode_changes.append(
+                {
+                    "profile": profile,
+                    "configured_mode": current_mode,
+                    "suggested_mode": suggested_mode,
+                    "reason": "profile mode differs from the current purpose-aware wizard default",
+                }
+            )
+
     return {
         "recommended_add": recommended_add,
         "recommended_replace": recommended_replace,
         "recommended_keep": recommended_keep,
+        "recommended_mode_changes": recommended_mode_changes,
     }
 
 

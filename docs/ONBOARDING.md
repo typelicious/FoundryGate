@@ -49,6 +49,8 @@ Useful flows:
   --select openrouter-fallback,kilocode --write config.yaml
 ```
 
+When a current config is present, the suggestion output now also flags client-profile mode deltas such as `recommended_mode_changes`, so you can see when `n8n`, `openclaw`, or `opencode` probably want a different default mode for the selected purpose.
+
 `foundrygate-onboarding-report` now includes concrete OpenClaw, n8n, and CLI quickstart hints plus a staged provider-rollout view. Use it after every provider or client change to keep the deployment understandable for the next operator as well.
 
 It now also includes provider-catalog alerts for:
