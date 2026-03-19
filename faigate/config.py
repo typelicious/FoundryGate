@@ -1493,9 +1493,7 @@ def load_config(path: str | Path | None = None) -> Config:
     load_dotenv()
 
     if path is None:
-        env_path = os.environ.get("FAIGATE_CONFIG_FILE") or os.environ.get(
-            "FAIGATE_CONFIG_PATH"
-        )
+        env_path = os.environ.get("FAIGATE_CONFIG_FILE") or os.environ.get("FAIGATE_CONFIG_PATH")
         if env_path:
             path = env_path
 

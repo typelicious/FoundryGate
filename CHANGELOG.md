@@ -6,6 +6,15 @@ The format is intentionally lightweight and human-readable. Group entries by rel
 
 ## Unreleased
 
+## v1.4.0 - 2026-03-19
+
+### Changed
+
+- Renamed the product branding from `FoundryGate` to `fusionAIze Gate` across the repository, documentation, examples, and operator-facing surfaces
+- Renamed the technical runtime slug from `foundrygate` to `faigate`, including the Python package, npm CLI package, helper scripts, example file names, service templates, and Homebrew formula path
+- Moved the repository references from `typelicious/FoundryGate` to `fusionAIze/faigate` and aligned env prefixes, headers, and operational examples with the new `FAIGATE_` / `x-faigate-*` naming
+- Completed the first release-prep baseline for the rebrand so future releases, installs, and documentation no longer depend on the old names
+
 ## v1.3.0 - 2026-03-19
 
 ### Added
