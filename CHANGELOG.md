@@ -6,6 +6,8 @@ The format is intentionally lightweight and human-readable. Group entries by rel
 
 ## Unreleased
 
+## v1.4.5 - 2026-03-19
+
 ### Added
 
 - Added a first `faigate-menu` control center with a shared terminal UI, the new fusionAIze Gate header, and consistent `q`/`c` navigation across status, configure, explore, validate, control, and update menus

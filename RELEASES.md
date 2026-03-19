@@ -23,11 +23,11 @@ This repo does not require a heavy release process. Use lightweight tags plus Gi
 ```bash
 git checkout main
 git pull --ff-only origin main
-git tag -a v1.4.0 -m "fusionAIze Gate v1.4.0"
-git push origin v1.4.0
+git tag -a v1.4.5 -m "fusionAIze Gate v1.4.5"
+git push origin v1.4.5
 ```
 
-Then open GitHub Releases and publish a release for `v1.4.0`.
+Then open GitHub Releases and publish a release for `v1.4.5`.
 
 ## Automation Baseline
 
@@ -68,6 +68,7 @@ The repo also includes [publish-dry-run](./.github/workflows/publish-dry-run.yml
 - `v1.2.3` finishes the immediate Brew runtime stabilization pass: the Brew-managed wrapper now invokes the correct Python module entrypoint and the formula also builds `watchfiles` from source to avoid the next macOS linkage fixup failure.
 - `v1.3.0` establishes the guided setup and catalog-assisted discovery baseline: routing modes and shortcuts are first-class, the config wizard can suggest, diff, apply, and back up multi-provider changes, provider-catalog drift alerts are richer, and discovery views stay explicitly performance-led and link-neutral.
 - `v1.4.0` establishes the rebrand baseline: the product name is now `fusionAIze Gate`, the technical slug is `faigate`, and package, script, service, documentation, and repository references align with the new identity.
+- `v1.4.5` establishes the first Gate-native shell control-center baseline: operators now get one consistent menu for status, configure, clients, validation, control, and update flows, with client quickstarts, structured configure paths, and stronger service-control helpers.
 
 ## Planned Publishing Path
 
@@ -83,6 +84,7 @@ The repo also includes [publish-dry-run](./.github/workflows/publish-dry-run.yml
 - `v1.2.3`: complete the immediate Brew-runtime stabilization work by fixing the packaged entrypoint path and broadening the native-wheel source-build policy on macOS.
 - `v1.3.0`: deepen guided onboarding and catalog-assisted operations with purpose-aware routing modes, config-wizard update flows, provider-catalog drift checks, and compact provider-discovery surfaces.
 - `v1.4.0`: ship the first fully rebranded release under `fusionAIze/faigate` so operators can adopt the new naming without mixed package, script, or documentation surfaces.
+- `v1.4.5`: ship the first cohesive shell UX line for standalone Gate operation, then follow with the actual Homebrew formula bump once the release tag exists.
 
 The npm package stays separate from the Python gateway core. It is meant for CLI-facing integrations, not for rewriting the service runtime.
 
