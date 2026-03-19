@@ -107,7 +107,7 @@ The config wizard can use this catalog metadata during first setup and later upd
   --select openrouter-fallback --write config.yaml
 ```
 
-That gives operators one purpose-aware candidate list, config-aware update suggestions (`recommended_add`, `recommended_replace`, `recommended_keep`), the ability to pick multiple providers at once, and a safer merge path for incremental catalog-driven updates.
+That gives operators one purpose-aware candidate list, config-aware update suggestions (`recommended_add`, `recommended_replace`, `recommended_keep`, `recommended_mode_changes`), the ability to pick multiple providers at once, and a safer merge path for incremental catalog-driven updates.
 
 ## Provider Fields
 

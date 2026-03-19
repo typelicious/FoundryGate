@@ -12,6 +12,7 @@ The format is intentionally lightweight and human-readable. Group entries by rel
 - Added first-class `routing_modes` and `model_shortcuts` config blocks so virtual model ids such as `auto`, `eco`, `premium`, `free`, or custom names can participate in routing
 - Added wizard candidate listing and conservative config merging so operators can select multiple provider candidates during first setup or later catalog-driven updates
 - Added config-aware wizard update suggestions so existing installs can see `recommended_add`, `recommended_replace`, and `recommended_keep` groups before applying provider changes
+- Added wizard `recommended_mode_changes` suggestions so existing client profiles can be nudged toward the current purpose-aware routing defaults without silently rewriting them
 
 ### Changed
 
