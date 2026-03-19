@@ -74,6 +74,8 @@ It now also includes provider-catalog alerts for:
 - volatile free-/BYOK-/marketplace-backed offer tracks
 - mixed/community-backed catalog entries that deserve faster review
 
+The same catalog can now also carry optional provider-discovery links for later CLI or browser surfaces. Those links can be operator-configured through env vars, but they are deliberately downstream of the recommendation itself: ranking stays performance-led and payout-blind.
+
 It also prints a client matrix:
 
 - which client profiles exist

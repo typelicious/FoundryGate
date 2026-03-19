@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import re
 from datetime import date
 from typing import Any
 
@@ -11,6 +13,11 @@ _COMMUNITY_WATCHLIST = {
     "label": "free-llm-api-resources",
     "url": "https://github.com/cheahjs/free-llm-api-resources",
 }
+
+_DISCOVERY_DISCLOSURE = (
+    "Provider recommendations stay performance-led. Signup or discovery links may include "
+    "operator-configured affiliate attribution, but payout never affects ranking."
+)
 
 _CATALOG: dict[str, dict[str, Any]] = {
     "deepseek-chat": {
@@ -23,6 +30,7 @@ _CATALOG: dict[str, dict[str, Any]] = {
         "volatility": "low",
         "evidence_level": "official",
         "official_source_url": "https://api-docs.deepseek.com/",
+        "signup_url": "https://platform.deepseek.com/",
         "watch_sources": [],
         "notes": "Balanced DeepSeek chat default",
         "last_reviewed": "2026-03-19",
@@ -37,6 +45,7 @@ _CATALOG: dict[str, dict[str, Any]] = {
         "volatility": "low",
         "evidence_level": "official",
         "official_source_url": "https://api-docs.deepseek.com/",
+        "signup_url": "https://platform.deepseek.com/",
         "watch_sources": [],
         "notes": "Reasoning-heavy DeepSeek path",
         "last_reviewed": "2026-03-19",
@@ -51,6 +60,7 @@ _CATALOG: dict[str, dict[str, Any]] = {
         "volatility": "low",
         "evidence_level": "official",
         "official_source_url": "https://ai.google.dev/gemini-api/docs/models",
+        "signup_url": "https://aistudio.google.com/",
         "watch_sources": [],
         "notes": "Cheap Gemini default",
         "last_reviewed": "2026-03-19",
@@ -65,6 +75,7 @@ _CATALOG: dict[str, dict[str, Any]] = {
         "volatility": "low",
         "evidence_level": "official",
         "official_source_url": "https://ai.google.dev/gemini-api/docs/models",
+        "signup_url": "https://aistudio.google.com/",
         "watch_sources": [],
         "notes": "Balanced Gemini default",
         "last_reviewed": "2026-03-19",
@@ -79,6 +90,7 @@ _CATALOG: dict[str, dict[str, Any]] = {
         "volatility": "medium",
         "evidence_level": "official",
         "official_source_url": "https://openrouter.ai/docs/features/provider-routing",
+        "signup_url": "https://openrouter.ai/",
         "watch_sources": [],
         "notes": "Marketplace fallback path with official provider routing and BYOK support",
         "last_reviewed": "2026-03-19",
@@ -93,6 +105,7 @@ _CATALOG: dict[str, dict[str, Any]] = {
         "volatility": "high",
         "evidence_level": "official",
         "official_source_url": "https://kilo.ai/docs/gateway/models-and-providers",
+        "signup_url": "https://kilo.ai/",
         "watch_sources": [_COMMUNITY_WATCHLIST],
         "notes": "Current curated Kilo free-tier model; free and budget tracks can move quickly",
         "last_reviewed": "2026-03-19",
@@ -107,6 +120,7 @@ _CATALOG: dict[str, dict[str, Any]] = {
         "volatility": "high",
         "evidence_level": "mixed",
         "official_source_url": "https://docs.blackbox.ai/api-reference/authentication",
+        "signup_url": "https://cloud.blackbox.ai/",
         "watch_sources": [_COMMUNITY_WATCHLIST],
         "notes": (
             "Current curated BLACKBOX free-tier path; verify often because free "
@@ -124,6 +138,7 @@ _CATALOG: dict[str, dict[str, Any]] = {
         "volatility": "low",
         "evidence_level": "official",
         "official_source_url": "https://platform.openai.com/docs/models",
+        "signup_url": "https://platform.openai.com/",
         "watch_sources": [],
         "notes": "Balanced OpenAI multimodal path",
         "last_reviewed": "2026-03-19",
@@ -138,6 +153,7 @@ _CATALOG: dict[str, dict[str, Any]] = {
         "volatility": "low",
         "evidence_level": "official",
         "official_source_url": "https://platform.openai.com/docs/models",
+        "signup_url": "https://platform.openai.com/",
         "watch_sources": [],
         "notes": "OpenAI image generation and editing",
         "last_reviewed": "2026-03-19",
@@ -152,6 +168,7 @@ _CATALOG: dict[str, dict[str, Any]] = {
         "volatility": "low",
         "evidence_level": "official",
         "official_source_url": "https://docs.anthropic.com/en/docs/about-claude/models",
+        "signup_url": "https://console.anthropic.com/",
         "watch_sources": [],
         "notes": "Quality-first Anthropic default",
         "last_reviewed": "2026-03-19",
@@ -166,6 +183,7 @@ _CATALOG: dict[str, dict[str, Any]] = {
         "volatility": "medium",
         "evidence_level": "official",
         "official_source_url": "https://blockrun.ai/docs/products/routing/clawrouter",
+        "signup_url": "https://blockrun.ai/",
         "watch_sources": [],
         "notes": "BlockRun ClawRouter uses wallet/x402 routing modes rather than a classic API key",
         "last_reviewed": "2026-03-19",
@@ -173,9 +191,41 @@ _CATALOG: dict[str, dict[str, Any]] = {
 }
 
 
+def _slugify_provider_name(provider_name: str) -> str:
+    return re.sub(r"[^A-Z0-9]+", "_", provider_name.upper()).strip("_")
+
+
+def _discovery_env_var(provider_name: str) -> str:
+    token = _slugify_provider_name(provider_name)
+    return f"FOUNDRYGATE_PROVIDER_LINK_{token}_URL"
+
+
+def _build_discovery_metadata(provider_name: str, catalog_entry: dict[str, Any]) -> dict[str, Any]:
+    env_var = _discovery_env_var(provider_name)
+    operator_url = str(os.environ.get(env_var, "") or "").strip()
+    signup_url = str(catalog_entry.get("signup_url", "") or "").strip()
+    discovery_url = (
+        operator_url or signup_url or str(catalog_entry.get("official_source_url", "") or "")
+    )
+
+    return {
+        "signup_url": signup_url,
+        "resolved_url": discovery_url,
+        "link_source": "operator_override" if operator_url else "official",
+        "operator_env_var": env_var,
+        "disclosure": _DISCOVERY_DISCLOSURE,
+        "disclosure_required": bool(operator_url),
+    }
+
+
 def get_provider_catalog() -> dict[str, dict[str, Any]]:
     """Return a shallow copy of the curated provider catalog."""
-    return {name: dict(entry) for name, entry in _CATALOG.items()}
+    payload: dict[str, dict[str, Any]] = {}
+    for name, entry in _CATALOG.items():
+        item = dict(entry)
+        item["discovery"] = _build_discovery_metadata(name, entry)
+        payload[name] = item
+    return payload
 
 
 def _alert(
@@ -221,6 +271,8 @@ def _tracked_item(
         "volatility": catalog_entry.get("volatility", "low"),
         "evidence_level": catalog_entry.get("evidence_level", "official"),
         "official_source_url": catalog_entry.get("official_source_url", ""),
+        "signup_url": catalog_entry.get("signup_url", ""),
+        "discovery": _build_discovery_metadata(provider_name, catalog_entry),
         "watch_sources": list(catalog_entry.get("watch_sources", [])),
         "notes": catalog_entry.get("notes", ""),
         "last_reviewed": catalog_entry["last_reviewed"],
@@ -345,6 +397,17 @@ def build_provider_catalog_report(config: Config) -> dict[str, Any]:
         "tracked_providers": tracked,
         "total_providers": len(config.providers),
         "alert_count": len(alerts),
+        "recommendation_policy": {
+            "affiliate_payout_affects_ranking": False,
+            "ranking_basis": [
+                "fit",
+                "quality",
+                "health",
+                "capability",
+                "cost_behavior",
+            ],
+            "disclosure": _DISCOVERY_DISCLOSURE,
+        },
         "alerts": alerts,
         "items": items,
     }

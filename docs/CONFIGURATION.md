@@ -88,6 +88,23 @@ The catalog now carries a little more structure than just one recommended model:
 
 The intent is still simple: if a configured provider drifts away from the curated model recommendation, sits on a volatile free-tier track, or relies on less-than-fully-official guidance, operators get a visible warning before the setup silently rots.
 
+Provider-discovery links can also be layered onto the catalog without touching `config.yaml`.
+
+Pattern:
+
+```bash
+export FOUNDRYGATE_PROVIDER_LINK_OPENROUTER_FALLBACK_URL="https://go.example.com/openrouter"
+export FOUNDRYGATE_PROVIDER_LINK_KILOCODE_URL="https://go.example.com/kilo"
+```
+
+These env vars are operator-controlled full URLs. They are intended for disclosed signup or partner links and keep attribution state out of normal client config. If unset, the catalog falls back to the provider's official signup or landing URL.
+
+The guardrail is strict:
+
+- recommendation ranking does not use payout as an input
+- operator-configured discovery links are only shown after a recommendation or candidate row already exists
+- CLI and API output should disclose that a shown link may include affiliate attribution
+
 For fast-moving offers, the current preferred review inputs are:
 
 - official provider docs first

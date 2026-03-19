@@ -462,6 +462,20 @@ def list_provider_candidates(
                 "volatility": catalog_entry.get("volatility", "low"),
                 "evidence_level": catalog_entry.get("evidence_level", "official"),
                 "official_source_url": catalog_entry.get("official_source_url", ""),
+                "signup_url": (catalog_entry.get("discovery") or {}).get("signup_url", ""),
+                "discovery_url": (catalog_entry.get("discovery") or {}).get("resolved_url", ""),
+                "discovery_link_source": (
+                    (catalog_entry.get("discovery") or {}).get("link_source", "official")
+                ),
+                "discovery_disclosure": (
+                    (catalog_entry.get("discovery") or {}).get("disclosure", "")
+                ),
+                "discovery_disclosure_required": bool(
+                    (catalog_entry.get("discovery") or {}).get("disclosure_required", False)
+                ),
+                "discovery_env_var": (
+                    (catalog_entry.get("discovery") or {}).get("operator_env_var", "")
+                ),
                 "notes": catalog_entry.get("notes", ""),
             }
         )

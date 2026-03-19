@@ -85,6 +85,9 @@ def test_list_provider_candidates_marks_defaults_and_catalog_metadata(tmp_path: 
     assert by_name["kilocode"]["offer_track"] == "free"
     assert by_name["blackbox-free"]["evidence_level"] == "mixed"
     assert by_name["gemini-flash-lite"]["provider_type"] == "direct"
+    assert by_name["kilocode"]["discovery_url"].startswith("https://")
+    assert by_name["kilocode"]["discovery_link_source"] == "official"
+    assert "performance-led" in by_name["kilocode"]["discovery_disclosure"]
 
 
 def test_build_initial_config_honors_multiselect(tmp_path: Path):

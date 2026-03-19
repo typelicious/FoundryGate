@@ -154,3 +154,37 @@ metrics:
     assert report["items"][0]["provider_type"] == "wallet-router"
     assert report["items"][0]["auth_modes"] == ["wallet_x402"]
     assert report["items"][0]["official_source_url"].startswith("https://blockrun.ai/")
+
+
+def test_provider_catalog_report_exposes_discovery_policy_and_links(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv(
+        "FOUNDRYGATE_PROVIDER_LINK_OPENROUTER_FALLBACK_URL",
+        "https://go.example.test/openrouter",
+    )
+    cfg = load_config(
+        _write_config(
+            tmp_path,
+            """
+server:
+  host: "127.0.0.1"
+  port: 8090
+providers:
+  openrouter-fallback:
+    backend: openai-compat
+    base_url: "https://openrouter.ai/api/v1"
+    api_key: "secret"
+    model: "openrouter/auto"
+fallback_chain: []
+metrics:
+  enabled: false
+""",
+        )
+    )
+
+    report = build_provider_catalog_report(cfg)
+
+    assert report["recommendation_policy"]["affiliate_payout_affects_ranking"] is False
+    discovery = report["items"][0]["discovery"]
+    assert discovery["resolved_url"] == "https://go.example.test/openrouter"
+    assert discovery["link_source"] == "operator_override"
+    assert discovery["disclosure_required"] is True

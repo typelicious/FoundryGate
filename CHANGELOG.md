@@ -17,6 +17,7 @@ The format is intentionally lightweight and human-readable. Group entries by rel
 - Added a wizard dry-run change summary so operators can preview added providers, model replacements, fallback changes, and client-mode changes before writing config updates
 - Added optional wizard write-backup snapshots so config updates can keep a local pre-change copy before overwriting `config.yaml`
 - Added a built-in `foundrygate-config-wizard --help` flow so first setup, catalog review, update suggestions, dry-run previews, and backup-aware writes are all discoverable directly from the CLI
+- Added optional provider-catalog discovery metadata and env-backed signup-link overrides so future CLI or control-center surfaces can show disclosed provider links without mixing affiliate state into normal config files
 
 ### Changed
 
@@ -26,6 +27,7 @@ The format is intentionally lightweight and human-readable. Group entries by rel
 - Provider catalog entries now distinguish direct providers from aggregators and wallet routers, track auth modes such as `api_key`, `byok`, and `wallet_x402`, and keep community watchlists explicitly secondary to official sources
 - `foundrygate-config-wizard` can now filter candidates by purpose and client, accept multi-select provider input, and merge selected providers back into an existing config instead of forcing a full rewrite
 - Tightened the roadmap and user-facing docs around `v1.3.0` so guided setup, catalog-assisted updates, and future recommendation-link work stay transparent and clearly separated from ranking logic
+- Provider discovery metadata now carries an explicit payout-blind recommendation policy so affiliate or partner attribution can never be mistaken for a ranking signal
 
 ## v1.2.3 - 2026-03-19
 
