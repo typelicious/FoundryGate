@@ -123,6 +123,8 @@ The repo ships example schedules under [`docs/examples`](./examples):
 - `foundrygate-auto-update.timer`
 - `foundrygate-auto-update.cron`
 - `com.typelicious.foundrygate.plist`
+- `foundrygate-start.ps1`
+- `foundrygate-task-scheduler.xml`
 
 Use them only after the manual update path is already validated.
 

@@ -10,6 +10,7 @@ The format is intentionally lightweight and human-readable. Group entries by rel
 
 - Added a workstation operations guide for Linux, macOS, and Windows runtime layouts
 - Added a macOS `launchd` LaunchAgent example for local workstation installs
+- Added Windows PowerShell and Task Scheduler starter examples for local workstation installs
 
 ## v1.1.0 - 2026-03-16
 

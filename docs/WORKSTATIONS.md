@@ -109,6 +109,25 @@ $env:FOUNDRYGATE_DB_PATH="$env:LOCALAPPDATA\FoundryGate\foundrygate.db"
 
 Task Scheduler is the recommended `v1.2.0`-targeted path. A native Windows service wrapper can come later if it proves necessary.
 
+The repo ships starter files for this path:
+
+- [examples/foundrygate-start.ps1](./examples/foundrygate-start.ps1)
+- [examples/foundrygate-task-scheduler.xml](./examples/foundrygate-task-scheduler.xml)
+
+Suggested install flow:
+
+```powershell
+New-Item -ItemType Directory -Force -Path "$env:APPDATA\FoundryGate" | Out-Null
+Copy-Item ".\docs\examples\foundrygate-start.ps1" "$env:APPDATA\FoundryGate\foundrygate-start.ps1"
+schtasks /Create /TN FoundryGate /XML ".\docs\examples\foundrygate-task-scheduler.xml" /F
+```
+
+If you want to avoid XML import, create one logon task that runs:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:APPDATA\FoundryGate\foundrygate-start.ps1"
+```
+
 ## Config and state placement
 
 Keep these out of the repo checkout:
