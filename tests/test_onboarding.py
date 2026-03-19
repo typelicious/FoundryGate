@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 from foundrygate.onboarding import (
@@ -222,6 +226,65 @@ auto_update:
 
     assert validation["ok"] is True
     assert validation["blockers"] == []
+
+
+def test_onboarding_report_helper_supports_explicit_python_and_config_env(tmp_path: Path):
+    env_file = tmp_path / ".env"
+    env_file.write_text("DEEPSEEK_API_KEY=sk-demo\n", encoding="utf-8")
+
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(
+        """
+fallback_chain:
+  - deepseek-chat
+providers:
+  deepseek-chat:
+    backend: openai-compat
+    base_url: "https://api.deepseek.com/v1"
+    api_key: "${DEEPSEEK_API_KEY}"
+    model: "deepseek-chat"
+    tier: default
+client_profiles:
+  enabled: true
+  default: generic
+  presets: ["openclaw"]
+  profiles:
+    generic: {}
+  rules: []
+routing_policies:
+  enabled: false
+  rules: []
+request_hooks:
+  enabled: false
+  hooks: []
+update_check:
+  enabled: false
+auto_update:
+  enabled: false
+""".strip(),
+        encoding="utf-8",
+    )
+
+    repo_root = Path(__file__).resolve().parent.parent
+    script = repo_root / "scripts" / "foundrygate-onboarding-report"
+    env = os.environ.copy()
+    env["FOUNDRYGATE_CONFIG_FILE"] = str(config_file)
+    env["FOUNDRYGATE_ENV_FILE"] = str(env_file)
+    env["FOUNDRYGATE_PYTHON"] = sys.executable
+    env["PYTHONPATH"] = str(repo_root)
+
+    completed = subprocess.run(
+        ["bash", str(script), "--json"],
+        cwd=repo_root,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    report = json.loads(completed.stdout)
+    assert report["providers"]["ready"] == 1
+    assert report["clients"]["presets"] == ["openclaw"]
 
 
 def test_onboarding_report_marks_all_builtin_integrations_ready(tmp_path: Path):

@@ -7,13 +7,16 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
 [![OpenAI-compatible](https://img.shields.io/badge/OpenAI-compatible-0ea5e9.svg)](./docs/API.md)
 [![OpenClaw-friendly](https://img.shields.io/badge/OpenClaw-friendly-111827.svg)](https://openclaw.ai/)
+[![Workstations](https://img.shields.io/badge/workstations-linux%20%7C%20macOS%20%7C%20windows-0f766e.svg)](./docs/WORKSTATIONS.md)
+[![Homebrew](https://img.shields.io/badge/homebrew-formula-fbbf24?logo=homebrew&logoColor=black)](./Formula/foundrygate.rb)
 [![Docker](https://img.shields.io/badge/docker-ready-2496ED?logo=docker&logoColor=white)](./Dockerfile)
-[![PyPI](https://img.shields.io/badge/pypi-workflow%20ready-3775A9?logo=pypi&logoColor=white)](./RELEASES.md)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](./pyproject.toml)
 
 Local OpenAI-compatible AI gateway for 🦞 [OpenClaw](https://openclaw.ai/) and other AI-native clients.
 
 FoundryGate gives OpenClaw, n8n, CLI tools, and custom apps one local endpoint and routes each request to the best configured provider or local worker. It keeps routing, fallback, onboarding, and operator visibility under your control instead of scattering provider logic across every client.
+
+Runs locally on Linux, macOS, and Windows, with first-class workstation guidance for `systemd`, `launchd`, Task Scheduler, and Homebrew-driven macOS installs.
 
 ## Quick Navigation
 
@@ -38,6 +41,12 @@ FoundryGate gives OpenClaw, n8n, CLI tools, and custom apps one local endpoint a
 ## Quickstart
 
 The fastest local path is the helper-driven bootstrap.
+
+Platform quick starts:
+
+- Linux or generic source checkout: use the helper/bootstrap flow below, then `systemd` if you want a long-running service.
+- macOS workstation: use the helper flow below or jump to [Homebrew](./docs/WORKSTATIONS.md#homebrew-on-macos) for `brew services`.
+- Windows workstation: use the source checkout flow below, then the PowerShell and Task Scheduler examples in [docs/WORKSTATIONS.md](./docs/WORKSTATIONS.md).
 
 ```bash
 git clone https://github.com/typelicious/FoundryGate.git foundrygate
@@ -67,6 +76,14 @@ Then use the onboarding helpers to move from “the server starts” to “real 
 ```
 
 If you prefer a packaged or service-driven install, jump to [Deployment](#deployment) or the fuller [Operations guide](./docs/OPERATIONS.md).
+
+Minimal Homebrew flow on macOS:
+
+```bash
+brew tap typelicious/foundrygate https://github.com/typelicious/FoundryGate
+brew install typelicious/foundrygate/foundrygate
+brew services start typelicious/foundrygate/foundrygate
+```
 
 ## How It Works
 
