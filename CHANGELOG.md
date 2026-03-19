@@ -6,6 +6,8 @@ The format is intentionally lightweight and human-readable. Group entries by rel
 
 ## Unreleased
 
+## v1.2.0 - 2026-03-19
+
 ### Added
 
 - Added a workstation operations guide for Linux, macOS, and Windows runtime layouts

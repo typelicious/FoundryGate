@@ -23,11 +23,11 @@ This repo does not require a heavy release process. Use lightweight tags plus Gi
 ```bash
 git checkout main
 git pull --ff-only origin main
-git tag -a v1.1.0 -m "FoundryGate v1.1.0"
-git push origin v1.1.0
+git tag -a v1.2.0 -m "FoundryGate v1.2.0"
+git push origin v1.2.0
 ```
 
-Then open GitHub Releases and publish a release for `v1.1.0`.
+Then open GitHub Releases and publish a release for `v1.2.0`.
 
 ## Automation Baseline
 
@@ -62,6 +62,7 @@ The repo also includes [publish-dry-run](./.github/workflows/publish-dry-run.yml
 - `v0.9.0` is the pre-`v1.0` hardening baseline: conservative response headers, bounded request surfaces, stronger functional API coverage, and a full documentation pass over operator-facing behavior.
 - `v1.0.0` establishes the stable baseline: trust-boundary validation for upstream base URLs, sanitized provider-error responses, a documented security review, and the separate `@foundrygate/cli` npm package for CLI-facing workflows.
 - `v1.1.0` deepens post-1.0 adoption: wider AI-native starter coverage, tighter policy semantics, richer client highlights in stats/dashboard, and cleaner onboarding guidance for popular agent frameworks.
+- `v1.2.0` establishes the workstation and packaging baseline: Linux/macOS/Windows workstation guidance, macOS-aware runtime helpers, Windows startup examples, explicit config-path support for packaged installs, and a project-owned Homebrew formula path.
 
 ## Planned Publishing Path
 
@@ -71,6 +72,7 @@ The repo also includes [publish-dry-run](./.github/workflows/publish-dry-run.yml
 - `v0.7.0`: helper-driven update controls become a first-class release line with scoped rollout gates and verification hooks.
 - `v0.8.0`: many-provider and many-client onboarding becomes copy/pasteable and validation-backed through reports, starters, and doctor checks.
 - `v1.0.0`: keep GitHub Releases, Docker, and PyPI, and add the separate npm CLI package under `packages/foundrygate-cli`.
+- `v1.2.0`: add the project-owned Homebrew packaging path for macOS workstations while keeping Docker, GitHub Releases, Python artifacts, and the separate npm CLI package.
 
 The npm package stays separate from the Python gateway core. It is meant for CLI-facing integrations, not for rewriting the service runtime.
 
