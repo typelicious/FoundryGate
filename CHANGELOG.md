@@ -4,8 +4,14 @@ All notable changes to fusionAIze Gate should be documented here.
 
 The format is intentionally lightweight and human-readable. Group entries by release and focus on user-visible behavior, operational changes, and compatibility notes.
 
-## v1.6.0 - 2026-03-20
+## v1.6.1 - 2026-03-20
 
+### Changed
+
+- Fixed the packaged `faigate-dashboard` helper so the shipped script keeps its executable bit and the Brew-installed dashboard no longer fails with `Permission denied`
+- Polished the interactive terminal wordmark again so the large `I` aligns with the intended shape and the current version now appears inline at the right edge of the logo in the same subdued tone as the subtitle
+
+## v1.6.0 - 2026-03-20
 ### Added
 
 - Added `faigate-provider-setup` plus matching `Quick Setup` / `Configure` menu entries so operators can add known providers, custom OpenAI-compatible upstreams, and local workers before dropping into the purpose-aware config wizard

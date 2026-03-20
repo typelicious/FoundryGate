@@ -23,11 +23,11 @@ This repo does not require a heavy release process. Use lightweight tags plus Gi
 ```bash
 git checkout main
 git pull --ff-only origin main
-git tag -a v1.6.0 -m "fusionAIze Gate v1.6.0"
-git push origin v1.6.0
+git tag -a v1.6.1 -m "fusionAIze Gate v1.6.1"
+git push origin v1.6.1
 ```
 
-Then open GitHub Releases and publish a release for `v1.6.0`.
+Then open GitHub Releases and publish a release for `v1.6.1`.
 
 ## Automation Baseline
 
@@ -72,6 +72,7 @@ The repo also includes [publish-dry-run](./.github/workflows/publish-dry-run.yml
 - `v1.5.0` deepens that shell UX into a stronger happy path: Quick Setup, summary cards, client recommendation cards, drilldowns, and explicit next-step receipts now make first setup and handoff flows feel much more guided.
 - `v1.5.1` polishes that guided shell UX: the wizard now surfaces compact ready-now candidate cards, the client area highlights the best next action more clearly, and base-url override prompts are explicitly framed as upstream provider overrides.
 - `v1.6.0` establishes the operator decision-support baseline: provider setup, provider probe, client scenario templates, and the new shell dashboard now work together as one onboarding-and-operations flow, with budget and routing hints layered into the live metrics view.
+- `v1.6.1` is the immediate packaging and polish follow-up: the Brew-installed dashboard helper is executable again, and the terminal wordmark now matches the intended shape more closely while surfacing the current version inline.
 
 ## Planned Publishing Path
 
