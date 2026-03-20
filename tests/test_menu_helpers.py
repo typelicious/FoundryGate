@@ -345,7 +345,9 @@ fallback_chain: [deepseek-chat]
     assert any(row["name"] == "openclaw" for row in payload["client_matrix"])
 
 
-def test_faigate_client_integrations_text_shows_recommended_cards_and_more_available(tmp_path: Path):
+def test_faigate_client_integrations_text_shows_recommended_cards_and_more_available(
+    tmp_path: Path,
+):
     config_file = tmp_path / "config.yaml"
     config_file.write_text(
         """
@@ -625,7 +627,12 @@ fallback_chain: [deepseek-chat]
     fake_bin = _write_fake_curl(
         tmp_path,
         {
-            "/health": json.dumps({"status": "ok", "summary": {"providers_total": 1, "providers_healthy": 1}}),
+            "/health": json.dumps(
+                {
+                    "status": "ok",
+                    "summary": {"providers_total": 1, "providers_healthy": 1},
+                }
+            ),
             "/v1/models": json.dumps(
                 {"data": [{"id": "auto"}, {"id": "deepseek-chat"}, {"id": "gemini-flash"}]}
             ),
@@ -672,7 +679,12 @@ fallback_chain: []
     fake_bin = _write_fake_curl(
         tmp_path,
         {
-            "/health": json.dumps({"status": "ok", "summary": {"providers_total": 0, "providers_healthy": 0}}),
+            "/health": json.dumps(
+                {
+                    "status": "ok",
+                    "summary": {"providers_total": 0, "providers_healthy": 0},
+                }
+            ),
             "/api/update": json.dumps(
                 {
                     "enabled": True,
@@ -737,7 +749,14 @@ client_profiles:
     env_file.write_text("", encoding="utf-8")
     fake_bin = _write_fake_curl(
         tmp_path,
-        {"/health": json.dumps({"status": "ok", "summary": {"providers_total": 0, "providers_healthy": 0}})},
+        {
+            "/health": json.dumps(
+                {
+                    "status": "ok",
+                    "summary": {"providers_total": 0, "providers_healthy": 0},
+                }
+            )
+        },
     )
 
     env = os.environ.copy()
@@ -783,7 +802,12 @@ client_profiles:
     fake_bin = _write_fake_curl(
         tmp_path,
         {
-            "/health": json.dumps({"status": "ok", "summary": {"providers_total": 0, "providers_healthy": 0}}),
+            "/health": json.dumps(
+                {
+                    "status": "ok",
+                    "summary": {"providers_total": 0, "providers_healthy": 0},
+                }
+            ),
             "/v1/models": json.dumps({"data": [{"id": "auto"}]}),
         },
     )
