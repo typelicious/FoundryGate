@@ -7,10 +7,12 @@ from faigate.wizard import (
     apply_update_suggestions,
     build_config_change_summary,
     build_initial_config,
+    build_interactive_candidate_sections,
     build_update_suggestions,
     detect_wizard_providers,
     list_provider_candidates,
     merge_initial_config,
+    render_candidate_cards_text,
     render_initial_config_yaml,
     write_output_file,
 )
@@ -96,9 +98,113 @@ def test_list_provider_candidates_marks_defaults_and_catalog_metadata(tmp_path: 
     assert by_name["kilocode"]["offer_track"] == "free"
     assert by_name["blackbox-free"]["evidence_level"] == "mixed"
     assert by_name["gemini-flash-lite"]["provider_type"] == "direct"
+    assert by_name["kilocode"]["ready_now"] is True
+    assert by_name["kilocode"]["recommended_now"] is True
     assert by_name["kilocode"]["discovery_url"].startswith("https://")
     assert by_name["kilocode"]["discovery_link_source"] == "official"
     assert "performance-led" in by_name["kilocode"]["discovery_disclosure"]
+
+
+def test_build_interactive_candidate_sections_splits_ready_and_needs_key(tmp_path: Path):
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "\n".join(
+            [
+                "DEEPSEEK_API_KEY=sk-demo",
+                "GEMINI_API_KEY=gm-demo",
+                "OPENROUTER_API_KEY=or-demo",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        """
+server:
+  host: "127.0.0.1"
+  port: 8090
+providers:
+  deepseek-chat:
+    backend: openai-compat
+    api_key: "${DEEPSEEK_API_KEY}"
+    base_url: "https://api.deepseek.com/v1"
+    model: "deepseek-chat"
+fallback_chain:
+  - deepseek-chat
+client_profiles:
+  enabled: true
+  default: generic
+  profiles:
+    generic: {}
+    opencode: {}
+""",
+        encoding="utf-8",
+    )
+
+    sections = build_interactive_candidate_sections(
+        env_file=env_file,
+        purpose="coding",
+        client="opencode",
+        config_path=config_path,
+    )
+
+    ready_names = [row["provider"] for row in sections["ready_now"]]
+    missing_names = [row["provider"] for row in sections["available_with_key"]]
+
+    assert "deepseek-chat" in ready_names
+    assert "deepseek-reasoner" in ready_names
+    assert "openai-gpt4o" in missing_names
+    assert "anthropic-claude" in missing_names
+
+
+def test_render_candidate_cards_text_prefers_compact_operator_view(tmp_path: Path):
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "\n".join(
+            [
+                "DEEPSEEK_API_KEY=sk-demo",
+                "GEMINI_API_KEY=gm-demo",
+                "OPENROUTER_API_KEY=or-demo",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        """
+server:
+  host: "127.0.0.1"
+  port: 8090
+providers:
+  deepseek-chat:
+    backend: openai-compat
+    api_key: "${DEEPSEEK_API_KEY}"
+    base_url: "https://api.deepseek.com/v1"
+    model: "deepseek-chat"
+fallback_chain:
+  - deepseek-chat
+client_profiles:
+  enabled: true
+  default: generic
+  profiles:
+    generic: {}
+    opencode: {}
+""",
+        encoding="utf-8",
+    )
+
+    rendered = render_candidate_cards_text(
+        env_file=env_file,
+        purpose="coding",
+        client="opencode",
+        config_path=config_path,
+    )
+
+    assert "Ready now" in rendered
+    assert "More options if you add keys" in rendered
+    assert "deepseek-chat  (recommended · already in config)" in rendered
+    assert "openai-gpt4o  (needs OPENAI_API_KEY)" in rendered
+    assert "discovery_env_var" not in rendered
 
 
 def test_build_initial_config_honors_multiselect(tmp_path: Path):
@@ -291,6 +397,7 @@ def test_config_wizard_help_lists_primary_flows():
     assert result.returncode == 0
     assert "Usage:" in result.stdout
     assert "--list-candidates" in result.stdout
+    assert "--text-candidates" in result.stdout
     assert "--dry-run-summary" in result.stdout
     assert "--write-backup" in result.stdout
     assert "recommended_mode_changes" in result.stdout

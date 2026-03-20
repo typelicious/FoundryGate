@@ -74,6 +74,8 @@ client_profiles:
   default: generic
   profiles:
     generic: {}
+    openclaw: {}
+    opencode: {}
 fallback_chain: [deepseek-chat]
 """.strip(),
         encoding="utf-8",
@@ -98,6 +100,9 @@ fallback_chain: [deepseek-chat]
     assert "Gateway" in result.stdout
     assert "Default mode" in result.stdout
     assert "Providers" in result.stdout
+    assert "Preset matches" in result.stdout
+    assert "Best next step" in result.stdout
+    assert "opencode" in result.stdout
     assert "Tip:" in result.stdout
 
 
@@ -394,6 +399,7 @@ fallback_chain: [deepseek-chat]
     )
 
     assert "Recommended clients now" in result.stdout
+    assert "Best next step: opencode" in result.stdout
     assert "- openclaw" in result.stdout
     assert "- n8n" in result.stdout
     assert "- cli" in result.stdout
@@ -447,6 +453,70 @@ fallback_chain: [deepseek-chat]
     assert "- opencode: ready" in result.stdout
     assert "best for: Coding-heavy editor and agent flows" in result.stdout
     assert "header: X-faigate-Client: opencode" in result.stdout
+
+
+def test_faigate_config_wizard_text_candidates_are_compact(tmp_path: Path):
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(
+        """
+server:
+  host: "127.0.0.1"
+  port: 8090
+providers:
+  deepseek-chat:
+    backend: openai-compat
+    api_key: "${DEEPSEEK_API_KEY}"
+    base_url: "https://api.deepseek.com/v1"
+    model: "deepseek-chat"
+client_profiles:
+  enabled: true
+  default: generic
+  profiles:
+    generic: {}
+    opencode: {}
+fallback_chain: [deepseek-chat]
+""".strip(),
+        encoding="utf-8",
+    )
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "\n".join(
+            [
+                "DEEPSEEK_API_KEY=test-key",
+                "GEMINI_API_KEY=gm-key",
+                "OPENROUTER_API_KEY=or-key",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [
+            "bash",
+            "scripts/faigate-config-wizard",
+            "--env-file",
+            str(env_file),
+            "--purpose",
+            "coding",
+            "--client",
+            "opencode",
+            "--current-config",
+            str(config_file),
+            "--list-candidates",
+            "--text-candidates",
+        ],
+        cwd=REPO_ROOT,
+        env={**os.environ, "FAIGATE_PYTHON": sys.executable},
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    assert "Ready now" in result.stdout
+    assert "More options if you add keys" in result.stdout
+    assert "deepseek-chat  (recommended · already in config)" in result.stdout
+    assert "openai-gpt4o  (needs OPENAI_API_KEY)" in result.stdout
+    assert "discovery_env_var" not in result.stdout
 
 
 def test_faigate_auto_update_parses_payload_without_mapfile(tmp_path: Path):
@@ -909,6 +979,8 @@ def test_faigate_api_keys_updates_env_file(tmp_path: Path):
 
     assert "ANTHROPIC_API_KEY=sk-ant-demo" in written
     assert "API key env updated" in result.stdout
+    assert "optional upstream provider overrides" in result.stdout
+    assert "OPENAI_BASE_URL (upstream)" in result.stdout
 
 
 def test_faigate_routing_settings_updates_default_and_profile_modes(tmp_path: Path):

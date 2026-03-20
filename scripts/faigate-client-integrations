@@ -99,6 +99,7 @@ else:
         "opencode": "Coding-heavy editor and agent flows",
         "cli": "Direct CLI and shell-driven requests",
     }
+    priority = ["opencode", "openclaw", "n8n", "cli"]
     all_integrations = report["integrations"]
     recommended_names = [
         name for name, data in all_integrations.items() if data.get("recommended")
@@ -106,6 +107,13 @@ else:
     remaining_names = [
         name for name in all_integrations if name not in recommended_names
     ]
+    best_next = ""
+    for item in priority:
+        if item in recommended_names:
+            best_next = item
+            break
+    if not best_next and recommended_names:
+        best_next = recommended_names[0]
 
     print("fusionAIze Gate Client Integrations")
     print("")
@@ -135,6 +143,9 @@ else:
     else:
         print("")
         print("Recommended clients now")
+        if best_next:
+            print(f"  Best next step: {best_next}")
+            print(f"  Drill in with --client {best_next} for copyable setup details.")
         for name in recommended_names:
             data = all_integrations[name]
             print(f"- {name}")

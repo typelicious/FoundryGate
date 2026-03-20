@@ -123,20 +123,43 @@ for payload in providers.values():
             continue
     providers_ready += 1
 
+default_profile = (
+    client_profiles.get("default", "generic") if isinstance(client_profiles, dict) else "generic"
+)
+next_client = ""
+priority = ["opencode", "openclaw", "n8n", "cli"]
+if default_profile in priority:
+    next_client = default_profile
+else:
+    available_client_targets = set(priority) & (set(profiles) | set(presets))
+    for item in priority:
+        if item in available_client_targets:
+            next_client = item
+            break
+
+preset_summary = "none yet"
+if len(presets) == 1:
+    preset_summary = "1 active"
+elif len(presets) > 1:
+    preset_summary = f"{len(presets)} active"
+
 print(f"providers={len(providers)}")
 print(f"providers_ready={providers_ready}")
 print(f"providers_missing_keys={providers_missing_keys}")
 print(f"fallbacks={len(fallback_chain)}")
 print(f"default_mode={routing.get('default', 'auto')}")
-print(f"default_profile={client_profiles.get('default', 'generic') if isinstance(client_profiles, dict) else 'generic'}")
+print(f"default_profile={default_profile}")
 print(f"profiles={len(profiles)}")
 print(f"presets={len(presets)}")
+print(f"preset_summary={preset_summary}")
+print(f"next_client={next_client or 'none'}")
 PY
 }
 
 collect_runtime_snapshot() {
   local state health_state bind snapshot_output line providers_count providers_ready providers_missing_keys
   local fallback_count default_mode default_profile profile_count preset_count
+  local preset_summary next_client
   state="$(faigate_service_state)"
   if faigate_is_healthy; then
     health_state="healthy"
@@ -163,6 +186,8 @@ collect_runtime_snapshot() {
       default_profile=*) default_profile="${line#default_profile=}" ;;
       profiles=*) profile_count="${line#profiles=}" ;;
       presets=*) preset_count="${line#presets=}" ;;
+      preset_summary=*) preset_summary="${line#preset_summary=}" ;;
+      next_client=*) next_client="${line#next_client=}" ;;
     esac
   done <<EOF
 $snapshot_output
@@ -179,11 +204,13 @@ EOF
   printf 'default_profile=%s\n' "$default_profile"
   printf 'profiles=%s\n' "$profile_count"
   printf 'presets=%s\n' "$preset_count"
+  printf 'preset_summary=%s\n' "${preset_summary:-none yet}"
+  printf 'next_client=%s\n' "${next_client:-none}"
 }
 
 render_summary_cards() {
   local snapshot_output line state health_state bind providers_count providers_ready providers_missing_keys
-  local fallback_count default_mode default_profile profile_count preset_count
+  local fallback_count default_mode default_profile profile_count preset_count preset_summary next_client
   snapshot_output="$(collect_runtime_snapshot)"
   while IFS= read -r line; do
     case "$line" in
@@ -198,6 +225,8 @@ render_summary_cards() {
       default_profile=*) default_profile="${line#default_profile=}" ;;
       profiles=*) profile_count="${line#profiles=}" ;;
       presets=*) preset_count="${line#presets=}" ;;
+      preset_summary=*) preset_summary="${line#preset_summary=}" ;;
+      next_client=*) next_client="${line#next_client=}" ;;
     esac
   done <<EOF
 $snapshot_output
@@ -222,8 +251,26 @@ EOF
   printf "  %bClients%b\n" "$FAIGATE_UI_BOLD" "$FAIGATE_UI_RESET"
   printf "  %-18s %s\n" "Default profile" "$default_profile"
   printf "  %-18s %s\n" "Profiles" "$profile_count"
-  printf "  %-18s %s\n" "Presets" "$preset_count"
+  printf "  %-18s %s\n" "Preset matches" "${preset_summary:-none yet}"
+  if [ -n "${next_client:-}" ] && [ "${next_client}" != "none" ]; then
+    printf "  %-18s %s\n" "Best next step" "$next_client"
+  fi
   printf "\n"
+}
+
+best_next_client() {
+  local snapshot_output line next_client
+  snapshot_output="$(collect_runtime_snapshot)"
+  while IFS= read -r line; do
+    case "$line" in
+      next_client=*) next_client="${line#next_client=}" ;;
+    esac
+  done <<EOF
+$snapshot_output
+EOF
+  if [ -n "${next_client:-}" ] && [ "$next_client" != "none" ]; then
+    printf "%s\n" "$next_client"
+  fi
 }
 
 render_quick_setup_guidance() {
@@ -337,6 +384,7 @@ run_config_wizard() {
       --purpose "$purpose" \
       --client "$client" \
       --current-config "$config_file" \
+      --text-candidates \
       --list-candidates || true
 
   echo ""
@@ -418,6 +466,7 @@ run_client_wizard() {
       --purpose "$purpose" \
       --client "$client" \
       --current-config "$config_file" \
+      --text-candidates \
       --list-candidates || true
 
   echo ""
@@ -656,9 +705,15 @@ explore_menu() {
 }
 
 clients_menu() {
+  local next_client
   while true; do
     faigate_ui_header "fusionAIze Gate Clients" "Client quickstarts, matrix, and client-scoped wizard flows"
-    faigate_ui_tip "Start with recommended client cards for a compact view. Use one-client drilldowns when you want copyable details without the long cross-client dump."
+    next_client="$(best_next_client || true)"
+    if [ -n "${next_client:-}" ]; then
+      faigate_ui_tip "Best next step: open ${next_client} Details, then use the ${next_client} Wizard if that client needs its own default."
+    else
+      faigate_ui_tip "Start with recommended client cards for a compact view. Use one-client drilldowns when you want copyable details without the long cross-client dump."
+    fi
     echo ""
     printf "    1)  Recommended Cards  Compact client recommendations\n"
     printf "    2)  Client Matrix      Show active client profiles and match intent\n"

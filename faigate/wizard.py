@@ -318,6 +318,197 @@ def detect_wizard_providers(*, env_file: str | Path | None = None) -> list[str]:
     return detected
 
 
+def _candidate_row(
+    name: str,
+    *,
+    env_values: dict[str, str],
+    existing: set[str],
+    preferred: set[str],
+    catalog: dict[str, Any],
+) -> dict[str, Any]:
+    factory = _PROVIDER_FACTORIES[name]
+    provider = factory["provider"]
+    catalog_entry = catalog.get(name, {})
+    ready_now = bool(env_values.get(factory["env"]))
+    already_configured = name in existing
+    recommended_now = name in preferred
+    return {
+        "provider": name,
+        "env": factory["env"],
+        "configured": already_configured,
+        "already_configured": already_configured,
+        "ready_now": ready_now,
+        "selected_by_default": recommended_now,
+        "recommended_now": recommended_now,
+        "model": provider.get("model", ""),
+        "tier": provider.get("tier", "default"),
+        "contract": provider.get("contract", "generic"),
+        "provider_type": catalog_entry.get("provider_type", "direct"),
+        "auth_modes": list(catalog_entry.get("auth_modes", ["api_key"])),
+        "offer_track": catalog_entry.get("offer_track", "direct"),
+        "volatility": catalog_entry.get("volatility", "low"),
+        "evidence_level": catalog_entry.get("evidence_level", "official"),
+        "official_source_url": catalog_entry.get("official_source_url", ""),
+        "signup_url": (catalog_entry.get("discovery") or {}).get("signup_url", ""),
+        "discovery_url": (catalog_entry.get("discovery") or {}).get("resolved_url", ""),
+        "discovery_link_source": (
+            (catalog_entry.get("discovery") or {}).get("link_source", "official")
+        ),
+        "discovery_disclosure": ((catalog_entry.get("discovery") or {}).get("disclosure", "")),
+        "discovery_disclosure_required": bool(
+            (catalog_entry.get("discovery") or {}).get("disclosure_required", False)
+        ),
+        "discovery_env_var": ((catalog_entry.get("discovery") or {}).get("operator_env_var", "")),
+        "notes": catalog_entry.get("notes", ""),
+    }
+
+
+def build_interactive_candidate_sections(
+    *,
+    env_file: str | Path | None = None,
+    purpose: str = "general",
+    client: str = "generic",
+    config_path: str | Path | None = None,
+) -> dict[str, Any]:
+    """Return compact candidate groups for interactive shell flows."""
+    if purpose not in _PURPOSES:
+        supported = ", ".join(sorted(_PURPOSES))
+        raise ValueError(f"Unsupported purpose '{purpose}'. Choose one of: {supported}")
+    if client not in _CLIENTS:
+        supported = ", ".join(sorted(_CLIENTS))
+        raise ValueError(f"Unsupported client '{client}'. Choose one of: {supported}")
+
+    env_values = _load_env_values(env_file)
+    catalog = get_provider_catalog()
+    existing = _load_existing_provider_names(config_path)
+    detected = detect_wizard_providers(env_file=env_file)
+    preferred_all = _preferred_provider_set(
+        list(_PROVIDER_FACTORIES),
+        purpose=purpose,
+        client=client,
+    )
+    preferred_set = set(preferred_all)
+
+    ready_now: list[dict[str, Any]] = []
+    available_with_key: list[dict[str, Any]] = []
+    optional_add_ons: list[dict[str, Any]] = []
+
+    for name in preferred_all:
+        row = _candidate_row(
+            name,
+            env_values=env_values,
+            existing=existing,
+            preferred=preferred_set,
+            catalog=catalog,
+        )
+        if row["contract"] != "generic":
+            optional_add_ons.append(row)
+        elif row["ready_now"]:
+            ready_now.append(row)
+        else:
+            available_with_key.append(row)
+
+    seen = set(preferred_all)
+    extra_ready = [
+        _candidate_row(
+            name,
+            env_values=env_values,
+            existing=existing,
+            preferred=preferred_set,
+            catalog=catalog,
+        )
+        for name in detected
+        if name not in seen
+        and _PROVIDER_FACTORIES[name]["provider"].get("contract", "generic") == "generic"
+    ]
+    extra_ready.sort(key=lambda row: row["provider"])
+    ready_now.extend(extra_ready)
+
+    return {
+        "purpose": purpose,
+        "client": client,
+        "ready_now": ready_now,
+        "available_with_key": available_with_key,
+        "optional_add_ons": optional_add_ons,
+    }
+
+
+def render_candidate_cards_text(
+    *,
+    env_file: str | Path | None = None,
+    purpose: str = "general",
+    client: str = "generic",
+    config_path: str | Path | None = None,
+) -> str:
+    """Render a compact operator-friendly candidate view."""
+    sections = build_interactive_candidate_sections(
+        env_file=env_file,
+        purpose=purpose,
+        client=client,
+        config_path=config_path,
+    )
+    lines = [
+        f"purpose: {sections['purpose']}",
+        f"client: {sections['client']}",
+        "",
+    ]
+
+    ready_now = sections["ready_now"]
+    if ready_now:
+        lines.append("Ready now")
+        for row in ready_now:
+            badges = ["recommended"]
+            if row["already_configured"]:
+                badges.append("already in config")
+            lines.append(f"- {row['provider']}  ({' · '.join(badges)})")
+            lines.append(
+                "  "
+                + f"model: {row['model']} | tier: {row['tier']} | source: {row['provider_type']}"
+            )
+            if row["notes"]:
+                lines.append("  " + f"why: {row['notes']}")
+        lines.append("")
+    else:
+        lines.extend(
+            [
+                "Ready now",
+                "- none yet",
+                "  why: no recommended providers are currently backed by a detected API key.",
+                "",
+            ]
+        )
+
+    available_with_key = sections["available_with_key"]
+    if available_with_key:
+        lines.append("More options if you add keys")
+        for row in available_with_key:
+            lines.append(f"- {row['provider']}  (needs {row['env']})")
+            lines.append(
+                "  "
+                + f"model: {row['model']} | tier: {row['tier']} | source: {row['provider_type']}"
+            )
+            if row["notes"]:
+                lines.append("  " + f"why: {row['notes']}")
+        lines.append("")
+
+    optional_add_ons = sections["optional_add_ons"]
+    if optional_add_ons:
+        lines.append("Optional specialty add-ons")
+        for row in optional_add_ons:
+            availability = "ready now" if row["ready_now"] else f"needs {row['env']}"
+            lines.append(f"- {row['provider']}  ({availability})")
+            lines.append("  " + f"model: {row['model']} | tier: {row['tier']}")
+            if row["notes"]:
+                lines.append("  " + f"why: {row['notes']}")
+        lines.append("")
+
+    lines.append("Tip: Press Enter in the wizard to use the recommended ready providers.")
+    lines.append(
+        "Tip: Use --json or --yaml with --list-candidates when you want the full metadata dump."
+    )
+    return "\n".join(lines) + "\n"
+
+
 def _preferred_fallback_chain(available: list[str], *, purpose: str) -> list[str]:
     """Return a purpose-aware fallback chain over available providers."""
     by_purpose = {
@@ -437,6 +628,7 @@ def list_provider_candidates(
         supported = ", ".join(sorted(_CLIENTS))
         raise ValueError(f"Unsupported client '{client}'. Choose one of: {supported}")
 
+    env_values = _load_env_values(env_file)
     catalog = get_provider_catalog()
     detected = detect_wizard_providers(env_file=env_file)
     existing = _load_existing_provider_names(config_path)
@@ -444,40 +636,14 @@ def list_provider_candidates(
 
     rows: list[dict[str, Any]] = []
     for name in detected:
-        factory = _PROVIDER_FACTORIES[name]
-        provider = factory["provider"]
-        catalog_entry = catalog.get(name, {})
         rows.append(
-            {
-                "provider": name,
-                "env": factory["env"],
-                "configured": name in existing,
-                "selected_by_default": name in preferred,
-                "model": provider.get("model", ""),
-                "tier": provider.get("tier", "default"),
-                "contract": provider.get("contract", "generic"),
-                "provider_type": catalog_entry.get("provider_type", "direct"),
-                "auth_modes": list(catalog_entry.get("auth_modes", ["api_key"])),
-                "offer_track": catalog_entry.get("offer_track", "direct"),
-                "volatility": catalog_entry.get("volatility", "low"),
-                "evidence_level": catalog_entry.get("evidence_level", "official"),
-                "official_source_url": catalog_entry.get("official_source_url", ""),
-                "signup_url": (catalog_entry.get("discovery") or {}).get("signup_url", ""),
-                "discovery_url": (catalog_entry.get("discovery") or {}).get("resolved_url", ""),
-                "discovery_link_source": (
-                    (catalog_entry.get("discovery") or {}).get("link_source", "official")
-                ),
-                "discovery_disclosure": (
-                    (catalog_entry.get("discovery") or {}).get("disclosure", "")
-                ),
-                "discovery_disclosure_required": bool(
-                    (catalog_entry.get("discovery") or {}).get("disclosure_required", False)
-                ),
-                "discovery_env_var": (
-                    (catalog_entry.get("discovery") or {}).get("operator_env_var", "")
-                ),
-                "notes": catalog_entry.get("notes", ""),
-            }
+            _candidate_row(
+                name,
+                env_values=env_values,
+                existing=existing,
+                preferred=preferred,
+                catalog=catalog,
+            )
         )
     return rows
 

@@ -7,6 +7,7 @@ python_bin="${FAIGATE_PYTHON:-python3}"
 purpose="general"
 client="generic"
 format="yaml"
+text_candidates="false"
 current_config=""
 merge_existing="false"
 list_candidates="false"
@@ -31,6 +32,7 @@ Purpose-aware setup:
 
 Candidate review:
   --list-candidates
+  --text-candidates   Compact text cards for interactive review
 
 Existing config review:
   --current-config <path>
@@ -124,6 +126,10 @@ while [ $# -gt 0 ]; do
       current_config="$2"
       shift 2
       ;;
+    --text-candidates)
+      text_candidates="true"
+      shift
+      ;;
     --merge-existing)
       merge_existing="true"
       shift
@@ -155,6 +161,7 @@ export FAIGATE_WIZARD_ENV="$env_file"
 export FAIGATE_WIZARD_PURPOSE="$purpose"
 export FAIGATE_WIZARD_CLIENT="$client"
 export FAIGATE_WIZARD_FORMAT="$format"
+export FAIGATE_WIZARD_TEXT_CANDIDATES="$text_candidates"
 export FAIGATE_WIZARD_CURRENT_CONFIG="$current_config"
 export FAIGATE_WIZARD_MERGE_EXISTING="$merge_existing"
 export FAIGATE_WIZARD_LIST_CANDIDATES="$list_candidates"
@@ -177,6 +184,7 @@ from faigate.wizard import (
     apply_update_suggestions,
     build_config_change_summary,
     build_initial_config,
+    render_candidate_cards_text,
     build_update_suggestions,
     list_provider_candidates,
     merge_initial_config,
@@ -187,6 +195,7 @@ env_file = os.environ["FAIGATE_WIZARD_ENV"]
 purpose = os.environ["FAIGATE_WIZARD_PURPOSE"]
 client = os.environ["FAIGATE_WIZARD_CLIENT"]
 render_format = os.environ["FAIGATE_WIZARD_FORMAT"]
+text_candidates = os.environ["FAIGATE_WIZARD_TEXT_CANDIDATES"] == "true"
 current_config = os.environ["FAIGATE_WIZARD_CURRENT_CONFIG"] or None
 merge_existing = os.environ["FAIGATE_WIZARD_MERGE_EXISTING"] == "true"
 list_candidates_only = os.environ["FAIGATE_WIZARD_LIST_CANDIDATES"] == "true"
@@ -202,21 +211,29 @@ write_backup = os.environ["FAIGATE_WIZARD_WRITE_BACKUP"] == "true"
 backup_suffix = os.environ["FAIGATE_WIZARD_BACKUP_SUFFIX"]
 
 if list_candidates_only:
-    payload = {
-        "purpose": purpose,
-        "client": client,
-        "candidates": list_provider_candidates(
+    if text_candidates:
+        rendered = render_candidate_cards_text(
             env_file=env_file,
             purpose=purpose,
             client=client,
             config_path=current_config,
-        ),
-    }
-    rendered = (
-        json.dumps(payload, indent=2)
-        if render_format == "json"
-        else yaml.safe_dump(payload, sort_keys=False, allow_unicode=False)
-    )
+        )
+    else:
+        payload = {
+            "purpose": purpose,
+            "client": client,
+            "candidates": list_provider_candidates(
+                env_file=env_file,
+                purpose=purpose,
+                client=client,
+                config_path=current_config,
+            ),
+        }
+        rendered = (
+            json.dumps(payload, indent=2)
+            if render_format == "json"
+            else yaml.safe_dump(payload, sort_keys=False, allow_unicode=False)
+        )
 elif current_config is not None and not selected:
     payload = {
         "purpose": purpose,

@@ -34,7 +34,7 @@ faigate_ui_logo() {
       "$FAIGATE_UI_MAGENTA2" "▄▖  ▗   " "$FAIGATE_UI_RESET"
     printf "  %b%s%b%b%s%b%b%s%b%b%s%b%b%s%b\n" \
       "$FAIGATE_UI_ORANGE" "▜▘▌▌▛▘▌" "$FAIGATE_UI_RESET" \
-      "$FAIGATE_UI_LIME" "▛▌▛▌▌▌▐ ▀▌" "$FAIGATE_UI_RESET" \
+      "$FAIGATE_UI_LIME" " ▛▌▛▌▌▌▐ ▀▌" "$FAIGATE_UI_RESET" \
       "$FAIGATE_UI_CYAN2" "█▌  ▌ ▀▌" "$FAIGATE_UI_RESET" \
       "$FAIGATE_UI_MAGENTA2" "▜▘" "$FAIGATE_UI_RESET" \
       "$FAIGATE_UI_CORAL" "█▌" "$FAIGATE_UI_RESET"
@@ -45,7 +45,7 @@ faigate_ui_logo() {
       "$FAIGATE_UI_CORAL" "▐▖▙▖" "$FAIGATE_UI_RESET"
   else
     printf "  %s\n" "▐▘    ▘    ▄▖▄▖      ▄▖  ▗   "
-    printf "  %s\n" "▜▘▌▌▛▘▌▛▌▛▌▌▌▐ ▀▌█▌  ▌ ▀▌▜▘█▌"
+    printf "  %s\n" "▜▘▌▌▛▘▌ ▛▌▛▌▌▌▐ ▀▌█▌  ▌ ▀▌▜▘█▌"
     printf "  %s\n" "▐ ▙▌▄▌▌▙▌▌▌▛▌▟▖▙▖▙▖  ▙▌█▌▐▖▙▖"
   fi
 }
