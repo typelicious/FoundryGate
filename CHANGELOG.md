@@ -6,6 +6,15 @@ The format is intentionally lightweight and human-readable. Group entries by rel
 
 ## Unreleased
 
+## v1.5.1 - 2026-03-20
+
+### Changed
+
+- Reworked the interactive config wizard candidate screen so purpose/client selection now shows compact `Ready now`, `More options if you add keys`, and `Optional specialty add-ons` cards instead of a raw provider metadata dump
+- Improved the client quickstart surfaces so the menu and client helper now show a clearer `Best next step` hint and friendlier `Preset matches` wording instead of implying that `Presets 0` means something is broken
+- Clarified the API-key helper so provider base URL overrides are explicitly labeled as optional upstream overrides, reducing confusion between local Gate client URLs and upstream provider endpoints
+- Nudged the terminal logo spacing closer to the intended fusionAIze Gate wordmark in interactive screens
+
 ## v1.5.0 - 2026-03-20
 
 ### Changed
