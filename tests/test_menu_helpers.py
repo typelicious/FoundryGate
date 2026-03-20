@@ -261,6 +261,7 @@ def test_faigate_service_lib_detects_homebrew_runtime_paths(tmp_path: Path):
             "bash",
             "-lc",
             "source scripts/faigate-service-lib.sh && "
+            "faigate_platform(){ echo Darwin; } && "
             "if faigate_is_homebrew_runtime; then echo yes; else echo no; fi && "
             "faigate_service_target && "
             "faigate_logs_stdout_path && "
