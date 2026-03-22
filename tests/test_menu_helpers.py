@@ -1442,6 +1442,58 @@ def test_faigate_client_scenarios_text_lists_opencode_templates(tmp_path: Path):
     assert "family coverage: Anthropic: quality lane active" in result.stdout
 
 
+def test_faigate_client_scenarios_write_shows_client_specific_next_steps(tmp_path: Path):
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "DEEPSEEK_API_KEY=sk-demo\nOPENAI_API_KEY=sk-openai\nANTHROPIC_API_KEY=sk-ant\n",
+        encoding="utf-8",
+    )
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(
+        """
+server:
+  host: "127.0.0.1"
+  port: 8090
+providers:
+  deepseek-chat:
+    backend: openai-compat
+    api_key: "${DEEPSEEK_API_KEY}"
+    base_url: "https://api.deepseek.com/v1"
+    model: "deepseek-chat"
+fallback_chain:
+  - deepseek-chat
+client_profiles:
+  enabled: true
+  default: generic
+  profiles:
+    generic: {}
+    opencode:
+      routing_mode: auto
+""".strip(),
+        encoding="utf-8",
+    )
+
+    env = os.environ.copy()
+    env["FAIGATE_ENV_FILE"] = str(env_file)
+    env["FAIGATE_CONFIG_FILE"] = str(config_file)
+    env["FAIGATE_PYTHON"] = sys.executable
+    env["PYTHONPATH"] = str(REPO_ROOT)
+
+    result = subprocess.run(
+        ["bash", "scripts/faigate-client-scenarios"],
+        cwd=REPO_ROOT,
+        env=env,
+        input="2\n2\n\n",
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert "Client scenario applied." in result.stdout
+    assert "new opencode profile default" in result.stdout
+    assert "drill into opencode Details" in result.stdout
+
+
 def test_faigate_provider_discovery_interactive_opens_provider_detail(tmp_path: Path):
     config_file = tmp_path / "config.yaml"
     config_file.write_text(

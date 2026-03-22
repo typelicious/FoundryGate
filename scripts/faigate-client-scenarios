@@ -72,6 +72,17 @@ show_next_steps() {
   done
 }
 
+scenario_client_name() {
+  local scenario="$1"
+  case "$scenario" in
+    opencode-*) printf "opencode" ;;
+    openclaw-*) printf "openclaw" ;;
+    n8n-*) printf "n8n" ;;
+    cli-*) printf "cli" ;;
+    *) printf "" ;;
+  esac
+}
+
 render_scenarios() {
   FAIGATE_SCENARIO_CONFIG="$config_file" \
     FAIGATE_SCENARIO_ENV="$env_file" \
@@ -184,7 +195,9 @@ while true; do
   printf "  q) Quit\n"
   printf "  c) Cancel\n"
   printf "  ▸ Selection: "
-  read -r scenario_selection
+  if ! read -r scenario_selection; then
+    exit 0
+  fi
   case "$scenario_selection" in
     q|Q) exit 0 ;;
     c|C|"") return 0 2>/dev/null || exit 0 ;;
@@ -204,19 +217,30 @@ while true; do
   printf "    c)  Cancel\n"
   printf "    q)  Quit\n"
   printf "  ▸ [1]: "
-  read -r choice
+  if ! read -r choice; then
+    exit 0
+  fi
   case "${choice:-1}" in
     q|Q) exit 0 ;;
     c|C|1) ;;
     2)
+      scenario_client="$(scenario_client_name "$scenario_id")"
       echo ""
       apply_scenario "$scenario_id" "write"
       echo ""
-      show_next_steps "Client scenario applied." \
-        "Restart + Verify next so the running gateway picks up the new client profile default." \
-        "Open Client Quickstarts to grab the matching client-specific connection details." \
-        "Provider Probe is useful when the scenario added providers you have not tested yet."
+      if [[ -n "$scenario_client" ]]; then
+        show_next_steps "Client scenario applied." \
+          "Restart + Verify next so the running gateway picks up the new ${scenario_client} profile default." \
+          "Open Client Quickstarts and drill into ${scenario_client} Details to grab the exact connection settings." \
+          "Provider Probe is useful when the scenario added providers you have not tested yet."
+      else
+        show_next_steps "Client scenario applied." \
+          "Restart + Verify next so the running gateway picks up the new client profile default." \
+          "Open Client Quickstarts to grab the matching client-specific connection details." \
+          "Provider Probe is useful when the scenario added providers you have not tested yet."
+      fi
       faigate_ui_pause
+      exit 0
       ;;
   esac
 done
