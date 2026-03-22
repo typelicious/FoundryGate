@@ -103,7 +103,7 @@ def test_faigate_ui_logo_plaintext_includes_version_and_expected_shape():
         [
             "bash",
             "-lc",
-            "source scripts/faigate-ui-lib.sh && faigate_ui_logo \"$(faigate_ui_version)\"",
+            'source scripts/faigate-ui-lib.sh && faigate_ui_logo "$(faigate_ui_version)"',
         ],
         cwd=REPO_ROOT,
         env=env,
