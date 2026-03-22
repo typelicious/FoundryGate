@@ -234,22 +234,6 @@ if list_candidates_only:
             if render_format == "json"
             else yaml.safe_dump(payload, sort_keys=False, allow_unicode=False)
         )
-elif current_config is not None and not selected:
-    payload = {
-        "purpose": purpose,
-        "client": client,
-        "suggestions": build_update_suggestions(
-            env_file=env_file,
-            purpose=purpose,
-            client=client,
-            config_path=current_config,
-        ),
-    }
-    rendered = (
-        json.dumps(payload, indent=2)
-        if render_format == "json"
-        else yaml.safe_dump(payload, sort_keys=False, allow_unicode=False)
-    )
 elif current_config is not None and apply_groups:
     payload = apply_update_suggestions(
         env_file=env_file,
@@ -265,6 +249,22 @@ elif current_config is not None and apply_groups:
             config_path=current_config,
             updated_config=payload,
         )
+    rendered = (
+        json.dumps(payload, indent=2)
+        if render_format == "json"
+        else yaml.safe_dump(payload, sort_keys=False, allow_unicode=False)
+    )
+elif current_config is not None and not selected:
+    payload = {
+        "purpose": purpose,
+        "client": client,
+        "suggestions": build_update_suggestions(
+            env_file=env_file,
+            purpose=purpose,
+            client=client,
+            config_path=current_config,
+        ),
+    }
     rendered = (
         json.dumps(payload, indent=2)
         if render_format == "json"

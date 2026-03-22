@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 import subprocess
+import sys
 from pathlib import Path
 
 from faigate.wizard import (
@@ -596,6 +598,87 @@ fallback_chain:
     assert merged["providers"]["openrouter-fallback"]["model"] == "openrouter/auto"
     assert merged["client_profiles"]["profiles"]["n8n"]["routing_mode"] == "eco"
     assert merged["client_profiles"]["profiles"]["generic"]["routing_mode"] == "premium"
+
+
+def test_config_wizard_write_uses_runtime_config_when_apply_groups_are_set(tmp_path: Path):
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "\n".join(
+            [
+                "DEEPSEEK_API_KEY=sk-demo",
+                "OPENROUTER_API_KEY=or-demo",
+                "KILOCODE_API_KEY=kilo-demo",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        """
+server:
+  host: "127.0.0.1"
+  port: 8090
+providers:
+  deepseek-chat:
+    backend: openai-compat
+    base_url: "https://api.deepseek.com/v1"
+    api_key: "${DEEPSEEK_API_KEY}"
+    model: "deepseek-chat"
+  openrouter-fallback:
+    backend: openai-compat
+    base_url: "https://openrouter.ai/api/v1"
+    api_key: "${OPENROUTER_API_KEY}"
+    model: "openrouter/wrong"
+client_profiles:
+  enabled: true
+  default: generic
+  profiles:
+    generic:
+      routing_mode: premium
+fallback_chain:
+  - deepseek-chat
+  - openrouter-fallback
+""",
+        encoding="utf-8",
+    )
+    env = os.environ.copy()
+    env["FAIGATE_PYTHON"] = sys.executable
+
+    subprocess.run(
+        [
+            "bash",
+            "scripts/faigate-config-wizard",
+            "--env-file",
+            str(env_file),
+            "--purpose",
+            "free",
+            "--client",
+            "generic",
+            "--current-config",
+            str(config_path),
+            "--merge-existing",
+            "--apply",
+            "recommended_add,recommended_replace,recommended_mode_changes",
+            "--write",
+            str(config_path),
+            "--write-backup",
+        ],
+        cwd=Path(__file__).resolve().parents[1],
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    written = config_path.read_text(encoding="utf-8")
+    backups = list(tmp_path.glob("config.yaml.bak"))
+
+    assert "suggestions:" not in written
+    assert "providers:" in written
+    assert "kilocode:" in written
+    assert "openrouter-fallback:" in written
+    assert "openrouter/auto" in written
+    assert len(backups) == 1
 
 
 def test_build_config_change_summary_reports_added_replaced_and_mode_changes(tmp_path: Path):

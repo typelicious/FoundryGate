@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -9,6 +10,16 @@ from pathlib import Path
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
+EXECUTABLE_HELPERS = [
+    "scripts/faigate-client-integrations",
+    "scripts/faigate-config-overview",
+    "scripts/faigate-config-wizard",
+    "scripts/faigate-dashboard",
+    "scripts/faigate-onboarding-report",
+    "scripts/faigate-onboarding-validate",
+    "scripts/faigate-provider-discovery",
+]
 
 
 def _write_fake_curl(tmp_path: Path, routes: dict[str, str]) -> Path:
@@ -47,6 +58,12 @@ def test_faigate_menu_help_lists_primary_sections():
 
     assert "fusionAIze Gate" in result.stdout
     assert "Interactive control center" in result.stdout
+
+
+def test_packaged_helper_scripts_keep_execute_bit():
+    for helper in EXECUTABLE_HELPERS:
+        mode = (REPO_ROOT / helper).stat().st_mode
+        assert mode & stat.S_IXUSR, helper
 
 
 def test_faigate_menu_quit_renders_snapshot_and_tip(tmp_path: Path):
@@ -250,6 +267,47 @@ fallback_chain: [deepseek-chat]
     assert payload["providers"][0]["name"] == "deepseek-chat"
     assert payload["client_profiles"][0]["name"] == "generic"
     assert payload["shortcuts"][0]["name"] == "ds"
+
+
+def test_faigate_doctor_warns_when_config_contains_wizard_suggestions(tmp_path: Path):
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(
+        """
+purpose: coding
+client: opencode
+suggestions:
+  recommended_add:
+    - provider: anthropic-claude
+server:
+  host: "127.0.0.1"
+  port: 8090
+providers:
+  deepseek-chat:
+    backend: openai-compat
+    api_key: "${DEEPSEEK_API_KEY}"
+    base_url: "https://api.deepseek.com/v1"
+    model: "deepseek-chat"
+""".strip(),
+        encoding="utf-8",
+    )
+    env_file = tmp_path / ".env"
+    env_file.write_text("DEEPSEEK_API_KEY=test-key\n", encoding="utf-8")
+
+    env = os.environ.copy()
+    env["FAIGATE_CONFIG_FILE"] = str(config_file)
+    env["FAIGATE_ENV_FILE"] = str(env_file)
+    env["FAIGATE_PYTHON"] = sys.executable
+
+    result = subprocess.run(
+        ["bash", "scripts/faigate-doctor"],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    assert "config appears to contain wizard suggestions" in result.stdout
 
 
 def test_faigate_service_lib_detects_homebrew_runtime_paths(tmp_path: Path):

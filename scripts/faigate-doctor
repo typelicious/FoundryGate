@@ -68,10 +68,23 @@ fi
 
 "$python_bin" - <<'PY'
 import os
+from pathlib import Path
 
+import yaml
 from faigate.onboarding import collect_provider_env_requirements
 from faigate.provider_catalog import build_provider_catalog_report
 from faigate.config import load_config
+
+config_path = Path(os.environ.get("FAIGATE_CONFIG_FILE", ""))
+raw_config = {}
+if config_path.exists():
+    raw_config = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+
+if isinstance(raw_config, dict) and raw_config.get("suggestions"):
+    print(
+        "[warn] config appears to contain wizard suggestions alongside runtime config; "
+        "restore a clean config backup if summary keys like purpose/client/suggestions were written accidentally"
+    )
 
 requirements = collect_provider_env_requirements(
     config_path=os.environ.get("FAIGATE_CONFIG_FILE"),
