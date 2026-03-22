@@ -23,11 +23,11 @@ This repo does not require a heavy release process. Use lightweight tags plus Gi
 ```bash
 git checkout main
 git pull --ff-only origin main
-git tag -a v1.7.1 -m "fusionAIze Gate v1.7.1"
-git push origin v1.7.1
+git tag -a v1.8.0 -m "fusionAIze Gate v1.8.0"
+git push origin v1.8.0
 ```
 
-Then open GitHub Releases and publish a release for `v1.7.1`.
+Then open GitHub Releases and publish a release for `v1.8.0`.
 
 ## Automation Baseline
 
@@ -77,6 +77,7 @@ The repo also includes [publish-dry-run](./.github/workflows/publish-dry-run.yml
 - `v1.6.3` hardens that recovery line: nullish config sections no longer break guided writes, the missing Brew helper wrappers now match the shell UX more closely, and the refreshed three-color wordmark still surfaces the live version inline.
 - `v1.7.0` establishes the internal-drilldown baseline: parameterized client, provider, and dashboard views now open directly inside Gate, and scenario templates explain provider roles and family coverage more explicitly instead of only listing flat recommendation sets.
 - `v1.7.1` is the immediate polish follow-up: the wordmark now renders without accidental spacer gaps in interactive menus, and applying a client scenario cleanly returns control to the caller instead of repainting the same chooser screen.
+- `v1.8.0` establishes the adaptive-lane-routing foundation: canonical model lanes, direct-versus-aggregator route metadata, same-lane-route fallback preference, early runtime pressure adaptation, and richer route explainability now shape both routing decisions and operator visibility.
 
 ## Planned Publishing Path
 

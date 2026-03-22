@@ -1,6 +1,6 @@
 {
   "name": "@faigate/cli",
-  "version": "1.7.1",
+  "version": "1.8.0",
   "description": "Small npm CLI for checking and previewing a fusionAIze Gate gateway.",
   "license": "Apache-2.0",
   "type": "module",

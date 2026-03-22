@@ -4,6 +4,17 @@ All notable changes to fusionAIze Gate should be documented here.
 
 The format is intentionally lightweight and human-readable. Group entries by release and focus on user-visible behavior, operational changes, and compatibility notes.
 
+## v1.8.0 - 2026-03-22
+
+### Changed
+
+- Started the adaptive-orchestration runtime line with canonical model-lane and provider-route metadata in config, wizard, runtime inventory, and provider-catalog surfaces
+- Added the first lane-aware router scoring slice so `quality`, `balanced`, `eco`, and `free` postures now influence candidate ranking through lane cluster, benchmark cluster, route type, and runtime pressure instead of only provider tier
+- Added Same-Lane-Route fallback preference before weaker cluster downgrades when a compatible alternate route exists for the same canonical model
+- Added an in-memory adaptation state for rate-limit, quota, timeout, and latency pressure so hot routes can be demoted conservatively at runtime
+- Persisted routing explainability fields such as `canonical_model`, `route_type`, `lane_cluster`, `selection_path`, and `decision_details` into metrics and route traces
+- Expanded candidate cards, client scenarios, and provider dashboard drilldowns so operators can now see route mirrors, degrade chains, canonical lanes, and runtime penalties directly in Gate
+
 ## v1.7.1 - 2026-03-22
 
 ### Changed
@@ -58,14 +69,6 @@ The format is intentionally lightweight and human-readable. Group entries by rel
 - Expanded client scenarios with clearer `budget`, `best when`, and `tradeoff` guidance so operators can pick templates by intent instead of only by routing-mode names
 - Expanded the new dashboard with budget, quota, and routing-pressure hints so it now helps answer whether traffic should shift, a cheaper scenario is worth trying, or a provider likely needs more budget
 
-## Unreleased
-
-### Changed
-
-- Started the `v1.8.0` lane-foundation line with canonical model-lane and provider-route metadata in the config, wizard, and provider-catalog surfaces, preparing Gate for route-aware aggregator handling and adaptive orchestration
-- Added the first lane-aware router scoring slice so `quality`, `balanced`, `eco`, and `free` postures now influence candidate ranking through canonical lane, cluster, and route-type metadata instead of only provider tier
-- Added the first same-lane-route fallback path so when a primary route becomes unhealthy Gate can preserve the canonical lane before dropping into a weaker cluster when a compatible alternate route exists
-- Carried lane metadata through runtime inventories and dashboard provider drilldowns so operator-facing views can now show canonical lane, route type, and cluster context alongside spend and health
 - Added a dedicated adaptive-orchestration roadmap that sketches the path from lane metadata to scoring, live adaptation, benchmark freshness, and budget-/quota-aware routing through the `v1.10.x` and `v1.11.x` lines
 
 ## v1.5.1 - 2026-03-20
