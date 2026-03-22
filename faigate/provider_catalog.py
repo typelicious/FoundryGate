@@ -8,6 +8,7 @@ from datetime import date
 from typing import Any
 
 from .config import Config
+from .lane_registry import get_canonical_model_catalog, get_provider_lane_binding
 
 _COMMUNITY_WATCHLIST = {
     "label": "free-llm-api-resources",
@@ -258,6 +259,9 @@ def _tracked_item(
     aliases = list(catalog_entry.get("aliases", []))
     reviewed_on = date.fromisoformat(catalog_entry["last_reviewed"])
     age_days = (today - reviewed_on).days
+    lane = dict(provider.get("lane") or get_provider_lane_binding(provider_name))
+    canonical_catalog = get_canonical_model_catalog()
+    canonical_entry = canonical_catalog.get(str(lane.get("canonical_model", "")), {})
     return {
         "provider": provider_name,
         "configured_model": model,
@@ -278,6 +282,16 @@ def _tracked_item(
         "last_reviewed": catalog_entry["last_reviewed"],
         "catalog_age_days": age_days,
         "model_matches_recommendation": model == recommended_model or model in aliases,
+        "canonical_model": lane.get("canonical_model", ""),
+        "lane_family": lane.get("family", ""),
+        "lane_name": lane.get("name", ""),
+        "route_type": lane.get("route_type", ""),
+        "lane_cluster": lane.get("cluster", ""),
+        "benchmark_cluster": lane.get("benchmark_cluster", ""),
+        "preferred_degrades": list(
+            canonical_entry.get("preferred_degrades", lane.get("degrade_to", []))
+        ),
+        "lane": lane,
     }
 
 

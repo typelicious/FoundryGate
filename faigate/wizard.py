@@ -10,6 +10,7 @@ from typing import Any
 import yaml
 from dotenv import dotenv_values
 
+from .lane_registry import get_provider_lane_binding
 from .provider_catalog import get_provider_catalog
 
 ProviderFactory = dict[str, Any]
@@ -532,6 +533,7 @@ def _candidate_row(
     factory = _PROVIDER_FACTORIES[name]
     provider = factory["provider"]
     catalog_entry = catalog.get(name, {})
+    lane = dict(provider.get("lane") or get_provider_lane_binding(name))
     ready_now = bool(env_values.get(factory["env"]))
     already_configured = name in existing
     recommended_now = name in preferred
@@ -563,6 +565,11 @@ def _candidate_row(
         ),
         "discovery_env_var": ((catalog_entry.get("discovery") or {}).get("operator_env_var", "")),
         "notes": catalog_entry.get("notes", ""),
+        "canonical_model": lane.get("canonical_model", ""),
+        "lane_family": lane.get("family", ""),
+        "lane_name": lane.get("name", ""),
+        "route_type": lane.get("route_type", ""),
+        "lane_cluster": lane.get("cluster", ""),
     }
 
 
@@ -842,7 +849,7 @@ def apply_provider_setup(
         if provider_name not in _PROVIDER_FACTORIES:
             raise ValueError(f"Unsupported known provider '{provider_name}'")
         factory = _PROVIDER_FACTORIES[provider_name]
-        providers[provider_name] = _clone(factory["provider"])
+        providers[provider_name] = _provider_payload_with_lane(provider_name)
         added_providers.append(provider_name)
         key_value = str(provider_item.get("env_value", "") or "")
         if key_value:
@@ -866,6 +873,28 @@ def apply_provider_setup(
             "capabilities": {
                 "cost_tier": str(custom_provider.get("cost_tier", "custom") or "custom"),
                 "latency_tier": str(custom_provider.get("latency_tier", "balanced") or "balanced"),
+            },
+            "lane": {
+                "family": str(custom_provider.get("family", "custom") or "custom"),
+                "name": str(custom_provider.get("lane_name", "custom") or "custom"),
+                "canonical_model": str(custom_provider.get("canonical_model", name) or name),
+                "route_type": "direct",
+                "cluster": str(custom_provider.get("cluster", "custom") or "custom"),
+                "benchmark_cluster": str(
+                    custom_provider.get("benchmark_cluster", "custom") or "custom"
+                ),
+                "quality_tier": str(custom_provider.get("quality_tier", "custom") or "custom"),
+                "reasoning_strength": str(
+                    custom_provider.get("reasoning_strength", "custom") or "custom"
+                ),
+                "context_strength": str(
+                    custom_provider.get("context_strength", "custom") or "custom"
+                ),
+                "tool_strength": str(custom_provider.get("tool_strength", "custom") or "custom"),
+                "same_model_group": str(
+                    custom_provider.get("same_model_group", name) or name
+                ),
+                "degrade_to": list(custom_provider.get("degrade_to", []) or []),
             },
         }
         providers[name] = provider_payload
@@ -891,6 +920,24 @@ def apply_provider_setup(
                 "network_zone": "local",
                 "cost_tier": "local",
                 "latency_tier": "local",
+            },
+            "lane": {
+                "family": "local",
+                "name": "local",
+                "canonical_model": str(local_worker.get("canonical_model", name) or name),
+                "route_type": "local",
+                "cluster": "local-worker",
+                "benchmark_cluster": "local-worker",
+                "quality_tier": "local",
+                "reasoning_strength": str(
+                    local_worker.get("reasoning_strength", "custom") or "custom"
+                ),
+                "context_strength": str(
+                    local_worker.get("context_strength", "custom") or "custom"
+                ),
+                "tool_strength": str(local_worker.get("tool_strength", "custom") or "custom"),
+                "same_model_group": str(local_worker.get("same_model_group", name) or name),
+                "degrade_to": list(local_worker.get("degrade_to", []) or []),
             },
         }
         api_env = str(local_worker.get("api_env", "") or "")
@@ -1742,6 +1789,14 @@ def _available_shortcuts(available: list[str]) -> dict[str, dict[str, Any]]:
     return shortcuts
 
 
+def _provider_payload_with_lane(name: str) -> dict[str, Any]:
+    provider = _clone(_PROVIDER_FACTORIES[name]["provider"])
+    lane = get_provider_lane_binding(name)
+    if lane:
+        provider["lane"] = lane
+    return provider
+
+
 def _premium_targets(available: list[str]) -> list[str]:
     return [
         name
@@ -1980,7 +2035,7 @@ def build_initial_config(
         client=client,
         selected_providers=selected_providers,
     )
-    providers = {name: _clone(_PROVIDER_FACTORIES[name]["provider"]) for name in selected}
+    providers = {name: _provider_payload_with_lane(name) for name in selected}
     shortcuts = _available_shortcuts(selected)
     fallback_chain = _preferred_fallback_chain(selected, purpose=purpose)
 

@@ -88,6 +88,8 @@ def test_build_initial_config_adds_modes_shortcuts_and_profile_defaults(tmp_path
     assert "free" in config["routing_modes"]["modes"]
     assert config["model_shortcuts"]["enabled"] is True
     assert config["model_shortcuts"]["shortcuts"]["deepseek-chat"]["target"] == "deepseek-chat"
+    assert config["providers"]["deepseek-chat"]["lane"]["canonical_model"] == "deepseek/chat"
+    assert config["providers"]["kilocode"]["lane"]["route_type"] == "aggregator"
     assert config["client_profiles"]["profiles"]["n8n"]["routing_mode"] == "eco"
     assert config["client_profiles"]["profiles"]["opencode"]["routing_mode"] == "auto"
     assert config["fallback_chain"][0] == "kilocode"

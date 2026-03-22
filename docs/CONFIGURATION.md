@@ -177,8 +177,66 @@ Each provider entry can include:
 - `timeout`
 - `pricing`
 - `image`
+- `lane`
 
 The comments in [`config.yaml`](../config.yaml) are the source of truth for the current schema.
+
+### `provider.lane`
+
+`v1.8.0` starts the lane foundation for adaptive orchestration.
+
+The intent is to separate:
+
+- the canonical model lane Gate wants for a task
+- the execution route used to reach it
+
+Current `lane` fields are:
+
+- `family`
+- `name`
+- `canonical_model`
+- `route_type`
+- `cluster`
+- `benchmark_cluster`
+- `quality_tier`
+- `reasoning_strength`
+- `context_strength`
+- `tool_strength`
+- `same_model_group`
+- `degrade_to`
+
+Example:
+
+```yaml
+providers:
+  anthropic-claude:
+    backend: anthropic-compat
+    base_url: ${ANTHROPIC_BASE_URL:-https://api.anthropic.com/v1}
+    api_key: ${ANTHROPIC_API_KEY}
+    model: claude-opus-4-6
+    lane:
+      family: anthropic
+      name: quality
+      canonical_model: anthropic/opus-4.6
+      route_type: direct
+      cluster: elite-reasoning
+      benchmark_cluster: quality-coding
+      quality_tier: premium
+      reasoning_strength: high
+      context_strength: high
+      tool_strength: medium
+      same_model_group: anthropic/opus-4.6
+      degrade_to:
+        - anthropic/sonnet-4.6
+        - openai/gpt-4o
+```
+
+This does not mean the full adaptive routing line already ships. It means the runtime, wizard, and provider catalog can now carry the vocabulary needed for:
+
+- same-lane aggregator fallback
+- cluster-aware degradation
+- benchmark-aware scoring
+- richer dashboard explanations later
 
 ## OpenClaw-Oriented Baseline
 

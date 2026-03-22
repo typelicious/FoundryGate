@@ -29,6 +29,7 @@ import yaml
 from dotenv import load_dotenv
 
 from .hooks import get_registered_request_hooks
+from .lane_registry import get_provider_lane_binding
 
 _SUPPORTED_BACKENDS = {"openai-compat", "google-genai", "anthropic-compat"}
 _SUPPORTED_PROVIDER_CONTRACTS = {"generic", "local-worker", "image-provider"}
@@ -66,6 +67,21 @@ _CLIENT_PROFILE_MATCH_KEYS = {"header_contains", "header_present", "any", "all"}
 _SUPPORTED_CLIENT_PROFILE_PRESETS = {"openclaw", "n8n", "cli"}
 _SUPPORTED_REQUEST_HOOKS = set(get_registered_request_hooks())
 _SUPPORTED_WINDOW_DAYS = {"mon", "tue", "wed", "thu", "fri", "sat", "sun"}
+_SUPPORTED_PROVIDER_LANE_KEYS = {
+    "family",
+    "name",
+    "canonical_model",
+    "route_type",
+    "cluster",
+    "benchmark_cluster",
+    "quality_tier",
+    "reasoning_strength",
+    "context_strength",
+    "tool_strength",
+    "same_model_group",
+    "degrade_to",
+}
+_SUPPORTED_PROVIDER_ROUTE_TYPES = {"direct", "aggregator", "wallet-router", "local"}
 
 _CLIENT_PROFILE_PRESET_SPECS: dict[str, dict[str, Any]] = {
     "openclaw": {
@@ -395,6 +411,74 @@ def _normalize_provider_image(name: str, cfg: dict[str, Any]) -> dict[str, Any]:
     return image
 
 
+def _normalize_provider_lane(name: str, cfg: dict[str, Any]) -> dict[str, Any]:
+    """Validate optional lane metadata used by adaptive routing."""
+    defaults = get_provider_lane_binding(name)
+    raw = cfg.get("lane", {})
+    if raw in (None, ""):
+        raw = {}
+    if not isinstance(raw, dict):
+        raise ConfigError(f"Provider '{name}' field 'lane' must be a mapping")
+
+    lane = {**defaults, **raw}
+    if not lane:
+        return {}
+
+    unknown = sorted(set(lane) - _SUPPORTED_PROVIDER_LANE_KEYS)
+    if unknown:
+        unknown_list = ", ".join(unknown)
+        raise ConfigError(f"Provider '{name}' lane has unknown keys: {unknown_list}")
+
+    required = ("family", "name", "canonical_model", "route_type")
+    normalized: dict[str, Any] = {}
+    for field_name in required:
+        value = lane.get(field_name, "")
+        if not isinstance(value, str) or not value.strip():
+            raise ConfigError(f"Provider '{name}' lane.{field_name} must be a non-empty string")
+        normalized[field_name] = value.strip()
+
+    if normalized["route_type"] not in _SUPPORTED_PROVIDER_ROUTE_TYPES:
+        supported = ", ".join(sorted(_SUPPORTED_PROVIDER_ROUTE_TYPES))
+        raise ConfigError(
+            f"Provider '{name}' lane.route_type uses unsupported value "
+            f"'{normalized['route_type']}' (supported: {supported})"
+        )
+
+    for field_name in (
+        "cluster",
+        "benchmark_cluster",
+        "quality_tier",
+        "reasoning_strength",
+        "context_strength",
+        "tool_strength",
+        "same_model_group",
+    ):
+        value = lane.get(field_name, "")
+        if value in (None, ""):
+            normalized[field_name] = ""
+            continue
+        if not isinstance(value, str) or not value.strip():
+            raise ConfigError(f"Provider '{name}' lane.{field_name} must be a non-empty string")
+        normalized[field_name] = value.strip()
+
+    degrade_to = lane.get("degrade_to", [])
+    if degrade_to in (None, ""):
+        degrade_to = []
+    if isinstance(degrade_to, str):
+        degrade_to = [degrade_to]
+    if not isinstance(degrade_to, list):
+        raise ConfigError(f"Provider '{name}' lane.degrade_to must be a list")
+    normalized["degrade_to"] = []
+    for item in degrade_to:
+        if not isinstance(item, str) or not item.strip():
+            raise ConfigError(
+                f"Provider '{name}' lane.degrade_to must contain non-empty strings"
+            )
+        normalized["degrade_to"].append(item.strip())
+
+    return normalized
+
+
 def _normalize_provider(name: str, cfg: Any) -> dict[str, Any]:
     """Validate a provider definition and attach normalized capability metadata."""
     if not isinstance(cfg, dict):
@@ -484,6 +568,7 @@ def _normalize_provider(name: str, cfg: Any) -> dict[str, Any]:
     normalized["cache"] = _normalize_provider_cache(name, normalized)
     normalized["image"] = _normalize_provider_image(name, normalized)
     normalized["capabilities"] = _normalize_provider_capabilities(name, normalized)
+    normalized["lane"] = _normalize_provider_lane(name, normalized)
     return normalized
 
 

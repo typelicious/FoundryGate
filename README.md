@@ -316,7 +316,8 @@ Start here for the deeper deployment details:
 - [Security review for `v1.0.0`](./docs/SECURITY-REVIEW-v1.0.0.md)
 - [Publishing](./docs/PUBLISHING.md)
 - [Troubleshooting](./docs/TROUBLESHOOTING.md)
-- [Roadmap](./docs/FOUNDRYGATE-ROADMAP.md)
+- [Adaptive model orchestration](./docs/ADAPTIVE-ORCHESTRATION.md)
+- [Roadmap](./docs/FAIGATE-ROADMAP.md)
 - [Releases](./RELEASES.md)
 
 ## Community And Security

@@ -56,6 +56,14 @@ The hard layers should carry governance, routing intent, and deterministic behav
 
 Before a candidate is accepted, fusionAIze Gate also scores and validates route fit against provider metadata such as context window, input/output token limits, cache hints, locality, health, latency, and recent failure state.
 
+The next architecture step is to separate:
+
+- canonical model lane
+- execution route
+- scenario policy
+
+That line is described in more detail in [Adaptive model orchestration](./ADAPTIVE-ORCHESTRATION.md). The short version is that Gate should increasingly choose the right *lane* first and then the best current *route* to that lane, especially when direct provider quotas and aggregator routes overlap.
+
 ## Provider layer
 
 The provider layer already supports:

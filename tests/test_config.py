@@ -190,6 +190,46 @@ metrics:
     assert cfg.client_profiles["profiles"]["app"]["routing_mode"] == "premium"
 
 
+def test_provider_lane_metadata_is_normalized(tmp_path):
+    path = tmp_path / "config.yaml"
+    path.write_text(
+        """
+server:
+  host: "127.0.0.1"
+  port: 8090
+providers:
+  cloud-default:
+    backend: openai-compat
+    base_url: "https://api.example.com/v1"
+    api_key: "secret"
+    model: "chat-model"
+    lane:
+      family: custom
+      name: workhorse
+      canonical_model: custom/chat-model
+      route_type: direct
+      cluster: balanced-workhorse
+      benchmark_cluster: internal-eval
+      quality_tier: mid
+      reasoning_strength: mid
+      context_strength: mid
+      tool_strength: low
+      same_model_group: custom/chat-model
+      degrade_to: [custom/backup-model]
+fallback_chain: []
+metrics:
+  enabled: false
+""",
+        encoding="utf-8",
+    )
+
+    cfg = load_config(path)
+
+    assert cfg.providers["cloud-default"]["lane"]["canonical_model"] == "custom/chat-model"
+    assert cfg.providers["cloud-default"]["lane"]["route_type"] == "direct"
+    assert cfg.providers["cloud-default"]["lane"]["degrade_to"] == ["custom/backup-model"]
+
+
 def test_client_profile_rejects_unknown_routing_mode(tmp_path):
     path = tmp_path / "config.yaml"
     path.write_text(

@@ -42,6 +42,9 @@ metrics:
     assert report["alert_count"] == 0
     assert report["items"][0]["provider_type"] == "direct"
     assert report["items"][0]["evidence_level"] == "official"
+    assert report["items"][0]["canonical_model"] == "deepseek/chat"
+    assert report["items"][0]["lane_family"] == "deepseek"
+    assert report["items"][0]["route_type"] == "direct"
 
 
 def test_provider_catalog_report_warns_on_model_drift(tmp_path: Path):

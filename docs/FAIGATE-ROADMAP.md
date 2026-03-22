@@ -19,11 +19,47 @@ The foundation that used to be the near-term buildout is largely in place:
 
 This roadmap now shifts from "rename and foundation" to "deepen the gateway plane without bloating it".
 
+The next major product track is now explicit: adaptive model orchestration.
+
+That means the next meaningful line is not just "more providers" or "more UI". It is:
+
+- canonical model lanes
+- route-aware aggregator handling
+- benchmark and cost clusters
+- live adaptation under quota, latency, and failure pressure
+- operator explainability for every major routing decision
+
+The detailed design lives in [Adaptive model orchestration](./ADAPTIVE-ORCHESTRATION.md).
+
 `v1.2.0` is now shipped. The workstation baseline is in place: Linux, macOS, and Windows runtime guidance is documented, macOS helpers now auto-detect `launchd`, and a project-owned Homebrew path exists for packaged macOS installs.
 
 `v1.2.x` also closed the immediate Homebrew/macOS packaging loop. The next active release line should therefore shift to `v1.3.0`: guided setup, catalog-assisted updates, and safer operator ergonomics for many fast-moving providers.
 
 The next block should stay disciplined: build on the workstation baseline, keep packaging practical, and avoid turning fusionAIze Gate into a sprawling platform.
+
+## `v1.8.0` to `v1.11.x`: adaptive model orchestration
+
+Primary goals:
+
+- treat providers, aggregators, and direct routes as execution paths to canonical model lanes rather than as one flat list of alternatives
+- let scenarios such as `quality`, `balanced`, `eco`, and `free` choose the right lane threshold and degradation path instead of only choosing a provider tier
+- preserve same-lane quality when direct quota is exhausted by trying equivalent aggregator routes before dropping to a weaker model cluster
+- keep benchmark and cost assumptions visible, curated, and refreshable so "magical" routing still stays explainable
+
+Release sequence:
+
+1. `v1.8.0`: lane registry, provider lane metadata, and route-aware catalog surfaces
+2. `v1.9.0`: lane-aware router scoring and "why this lane?" traces
+3. `v1.10.0`: live lane adaptation using quota, latency, failure, and fallback pressure
+4. `v1.10.x`: benchmark freshness, cluster-level degradation rules, and stronger budget hints
+5. `v1.11.x`: operator controls, budget rails, and controlled adaptive-routing automation
+
+Non-negotiable guardrails:
+
+- never hide a downgrade from operators
+- prefer same-lane route substitution before weaker-model degradation
+- keep old configs compatible while lane metadata is introduced
+- treat benchmarks and cost heuristics as curated operational inputs, not as magic constants
 
 ## `v1.5.0`: guided control-center UX
 
