@@ -47,18 +47,26 @@ class Faigate < Formula
       faigate-menu
       faigate-dashboard
       faigate-api-keys
+      faigate-auto-update
       faigate-provider-probe
       faigate-provider-setup
       faigate-config-overview
+      faigate-config-wizard
       faigate-client-integrations
       faigate-client-scenarios
+      faigate-logs
+      faigate-restart
       faigate-routing-settings
       faigate-server-settings
+      faigate-start
+      faigate-status
+      faigate-stop
       faigate-doctor
       faigate-health
       faigate-onboarding-report
       faigate-onboarding-validate
       faigate-provider-discovery
+      faigate-update
       faigate-update-check
     ].each do |helper|
       (bin/helper).write <<~SH

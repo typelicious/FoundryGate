@@ -8,13 +8,9 @@ FAIGATE_UI_CYAN=$'\033[36m'
 FAIGATE_UI_GREEN=$'\033[32m'
 FAIGATE_UI_YELLOW=$'\033[33m'
 FAIGATE_UI_RED=$'\033[31m'
-FAIGATE_UI_ORANGE=$'\033[38;5;214m'
-FAIGATE_UI_LIME=$'\033[38;5;190m'
-FAIGATE_UI_GREEN2=$'\033[38;5;82m'
-FAIGATE_UI_CYAN2=$'\033[38;5;45m'
-FAIGATE_UI_BLUE2=$'\033[38;5;39m'
-FAIGATE_UI_MAGENTA2=$'\033[38;5;207m'
-FAIGATE_UI_CORAL=$'\033[38;5;203m'
+FAIGATE_UI_BRAND_BLUE=$'\033[38;2;0;82;204m'
+FAIGATE_UI_BRAND_YELLOW=$'\033[38;2;196;217;0m'
+FAIGATE_UI_BRAND_GREEN=$'\033[38;2;46;167;93m'
 
 faigate_ui_clear() {
   if [ -t 1 ] && command -v clear >/dev/null 2>&1; then
@@ -67,20 +63,17 @@ faigate_ui_logo() {
   local version_text="${1:-}"
   if faigate_ui_has_color; then
     printf "  %b%s%b%b%s%b%b%s%b\n" \
-      "$FAIGATE_UI_ORANGE" "▐▘    ▘    " "$FAIGATE_UI_RESET" \
-      "$FAIGATE_UI_GREEN2" "▄▖▄▖      " "$FAIGATE_UI_RESET" \
-      "$FAIGATE_UI_MAGENTA2" "▄▖  ▗      " "$FAIGATE_UI_RESET"
-    printf "  %b%s%b%b%s%b%b%s%b%b%s%b%b%s%b\n" \
-      "$FAIGATE_UI_ORANGE" "▜▘▌▌▛▘▌▛▌▛▌" "$FAIGATE_UI_RESET" \
-      "$FAIGATE_UI_LIME" "▌▌▐ ▀▌" "$FAIGATE_UI_RESET" \
-      "$FAIGATE_UI_CYAN2" "█▌  ▌ ▀▌" "$FAIGATE_UI_RESET" \
-      "$FAIGATE_UI_MAGENTA2" "▜▘" "$FAIGATE_UI_RESET" \
-      "$FAIGATE_UI_CORAL" "█▌   " "$FAIGATE_UI_RESET"
-    printf "  %b%s%b%b%s%b%b%s%b%b%s%b" \
-      "$FAIGATE_UI_ORANGE" "▐ ▙▌▄▌▌" "$FAIGATE_UI_RESET" \
-      "$FAIGATE_UI_GREEN2" "▙▌▌▌▛▌▟▖▙▖" "$FAIGATE_UI_RESET" \
-      "$FAIGATE_UI_CYAN2" "▙▖  ▙▌█▌" "$FAIGATE_UI_RESET" \
-      "$FAIGATE_UI_CORAL" "▐▖▙▖" "$FAIGATE_UI_RESET"
+      "$FAIGATE_UI_BRAND_BLUE" "▐▘    ▘    " "$FAIGATE_UI_RESET" \
+      "$FAIGATE_UI_BRAND_YELLOW" "▄▖▄▖      " "$FAIGATE_UI_RESET" \
+      "$FAIGATE_UI_BRAND_GREEN" "▄▖  ▗      " "$FAIGATE_UI_RESET"
+    printf "  %b%s%b%b%s%b%b%s%b\n" \
+      "$FAIGATE_UI_BRAND_BLUE" "▜▘▌▌▛▘▌▛▌▛▌" "$FAIGATE_UI_RESET" \
+      "$FAIGATE_UI_BRAND_YELLOW" "▌▌▐ ▀▌" "$FAIGATE_UI_RESET" \
+      "$FAIGATE_UI_BRAND_GREEN" "█▌  ▌ ▀▌▜▘█▌   " "$FAIGATE_UI_RESET"
+    printf "  %b%s%b%b%s%b%b%s%b" \
+      "$FAIGATE_UI_BRAND_BLUE" "▐ ▙▌▄▌▌" "$FAIGATE_UI_RESET" \
+      "$FAIGATE_UI_BRAND_YELLOW" "▙▌▌▌▛▌" "$FAIGATE_UI_RESET" \
+      "$FAIGATE_UI_BRAND_GREEN" "▟▖▙▖▙▖  ▙▌█▌▐▖▙▖  " "$FAIGATE_UI_RESET"
     if [ -n "$version_text" ]; then
       printf "  %b%s%b" "$FAIGATE_UI_DIM" "$version_text" "$FAIGATE_UI_RESET"
     fi

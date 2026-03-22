@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import stat
 import subprocess
 import sys
@@ -12,13 +13,31 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 EXECUTABLE_HELPERS = [
+    "scripts/faigate-auto-update",
     "scripts/faigate-client-integrations",
     "scripts/faigate-config-overview",
     "scripts/faigate-config-wizard",
     "scripts/faigate-dashboard",
+    "scripts/faigate-logs",
     "scripts/faigate-onboarding-report",
     "scripts/faigate-onboarding-validate",
     "scripts/faigate-provider-discovery",
+    "scripts/faigate-restart",
+    "scripts/faigate-start",
+    "scripts/faigate-status",
+    "scripts/faigate-stop",
+    "scripts/faigate-update",
+]
+
+EXPECTED_BREW_HELPERS = [
+    "faigate-config-wizard",
+    "faigate-status",
+    "faigate-restart",
+    "faigate-logs",
+    "faigate-start",
+    "faigate-stop",
+    "faigate-update",
+    "faigate-auto-update",
 ]
 
 
@@ -64,6 +83,39 @@ def test_packaged_helper_scripts_keep_execute_bit():
     for helper in EXECUTABLE_HELPERS:
         mode = (REPO_ROOT / helper).stat().st_mode
         assert mode & stat.S_IXUSR, helper
+
+
+def test_homebrew_formula_wraps_expected_user_facing_helpers():
+    formula = (REPO_ROOT / "Formula" / "faigate.rb").read_text(encoding="utf-8")
+    match = re.search(r"%w\[(.*?)\]\.each", formula, re.S)
+    assert match is not None
+    helpers = match.group(1).split()
+
+    for helper in EXPECTED_BREW_HELPERS:
+        assert helper in helpers, helper
+
+
+def test_faigate_ui_logo_plaintext_includes_version_and_expected_shape():
+    env = os.environ.copy()
+    env["NO_COLOR"] = "1"
+    env["FAIGATE_UI_VERSION"] = "v1.6.3"
+    result = subprocess.run(
+        [
+            "bash",
+            "-lc",
+            "source scripts/faigate-ui-lib.sh && faigate_ui_logo \"$(faigate_ui_version)\"",
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert "▐▘    ▘    ▄▖▄▖      ▄▖  ▗" in result.stdout
+    assert "▜▘▌▌▛▘▌▛▌▛▌▌▌▐ ▀▌█▌  ▌ ▀▌▜▘█▌" in result.stdout
+    assert "▐ ▙▌▄▌▌▙▌▌▌▛▌▟▖▙▖▙▖  ▙▌█▌▐▖▙▖" in result.stdout
+    assert "v1.6.3" in result.stdout
 
 
 def test_faigate_menu_quit_renders_snapshot_and_tip(tmp_path: Path):

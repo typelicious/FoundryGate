@@ -5,6 +5,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import yaml
+
 from faigate.wizard import (
     apply_client_scenario,
     apply_provider_setup,
@@ -679,6 +681,93 @@ fallback_chain:
     assert "openrouter-fallback:" in written
     assert "openrouter/auto" in written
     assert len(backups) == 1
+
+
+def test_config_wizard_write_handles_nullish_existing_sections(tmp_path: Path):
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "\n".join(
+            [
+                "DEEPSEEK_API_KEY=test-deepseek",
+                "OPENROUTER_API_KEY=test-openrouter",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        """
+server:
+  host: "127.0.0.1"
+  port: 8090
+providers:
+  deepseek-chat:
+    backend: openai-compat
+    base_url: "https://api.deepseek.com/v1"
+    api_key: "${DEEPSEEK_API_KEY}"
+    model: "deepseek-chat"
+fallback_chain: null
+routing_modes:
+  enabled: true
+  default: auto
+  modes: null
+model_shortcuts:
+  enabled: true
+  shortcuts: null
+client_profiles:
+  enabled: true
+  default: generic
+  presets: null
+  profiles:
+    generic: {}
+  rules: null
+routing_policies:
+  enabled: true
+  rules: null
+request_hooks:
+  enabled: true
+  on_error: continue
+  hooks: null
+""",
+        encoding="utf-8",
+    )
+    env = os.environ.copy()
+    env["FAIGATE_PYTHON"] = sys.executable
+
+    subprocess.run(
+        [
+            "bash",
+            "scripts/faigate-config-wizard",
+            "--env-file",
+            str(env_file),
+            "--purpose",
+            "free",
+            "--client",
+            "cli",
+            "--current-config",
+            str(config_path),
+            "--apply",
+            "recommended_add,recommended_replace,recommended_mode_changes",
+            "--write",
+            str(config_path),
+        ],
+        cwd=Path(__file__).resolve().parents[1],
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    written = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+
+    assert isinstance(written["fallback_chain"], list)
+    assert isinstance(written["routing_modes"]["modes"], dict)
+    assert isinstance(written["model_shortcuts"]["shortcuts"], dict)
+    assert isinstance(written["client_profiles"]["presets"], list)
+    assert isinstance(written["client_profiles"]["rules"], list)
+    assert isinstance(written["routing_policies"]["rules"], list)
+    assert isinstance(written["request_hooks"]["hooks"], list)
 
 
 def test_build_config_change_summary_reports_added_replaced_and_mode_changes(tmp_path: Path):

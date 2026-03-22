@@ -1622,6 +1622,14 @@ def _merge_mapping(existing: dict[str, Any], incoming: dict[str, Any]) -> dict[s
     return merged
 
 
+def _mapping_or_empty(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _list_or_empty(value: Any) -> list[Any]:
+    return value if isinstance(value, list) else []
+
+
 def merge_initial_config(
     *,
     config_path: str | Path,
@@ -1636,17 +1644,21 @@ def merge_initial_config(
 
     merged = _clone(existing)
     for section in ("server", "security", "provider_catalog_check", "update_check", "auto_update"):
-        merged[section] = _merge_mapping(merged.get(section, {}), suggestion.get(section, {}))
+        merged[section] = _merge_mapping(
+            _mapping_or_empty(merged.get(section)),
+            _mapping_or_empty(suggestion.get(section)),
+        )
 
-    merged["providers"] = dict(merged.get("providers", {}))
-    merged["providers"].update(_clone(suggestion.get("providers", {})))
+    merged["providers"] = dict(_mapping_or_empty(merged.get("providers")))
+    merged["providers"].update(_clone(_mapping_or_empty(suggestion.get("providers"))))
 
     merged["fallback_chain"] = _unique_preserve_order(
-        list(merged.get("fallback_chain", [])) + list(suggestion.get("fallback_chain", []))
+        list(_list_or_empty(merged.get("fallback_chain")))
+        + list(_list_or_empty(suggestion.get("fallback_chain")))
     )
 
-    existing_modes = merged.get("routing_modes", {})
-    suggested_modes = suggestion.get("routing_modes", {})
+    existing_modes = _mapping_or_empty(merged.get("routing_modes"))
+    suggested_modes = _mapping_or_empty(suggestion.get("routing_modes"))
     existing_modes["enabled"] = bool(
         existing_modes.get("enabled", suggested_modes.get("enabled", True))
     )
@@ -1655,24 +1667,24 @@ def merge_initial_config(
         suggested_modes.get("default", "auto"),
     )
     existing_modes["modes"] = _merge_mapping(
-        existing_modes.get("modes", {}),
-        suggested_modes.get("modes", {}),
+        _mapping_or_empty(existing_modes.get("modes")),
+        _mapping_or_empty(suggested_modes.get("modes")),
     )
     merged["routing_modes"] = existing_modes
 
-    existing_shortcuts = merged.get("model_shortcuts", {})
-    suggested_shortcuts = suggestion.get("model_shortcuts", {})
+    existing_shortcuts = _mapping_or_empty(merged.get("model_shortcuts"))
+    suggested_shortcuts = _mapping_or_empty(suggestion.get("model_shortcuts"))
     existing_shortcuts["enabled"] = bool(
         existing_shortcuts.get("enabled", suggested_shortcuts.get("enabled", True))
     )
     existing_shortcuts["shortcuts"] = _merge_mapping(
-        existing_shortcuts.get("shortcuts", {}),
-        suggested_shortcuts.get("shortcuts", {}),
+        _mapping_or_empty(existing_shortcuts.get("shortcuts")),
+        _mapping_or_empty(suggested_shortcuts.get("shortcuts")),
     )
     merged["model_shortcuts"] = existing_shortcuts
 
-    existing_profiles = merged.get("client_profiles", {})
-    suggested_profiles = suggestion.get("client_profiles", {})
+    existing_profiles = _mapping_or_empty(merged.get("client_profiles"))
+    suggested_profiles = _mapping_or_empty(suggestion.get("client_profiles"))
     existing_profiles["enabled"] = bool(
         existing_profiles.get("enabled", suggested_profiles.get("enabled", True))
     )
@@ -1680,31 +1692,47 @@ def merge_initial_config(
         "default", suggested_profiles.get("default", "generic")
     )
     existing_profiles["presets"] = _unique_preserve_order(
-        list(existing_profiles.get("presets", [])) + list(suggested_profiles.get("presets", []))
+        list(_list_or_empty(existing_profiles.get("presets")))
+        + list(_list_or_empty(suggested_profiles.get("presets")))
     )
-    profiles = dict(existing_profiles.get("profiles", {}))
-    for name, profile in suggested_profiles.get("profiles", {}).items():
-        profiles[name] = _merge_mapping(profiles.get(name, {}), profile)
+    profiles = dict(_mapping_or_empty(existing_profiles.get("profiles")))
+    for name, profile in _mapping_or_empty(suggested_profiles.get("profiles")).items():
+        profiles[name] = _merge_mapping(
+            _mapping_or_empty(profiles.get(name)),
+            _mapping_or_empty(profile),
+        )
     existing_profiles["profiles"] = profiles
-    rules_by_profile = {rule.get("profile"): rule for rule in existing_profiles.get("rules", [])}
-    for rule in suggested_profiles.get("rules", []):
+    rules_by_profile = {
+        rule.get("profile"): rule
+        for rule in _list_or_empty(existing_profiles.get("rules"))
+        if isinstance(rule, dict)
+    }
+    for rule in _list_or_empty(suggested_profiles.get("rules")):
+        if not isinstance(rule, dict):
+            continue
         rules_by_profile.setdefault(rule.get("profile"), _clone(rule))
     existing_profiles["rules"] = list(rules_by_profile.values())
     merged["client_profiles"] = existing_profiles
 
-    existing_policies = merged.get("routing_policies", {})
-    suggested_policies = suggestion.get("routing_policies", {})
+    existing_policies = _mapping_or_empty(merged.get("routing_policies"))
+    suggested_policies = _mapping_or_empty(suggestion.get("routing_policies"))
     existing_policies["enabled"] = bool(
         existing_policies.get("enabled", suggested_policies.get("enabled", True))
     )
-    rules_by_name = {rule.get("name"): rule for rule in existing_policies.get("rules", [])}
-    for rule in suggested_policies.get("rules", []):
+    rules_by_name = {
+        rule.get("name"): rule
+        for rule in _list_or_empty(existing_policies.get("rules"))
+        if isinstance(rule, dict)
+    }
+    for rule in _list_or_empty(suggested_policies.get("rules")):
+        if not isinstance(rule, dict):
+            continue
         rules_by_name.setdefault(rule.get("name"), _clone(rule))
     existing_policies["rules"] = list(rules_by_name.values())
     merged["routing_policies"] = existing_policies
 
-    existing_hooks = merged.get("request_hooks", {})
-    suggested_hooks = suggestion.get("request_hooks", {})
+    existing_hooks = _mapping_or_empty(merged.get("request_hooks"))
+    suggested_hooks = _mapping_or_empty(suggestion.get("request_hooks"))
     existing_hooks["enabled"] = bool(
         existing_hooks.get("enabled", suggested_hooks.get("enabled", True))
     )
@@ -1712,7 +1740,8 @@ def merge_initial_config(
         "on_error", suggested_hooks.get("on_error", "continue")
     )
     existing_hooks["hooks"] = _unique_preserve_order(
-        list(existing_hooks.get("hooks", [])) + list(suggested_hooks.get("hooks", []))
+        list(_list_or_empty(existing_hooks.get("hooks")))
+        + list(_list_or_empty(suggested_hooks.get("hooks")))
     )
     merged["request_hooks"] = existing_hooks
     return merged
