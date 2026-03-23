@@ -400,6 +400,9 @@ def _provider_request_readiness(provider: Any) -> dict[str, Any]:
     runtime_state = _provider_runtime_state_snapshot().get(getattr(provider, "name", ""), {})
     runtime_penalty = int(runtime_state.get("penalty", 0) or 0)
     runtime_issue_type = str(runtime_state.get("last_issue_type") or "")
+    runtime_window_state = str(runtime_state.get("window_state") or "clear")
+    runtime_cooldown_remaining = int(runtime_state.get("cooldown_remaining_s", 0) or 0)
+    runtime_degraded_remaining = int(runtime_state.get("degraded_remaining_s", 0) or 0)
 
     if hasattr(provider, "request_readiness"):
         state = dict(provider.request_readiness() or {})
@@ -415,8 +418,39 @@ def _provider_request_readiness(provider: Any) -> dict[str, Any]:
     state["runtime_penalty"] = runtime_penalty
     state["runtime_issue_type"] = runtime_issue_type
     state["runtime_cooldown_active"] = False
+    state["runtime_window_state"] = runtime_window_state
+    state["runtime_cooldown_remaining_s"] = runtime_cooldown_remaining
+    state["runtime_degraded_remaining_s"] = runtime_degraded_remaining
+    state["runtime_cooldown_until"] = float(runtime_state.get("cooldown_until", 0.0) or 0.0)
+    state["runtime_degraded_until"] = float(runtime_state.get("degraded_until", 0.0) or 0.0)
 
-    if runtime_penalty >= 20 and runtime_issue_type in {
+    if runtime_window_state == "cooldown" and runtime_issue_type in {
+        "auth-invalid",
+        "endpoint-mismatch",
+        "model-unavailable",
+        "quota-exhausted",
+        "rate-limited",
+    }:
+        state["ready"] = False
+        state["status"] = runtime_issue_type
+        state["reason"] = (
+            "route is in runtime cooldown for another "
+            f"{runtime_cooldown_remaining}s after recent {runtime_issue_type.replace('-', ' ')} failures"
+        )
+        state["runtime_cooldown_active"] = True
+        state["operator_hint"] = (
+            "keep this route out of primary traffic until the cooldown pressure drops"
+        )
+    elif runtime_window_state == "degraded" and runtime_issue_type and bool(state.get("ready")):
+        state["status"] = "ready-degraded"
+        state["reason"] = (
+            "route is still request-ready but operating under recent "
+            f"{runtime_issue_type.replace('-', ' ')} pressure for another {runtime_degraded_remaining}s"
+        )
+        state["operator_hint"] = (
+            "prefer lower-pressure siblings while this route recovers"
+        )
+    elif runtime_penalty >= 20 and runtime_issue_type in {
         "quota-exhausted",
         "rate-limited",
         "model-unavailable",

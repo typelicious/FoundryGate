@@ -870,6 +870,12 @@ def _render_provider_detail(report: dict[str, Any], provider_name: str) -> str:
                 f"Last issue type   {runtime_state.get('last_issue_type') or 'n/a'}",
             ]
         )
+        if runtime_state.get("window_state") and runtime_state.get("window_state") != "clear":
+            lines.append(f"Runtime window    {runtime_state.get('window_state')}")
+        if runtime_state.get("cooldown_remaining_s"):
+            lines.append(f"Cooldown left     {_safe_int(runtime_state.get('cooldown_remaining_s'))}s")
+        if runtime_state.get("degraded_remaining_s"):
+            lines.append(f"Degraded left     {_safe_int(runtime_state.get('degraded_remaining_s'))}s")
     if provider in unhealthy:
         lines.append(f"Live issue        {unhealthy[provider]['detail']}")
     if provider_routing_paths:

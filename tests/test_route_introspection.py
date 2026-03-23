@@ -776,9 +776,46 @@ class TestProviderCoverage:
         assert readiness["status"] == "rate-limited"
         assert readiness["runtime_penalty"] >= 20
         assert readiness["runtime_cooldown_active"] is True
+        assert readiness["runtime_window_state"] == "cooldown"
+        assert readiness["runtime_cooldown_remaining_s"] > 0
         assert readiness["operator_hint"] == (
             "keep this route out of primary traffic until the cooldown pressure drops"
         )
+
+    @pytest.mark.asyncio
+    async def test_health_request_readiness_marks_timeout_routes_as_degraded(
+        self, preview_config
+    ):
+        main_module._adaptive_state.record_failure(
+            "cloud-default",
+            error="Timeout: upstream timed out",
+        )
+
+        response = await health()
+
+        readiness = response["providers"]["cloud-default"]["request_readiness"]
+        assert readiness["ready"] is True
+        assert readiness["status"] == "ready-degraded"
+        assert readiness["runtime_window_state"] == "degraded"
+        assert readiness["runtime_degraded_remaining_s"] > 0
+        assert (
+            readiness["operator_hint"]
+            == "prefer lower-pressure siblings while this route recovers"
+        )
+
+    @pytest.mark.asyncio
+    async def test_health_request_readiness_blocks_auth_invalid_routes_immediately(
+        self, preview_config
+    ):
+        main_module._adaptive_state.record_failure("cloud-default", error="401 invalid api key")
+
+        response = await health()
+
+        readiness = response["providers"]["cloud-default"]["request_readiness"]
+        assert readiness["ready"] is False
+        assert readiness["status"] == "auth-invalid"
+        assert readiness["runtime_window_state"] == "cooldown"
+        assert readiness["runtime_cooldown_active"] is True
 
     @pytest.mark.asyncio
     async def test_provider_inventory_filters_by_capability(self, preview_config):

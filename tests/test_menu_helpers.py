@@ -412,6 +412,9 @@ providers:
                                 "runtime_penalty": 0,
                                 "runtime_issue_type": "",
                                 "runtime_cooldown_active": False,
+                                "runtime_window_state": "clear",
+                                "runtime_cooldown_remaining_s": 0,
+                                "runtime_degraded_remaining_s": 0,
                             },
                         }
                     },
@@ -442,6 +445,84 @@ providers:
     assert "[openai-compatible | native | confidence=high]" in result.stdout
     assert "request-ready payload: deepseek-chat -> openai-chat-minimal" in result.stdout
     assert "request-ready next step: deepseek-chat -> route can carry live traffic" in result.stdout
+
+
+def test_faigate_doctor_reports_runtime_cooldown_windows(tmp_path: Path):
+    config_file = tmp_path / "config.yaml"
+    env_file = tmp_path / "faigate.env"
+    config_file.write_text("server: {}\nproviders: {}\n", encoding="utf-8")
+    env_file.write_text("", encoding="utf-8")
+
+    fake_bin = _write_fake_curl(
+        tmp_path,
+        {
+            "/health": json.dumps(
+                {
+                    "status": "ok",
+                    "summary": {
+                        "providers_total": 1,
+                        "providers_healthy": 1,
+                        "providers_unhealthy": 0,
+                    },
+                    "request_readiness": {
+                        "providers_total": 1,
+                        "providers_ready": 0,
+                        "providers_not_ready": 1,
+                    },
+                    "providers": {
+                        "deepseek-chat": {
+                            "healthy": True,
+                            "request_readiness": {
+                                "ready": False,
+                                "status": "rate-limited",
+                                "reason": (
+                                    "route is in runtime cooldown for another 120s "
+                                    "after recent rate limited failures"
+                                ),
+                                "profile": "openai-compatible",
+                                "compatibility": "native",
+                                "probe_confidence": "high",
+                                "probe_payload": "openai-chat-minimal | user='ping' | max_tokens=1",
+                                "operator_hint": (
+                                    "keep this route out of primary traffic until "
+                                    "the cooldown pressure drops"
+                                ),
+                                "runtime_penalty": 24,
+                                "runtime_issue_type": "rate-limited",
+                                "runtime_cooldown_active": True,
+                                "runtime_window_state": "cooldown",
+                                "runtime_cooldown_remaining_s": 120,
+                                "runtime_degraded_remaining_s": 0,
+                            },
+                        }
+                    },
+                }
+            ),
+            "/v1/models": json.dumps({"data": []}),
+        },
+    )
+
+    env = os.environ.copy()
+    env["PATH"] = f"{fake_bin}:{env['PATH']}"
+    env["FAIGATE_CONFIG_FILE"] = str(config_file)
+    env["FAIGATE_ENV_FILE"] = str(env_file)
+    env["FAIGATE_PYTHON"] = sys.executable
+    env["PYTHONPATH"] = str(REPO_ROOT)
+
+    result = subprocess.run(
+        ["bash", "scripts/faigate-doctor"],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    assert "request-ready: deepseek-chat -> rate-limited" in result.stdout
+    assert (
+        "request-ready runtime: deepseek-chat -> penalty=24 | issue=rate-limited "
+        "| cooldown active | cooldown 120s left" in result.stdout
+    )
 
 
 def test_faigate_service_lib_detects_homebrew_runtime_paths(tmp_path: Path):

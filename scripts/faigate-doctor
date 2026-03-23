@@ -155,6 +155,9 @@ if health_raw:
         runtime_penalty = int(request_readiness.get("runtime_penalty") or 0)
         runtime_issue_type = str(request_readiness.get("runtime_issue_type") or "")
         cooldown_active = bool(request_readiness.get("runtime_cooldown_active"))
+        runtime_window_state = str(request_readiness.get("runtime_window_state") or "clear")
+        runtime_cooldown_remaining = int(request_readiness.get("runtime_cooldown_remaining_s") or 0)
+        runtime_degraded_remaining = int(request_readiness.get("runtime_degraded_remaining_s") or 0)
         profile_bits = []
         if profile:
             profile_bits.append(profile)
@@ -176,9 +179,14 @@ if health_raw:
             print(f"[ok] request-ready next step: {provider_name} -> {operator_hint}")
         if runtime_penalty or runtime_issue_type:
             cooldown_suffix = " | cooldown active" if cooldown_active else ""
+            window_suffix = ""
+            if runtime_window_state == "cooldown" and runtime_cooldown_remaining:
+                window_suffix = f" | cooldown {runtime_cooldown_remaining}s left"
+            elif runtime_window_state == "degraded" and runtime_degraded_remaining:
+                window_suffix = f" | degraded {runtime_degraded_remaining}s left"
             print(
                 f"[ok] request-ready runtime: {provider_name} -> penalty={runtime_penalty}"
-                f" | issue={runtime_issue_type or 'n/a'}{cooldown_suffix}"
+                f" | issue={runtime_issue_type or 'n/a'}{cooldown_suffix}{window_suffix}"
             )
     if total:
         print(f"[ok] request readiness summary: {ready}/{total} provider routes look request-ready")
