@@ -11,6 +11,8 @@ from typing import Any
 
 import httpx
 
+from .lane_registry import get_provider_transport_binding
+
 logger = logging.getLogger("faigate.providers")
 _UNRESOLVED_ENV_RE = re.compile(r"\$\{[^}]+}")
 
@@ -78,7 +80,14 @@ class ProviderBackend:
         self.cache = dict(cfg.get("cache", {}))
         self.image = dict(cfg.get("image", {}))
         self.lane = dict(cfg.get("lane", {}))
-        self.transport = dict(cfg.get("transport", {}))
+        self.transport = {
+            **get_provider_transport_binding(
+                name,
+                backend=self.backend_type,
+                contract=self.contract,
+            ),
+            **dict(cfg.get("transport", {})),
+        }
         self.health = ProviderHealth(name=name)
 
         self._client = httpx.AsyncClient(
@@ -141,6 +150,10 @@ class ProviderBackend:
         """Return operator-facing request-readiness for one configured route."""
         requires_api_key = bool(self.transport.get("requires_api_key", True))
         probe_strategy = str(self.transport.get("probe_strategy", "models") or "models")
+        compatibility = str(self.transport.get("compatibility", "native") or "native")
+        profile = str(self.transport.get("profile", "") or "")
+        probe_confidence = str(self.transport.get("probe_confidence", "medium") or "medium")
+        notes = list(self.transport.get("notes", []) or [])
 
         if requires_api_key and not self.api_key:
             return {
@@ -148,6 +161,10 @@ class ProviderBackend:
                 "status": "missing-key",
                 "reason": "provider is configured without an API key",
                 "probe_strategy": probe_strategy,
+                "compatibility": compatibility,
+                "profile": profile,
+                "probe_confidence": probe_confidence,
+                "notes": notes,
             }
         if requires_api_key and _UNRESOLVED_ENV_RE.search(self.api_key or ""):
             return {
@@ -155,6 +172,10 @@ class ProviderBackend:
                 "status": "unresolved-key",
                 "reason": "provider still carries an unresolved ${ENV_VAR} placeholder",
                 "probe_strategy": probe_strategy,
+                "compatibility": compatibility,
+                "profile": profile,
+                "probe_confidence": probe_confidence,
+                "notes": notes,
             }
         if self.health.last_error:
             status, reason = self._classify_request_readiness_issue(self.health.last_error)
@@ -164,12 +185,34 @@ class ProviderBackend:
                 "status": "ready" if recovered else status,
                 "reason": "route responded successfully" if recovered else reason,
                 "probe_strategy": probe_strategy,
+                "compatibility": compatibility,
+                "profile": profile,
+                "probe_confidence": probe_confidence,
+                "notes": notes,
+            }
+        if compatibility != "native" and probe_confidence != "high":
+            return {
+                "ready": True,
+                "status": "ready-compat",
+                "reason": (
+                    "route looks request-ready, but this transport profile is still based on "
+                    f"{probe_confidence}-confidence compatibility assumptions"
+                ),
+                "probe_strategy": probe_strategy,
+                "compatibility": compatibility,
+                "profile": profile,
+                "probe_confidence": probe_confidence,
+                "notes": notes,
             }
         return {
             "ready": True,
             "status": "ready",
             "reason": "route looks request-ready from config and recent runtime state",
             "probe_strategy": probe_strategy,
+            "compatibility": compatibility,
+            "profile": profile,
+            "probe_confidence": probe_confidence,
+            "notes": notes,
         }
 
     async def probe_health(self, timeout_seconds: float = 10.0) -> bool:

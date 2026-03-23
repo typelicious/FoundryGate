@@ -347,6 +347,9 @@ _PROVIDER_LANE_BINDINGS: dict[str, dict[str, Any]] = {
 
 _DEFAULT_TRANSPORT_BY_BACKEND: dict[str, dict[str, Any]] = {
     "openai-compat": {
+        "profile": "openai-compatible",
+        "compatibility": "native",
+        "probe_confidence": "high",
         "auth_mode": "bearer",
         "probe_strategy": "models",
         "models_path": "/models",
@@ -355,8 +358,12 @@ _DEFAULT_TRANSPORT_BY_BACKEND: dict[str, dict[str, Any]] = {
         "image_edit_path": "/images/edits",
         "requires_api_key": True,
         "supports_models_probe": True,
+        "notes": [],
     },
     "anthropic-compat": {
+        "profile": "anthropic-compatible",
+        "compatibility": "native",
+        "probe_confidence": "high",
         "auth_mode": "bearer",
         "probe_strategy": "models",
         "models_path": "/models",
@@ -365,8 +372,12 @@ _DEFAULT_TRANSPORT_BY_BACKEND: dict[str, dict[str, Any]] = {
         "image_edit_path": "/images/edits",
         "requires_api_key": True,
         "supports_models_probe": True,
+        "notes": [],
     },
     "google-genai": {
+        "profile": "google-genai",
+        "compatibility": "native",
+        "probe_confidence": "medium",
         "auth_mode": "query",
         "probe_strategy": "none",
         "models_path": "",
@@ -375,27 +386,49 @@ _DEFAULT_TRANSPORT_BY_BACKEND: dict[str, dict[str, Any]] = {
         "image_edit_path": "",
         "requires_api_key": True,
         "supports_models_probe": False,
+        "notes": ["genai backend uses generateContent instead of OpenAI-compatible chat paths"],
     },
 }
 
 _PROVIDER_TRANSPORT_BINDINGS: dict[str, dict[str, Any]] = {
     "openrouter-fallback": {
+        "profile": "openrouter-openai-compat",
+        "compatibility": "aggregator",
+        "probe_confidence": "high",
         "auth_mode": "bearer",
         "probe_strategy": "models",
         "models_path": "/models",
         "chat_path": "/chat/completions",
+        "notes": [
+            "requires HTTP-Referer and X-Title headers for best marketplace attribution",
+            "route remains OpenAI-compatible but upstream model selection is marketplace-managed",
+        ],
     },
     "kilocode": {
+        "profile": "kilo-openai-compat",
+        "compatibility": "aggregator",
+        "probe_confidence": "medium",
         "auth_mode": "bearer",
         "probe_strategy": "models",
         "models_path": "/models",
         "chat_path": "/chat/completions",
+        "notes": [
+            "aggregator route uses OpenAI-compatible chat paths with medium evidence",
+            "free-tier model availability and path behavior should be revalidated regularly",
+        ],
     },
     "blackbox-free": {
+        "profile": "blackbox-openai-compat",
+        "compatibility": "aggregator",
+        "probe_confidence": "medium",
         "auth_mode": "bearer",
         "probe_strategy": "models",
         "models_path": "/models",
         "chat_path": "/chat/completions",
+        "notes": [
+            "aggregator route uses OpenAI-compatible chat paths with mixed evidence",
+            "free-tier route volatility is high; auth and model availability can shift quickly",
+        ],
     },
 }
 

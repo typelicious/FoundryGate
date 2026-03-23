@@ -146,11 +146,22 @@ if health_raw:
             continue
         status = str(request_readiness.get("status") or "unknown")
         reason = str(request_readiness.get("reason") or "no request-readiness detail")
+        profile = str(request_readiness.get("profile") or "")
+        compatibility = str(request_readiness.get("compatibility") or "")
+        confidence = str(request_readiness.get("probe_confidence") or "")
+        profile_bits = []
+        if profile:
+            profile_bits.append(profile)
+        if compatibility:
+            profile_bits.append(compatibility)
+        if confidence:
+            profile_bits.append(f"confidence={confidence}")
+        profile_suffix = f" [{' | '.join(profile_bits)}]" if profile_bits else ""
         if request_readiness.get("ready"):
             ready += 1
-            print(f"[ok] request-ready: {provider_name} -> {status} ({reason})")
+            print(f"[ok] request-ready: {provider_name} -> {status}{profile_suffix} ({reason})")
         else:
-            print(f"[warn] request-ready: {provider_name} -> {status} ({reason})")
+            print(f"[warn] request-ready: {provider_name} -> {status}{profile_suffix} ({reason})")
     if total:
         print(f"[ok] request readiness summary: {ready}/{total} provider routes look request-ready")
 PY

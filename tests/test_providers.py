@@ -193,6 +193,40 @@ class TestProviderHealthProbes:
 
         assert readiness["ready"] is False
         assert readiness["status"] == "unresolved-key"
+        assert readiness["profile"] == "openai-compatible"
+
+    @pytest.mark.asyncio
+    async def test_aggregator_request_readiness_reports_compatibility_profile(self):
+        backend = ProviderBackend(
+            "kilocode",
+            {
+                "backend": "openai-compat",
+                "base_url": "https://api.kilo.example/v1",
+                "api_key": "secret",
+                "model": "glm-5-free",
+                "transport": {
+                    "profile": "kilo-openai-compat",
+                    "compatibility": "aggregator",
+                    "probe_confidence": "medium",
+                    "auth_mode": "bearer",
+                    "probe_strategy": "models",
+                    "models_path": "/models",
+                    "chat_path": "/chat/completions",
+                    "image_generation_path": "/images/generations",
+                    "image_edit_path": "/images/edits",
+                    "requires_api_key": True,
+                    "supports_models_probe": True,
+                    "notes": ["aggregator route uses compatibility assumptions"],
+                },
+            },
+        )
+
+        readiness = backend.request_readiness()
+
+        assert readiness["ready"] is True
+        assert readiness["status"] == "ready-compat"
+        assert readiness["compatibility"] == "aggregator"
+        assert readiness["probe_confidence"] == "medium"
 
     @pytest.mark.asyncio
     async def test_assistant_none_content_converted_to_empty_string(self):

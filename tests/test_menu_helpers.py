@@ -12,6 +12,10 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 _READY_REASON = "route looks request-ready from config and recent runtime state"
+_READY_COMPAT_REASON = (
+    "route looks request-ready, but this transport profile is still based on "
+    "medium-confidence compatibility assumptions"
+)
 
 EXECUTABLE_HELPERS = [
     "scripts/faigate-auto-update",
@@ -400,6 +404,9 @@ providers:
                                 "ready": True,
                                 "status": "ready",
                                 "reason": _READY_REASON,
+                                "profile": "openai-compatible",
+                                "compatibility": "native",
+                                "probe_confidence": "high",
                             },
                         }
                     },
@@ -427,6 +434,7 @@ providers:
 
     assert "request-ready: deepseek-chat -> ready" in result.stdout
     assert "request readiness summary: 1/1 provider routes look request-ready" in result.stdout
+    assert "[openai-compatible | native | confidence=high]" in result.stdout
 
 
 def test_faigate_service_lib_detects_homebrew_runtime_paths(tmp_path: Path):
@@ -1283,22 +1291,24 @@ def test_faigate_dashboard_overview_summarizes_live_stats(tmp_path: Path):
                             },
                         },
                         "gemini-flash": {
-                            "healthy": True,
+                            "healthy": False,
                             "tier": "cheap",
                             "request_readiness": {
-                                "ready": True,
-                                "status": "ready",
-                                "reason": _READY_REASON,
+                                "ready": False,
+                                "status": "degraded",
+                                "reason": "runtime reported an unspecified provider issue",
                             },
                         },
                         "openrouter-fallback": {
-                            "healthy": False,
+                            "healthy": True,
                             "tier": "fallback",
-                            "last_error": "rate limit",
                             "request_readiness": {
-                                "ready": False,
-                                "status": "rate-limited",
-                                "reason": "rate-limit pressure is active on this route",
+                                "ready": True,
+                                "status": "ready-compat",
+                                "reason": _READY_COMPAT_REASON,
+                                "profile": "openrouter-openai-compat",
+                                "compatibility": "aggregator",
+                                "probe_confidence": "high",
                             },
                         },
                     },
@@ -1424,6 +1434,11 @@ def test_faigate_dashboard_overview_summarizes_live_stats(tmp_path: Path):
                                 "status": "ready",
                                 "reason": _READY_REASON,
                             },
+                            "transport": {
+                                "profile": "openai-compatible",
+                                "compatibility": "native",
+                                "probe_confidence": "high",
+                            },
                         },
                         {
                             "name": "openrouter-fallback",
@@ -1435,9 +1450,17 @@ def test_faigate_dashboard_overview_summarizes_live_stats(tmp_path: Path):
                                 "cluster": "aggregator-fallback",
                             },
                             "request_readiness": {
-                                "ready": False,
-                                "status": "rate-limited",
-                                "reason": "rate-limit pressure is active on this route",
+                                "ready": True,
+                                "status": "ready-compat",
+                                "reason": _READY_COMPAT_REASON,
+                                "profile": "openrouter-openai-compat",
+                                "compatibility": "aggregator",
+                                "probe_confidence": "high",
+                            },
+                            "transport": {
+                                "profile": "openrouter-openai-compat",
+                                "compatibility": "aggregator",
+                                "probe_confidence": "high",
                             },
                         },
                     ]
@@ -1466,9 +1489,9 @@ def test_faigate_dashboard_overview_summarizes_live_stats(tmp_path: Path):
     assert "Top provider        deepseek-chat" in result.stdout
     assert "Top client          opencode" in result.stdout
     assert "Request-ready       2/3 ready" in result.stdout
+    assert "Compat routes       1 compatibility-backed" in result.stdout
     assert "Fallback traffic    28 requests" in result.stdout
     assert "Top alert" in result.stdout
-    assert "Decision support" in result.stdout
 
 
 def test_faigate_dashboard_provider_detail_shows_canonical_lane(tmp_path: Path):
@@ -1553,6 +1576,9 @@ def test_faigate_dashboard_provider_detail_shows_canonical_lane(tmp_path: Path):
                                 "cluster": "balanced-workhorse",
                             },
                             "transport": {
+                                "profile": "openai-compatible",
+                                "compatibility": "native",
+                                "probe_confidence": "high",
                                 "probe_strategy": "models",
                                 "chat_path": "/chat/completions",
                             },
@@ -1592,6 +1618,8 @@ def test_faigate_dashboard_provider_detail_shows_canonical_lane(tmp_path: Path):
     assert "Route type        direct" in result.stdout
     assert "Lane cluster      balanced-workhorse" in result.stdout
     assert "Request-ready     ready" in result.stdout
+    assert "Transport profile openai-compatible" in result.stdout
+    assert "Compatibility     native" in result.stdout
     assert "Chat path         /chat/completions" in result.stdout
     assert "Runtime penalty   6" in result.stdout
     assert "Last issue type   rate-limited" in result.stdout

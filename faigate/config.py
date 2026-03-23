@@ -83,6 +83,9 @@ _SUPPORTED_PROVIDER_LANE_KEYS = {
 }
 _SUPPORTED_PROVIDER_ROUTE_TYPES = {"direct", "aggregator", "wallet-router", "local"}
 _SUPPORTED_PROVIDER_TRANSPORT_KEYS = {
+    "profile",
+    "compatibility",
+    "probe_confidence",
     "auth_mode",
     "probe_strategy",
     "models_path",
@@ -91,9 +94,12 @@ _SUPPORTED_PROVIDER_TRANSPORT_KEYS = {
     "image_edit_path",
     "requires_api_key",
     "supports_models_probe",
+    "notes",
 }
 _SUPPORTED_PROVIDER_TRANSPORT_AUTH_MODES = {"bearer", "query", "none"}
 _SUPPORTED_PROVIDER_TRANSPORT_PROBE_STRATEGIES = {"models", "none"}
+_SUPPORTED_PROVIDER_TRANSPORT_COMPATIBILITY = {"native", "aggregator", "compat-layer"}
+_SUPPORTED_PROVIDER_TRANSPORT_CONFIDENCE = {"high", "medium", "low"}
 
 _CLIENT_PROFILE_PRESET_SPECS: dict[str, dict[str, Any]] = {
     "openclaw": {
@@ -509,6 +515,29 @@ def _normalize_provider_transport(name: str, cfg: dict[str, Any]) -> dict[str, A
         raise ConfigError(f"Provider '{name}' transport has unknown keys: {unknown_list}")
 
     normalized: dict[str, Any] = {}
+    profile = str(transport.get("profile", "") or "").strip()
+    if not profile:
+        raise ConfigError(f"Provider '{name}' transport.profile must be a non-empty string")
+    normalized["profile"] = profile
+
+    compatibility = str(transport.get("compatibility", "native") or "native").strip().lower()
+    if compatibility not in _SUPPORTED_PROVIDER_TRANSPORT_COMPATIBILITY:
+        supported = ", ".join(sorted(_SUPPORTED_PROVIDER_TRANSPORT_COMPATIBILITY))
+        raise ConfigError(
+            f"Provider '{name}' transport.compatibility uses unsupported value "
+            f"'{compatibility}' (supported: {supported})"
+        )
+    normalized["compatibility"] = compatibility
+
+    probe_confidence = str(transport.get("probe_confidence", "medium") or "medium").strip().lower()
+    if probe_confidence not in _SUPPORTED_PROVIDER_TRANSPORT_CONFIDENCE:
+        supported = ", ".join(sorted(_SUPPORTED_PROVIDER_TRANSPORT_CONFIDENCE))
+        raise ConfigError(
+            f"Provider '{name}' transport.probe_confidence uses unsupported value "
+            f"'{probe_confidence}' (supported: {supported})"
+        )
+    normalized["probe_confidence"] = probe_confidence
+
     auth_mode = str(transport.get("auth_mode", "bearer") or "bearer").strip().lower()
     if auth_mode not in _SUPPORTED_PROVIDER_TRANSPORT_AUTH_MODES:
         supported = ", ".join(sorted(_SUPPORTED_PROVIDER_TRANSPORT_AUTH_MODES))
@@ -551,6 +580,19 @@ def _normalize_provider_transport(name: str, cfg: dict[str, Any]) -> dict[str, A
         if not isinstance(value, bool):
             raise ConfigError(f"Provider '{name}' transport.{field_name} must be a boolean")
         normalized[field_name] = value
+
+    notes = transport.get("notes", [])
+    if notes in (None, ""):
+        notes = []
+    if isinstance(notes, str):
+        notes = [notes]
+    if not isinstance(notes, list):
+        raise ConfigError(f"Provider '{name}' transport.notes must be a list")
+    normalized["notes"] = []
+    for item in notes:
+        if not isinstance(item, str) or not item.strip():
+            raise ConfigError(f"Provider '{name}' transport.notes must contain non-empty strings")
+        normalized["notes"].append(item.strip())
 
     if normalized["probe_strategy"] == "models" and not normalized["models_path"]:
         raise ConfigError(

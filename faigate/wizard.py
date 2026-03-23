@@ -10,7 +10,11 @@ from typing import Any
 import yaml
 from dotenv import dotenv_values
 
-from .lane_registry import get_canonical_model_routes, get_provider_lane_binding
+from .lane_registry import (
+    get_canonical_model_routes,
+    get_provider_lane_binding,
+    get_provider_transport_binding,
+)
 from .provider_catalog import get_provider_catalog
 
 ProviderFactory = dict[str, Any]
@@ -1039,6 +1043,11 @@ def build_provider_probe_report(
     ready_count = 0
 
     for name, provider in sorted(configured.items()):
+        transport_defaults = get_provider_transport_binding(
+            name,
+            backend=str(provider.get("backend", "openai-compat") or "openai-compat"),
+            contract=str(provider.get("contract", "generic") or "generic"),
+        )
         api_key = str(provider.get("api_key", "") or "").strip()
         env_name = _extract_env_reference(api_key)
         missing_key = bool(env_name) and not bool(env_values.get(env_name))
@@ -1088,6 +1097,24 @@ def build_provider_probe_report(
                 "env": env_name,
                 "healthy": healthy,
                 "avg_latency_ms": float(health.get("avg_latency_ms", 0.0) or 0.0),
+                "transport_profile": str(
+                    request_readiness.get("profile")
+                    or (provider.get("transport") or {}).get("profile")
+                    or transport_defaults.get("profile")
+                    or ""
+                ),
+                "transport_compatibility": str(
+                    request_readiness.get("compatibility")
+                    or (provider.get("transport") or {}).get("compatibility")
+                    or transport_defaults.get("compatibility")
+                    or ""
+                ),
+                "transport_confidence": str(
+                    request_readiness.get("probe_confidence")
+                    or (provider.get("transport") or {}).get("probe_confidence")
+                    or transport_defaults.get("probe_confidence")
+                    or ""
+                ),
             }
         )
 
@@ -1117,6 +1144,17 @@ def render_provider_probe_text(report: dict[str, Any]) -> str:
         lines.append(
             "  " + f"model: {row['model']} | tier: {row['tier']} | contract: {row['contract']}"
         )
+        if row.get("transport_profile"):
+            lines.append(
+                "  "
+                + "transport: "
+                + f"{row['transport_profile']} | {row.get('transport_compatibility') or 'n/a'}"
+                + (
+                    f" | confidence: {row.get('transport_confidence')}"
+                    if row.get("transport_confidence")
+                    else ""
+                )
+            )
         if row.get("avg_latency_ms"):
             lines.append("  " + f"latency: {row['avg_latency_ms']:.1f} ms")
         lines.append("  " + f"why: {row['reason']}")

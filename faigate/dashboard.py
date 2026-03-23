@@ -74,6 +74,15 @@ def _health_issue_category(last_error: str) -> str:
     return "unhealthy"
 
 
+def _readiness_category(status: str) -> str:
+    normalized = str(status or "").strip().lower()
+    if normalized in {"ready"}:
+        return "ready"
+    if normalized in {"ready-compat"}:
+        return "compat"
+    return "degraded"
+
+
 def _client_highlights(client_totals: list[dict[str, Any]]) -> dict[str, dict[str, Any] | None]:
     if not client_totals:
         return {
@@ -148,6 +157,15 @@ def _routing_path_summary(routing_rows: list[dict[str, Any]]) -> list[dict[str, 
         key=lambda row: (row["requests"], row["cost_usd"]),
         reverse=True,
     )
+
+
+def _request_readiness_breakdown(rows: list[dict[str, Any]]) -> dict[str, int]:
+    counts = {"ready": 0, "compat": 0, "degraded": 0}
+    for row in rows:
+        request_readiness = row.get("request_readiness") or {}
+        category = _readiness_category(str(request_readiness.get("status") or "degraded"))
+        counts[category] = counts.get(category, 0) + 1
+    return counts
 
 
 def _enrich_provider_rows_with_lane(
@@ -237,6 +255,9 @@ def build_dashboard_report(
     inventory_provider_map = _inventory_provider_map(inventory_payload)
     providers = _enrich_provider_rows_with_lane(
         stats.get("providers") or [], inventory_provider_map
+    )
+    readiness_breakdown = _request_readiness_breakdown(
+        list(inventory_provider_map.values()) if inventory_provider_map else providers
     )
     routing = stats.get("routing") or []
     routing_paths = _routing_path_summary(routing)
@@ -341,6 +362,10 @@ def build_dashboard_report(
                     ),
                     "suggestion": "Run Provider Probe or Doctor next to isolate missing keys, auth failures, endpoint mismatches, or quota pressure before live routing.",
                 }
+            )
+        if readiness_breakdown.get("compat"):
+            hints.append(
+                f"{readiness_breakdown['compat']} provider routes are request-ready via compatibility profiles rather than native transport profiles."
             )
 
     if total_requests == 0:
@@ -536,6 +561,7 @@ def build_dashboard_report(
                         "providers_not_ready"
                     )
                 ),
+                "providers_request_ready_compat": readiness_breakdown.get("compat", 0),
                 "unhealthy": unhealthy_providers,
             },
             "drivers": {
@@ -583,6 +609,11 @@ def _render_overview(report: dict[str, Any]) -> str:
             f"  Request-ready       {cards['health']['providers_request_ready']}/{cards['health']['providers_total']} ready"
             if report["source"]["live_health"]
             else "  Request-ready       unavailable (runtime health not reachable)"
+        ),
+        (
+            f"  Compat routes       {cards['health']['providers_request_ready_compat']} compatibility-backed"
+            if report["source"]["live_health"]
+            else "  Compat routes       unavailable (runtime health not reachable)"
         ),
         f"  Fallback traffic    {cards['drivers']['fallback_requests']} requests ({_format_pct(_safe_float(cards['drivers']['fallback_pct']))})",
         f"  24h activity        {cards['drivers']['requests_24h']} requests / {_format_usd(_safe_float(cards['drivers']['cost_24h']))} / {_format_tokens(_safe_int(cards['drivers']['tokens_24h']))}",
@@ -641,6 +672,20 @@ def _render_providers(report: dict[str, Any]) -> str:
                     f"{(row.get('request_readiness') or {}).get('status')} | {(row.get('request_readiness') or {}).get('reason')}"
                     if row.get("request_readiness")
                     else "n/a"
+                ),
+                (
+                    "  transport: "
+                    + f"{(row.get('transport') or {}).get('profile') or 'n/a'}"
+                    + (
+                        f" | {(row.get('transport') or {}).get('compatibility')}"
+                        if (row.get("transport") or {}).get("compatibility")
+                        else ""
+                    )
+                    + (
+                        f" | confidence: {(row.get('transport') or {}).get('probe_confidence')}"
+                        if (row.get("transport") or {}).get("probe_confidence")
+                        else ""
+                    )
                 ),
                 f"  requests: {_safe_int(row.get('requests'))} | failures: {_safe_int(row.get('failures'))} | success: {_format_pct(100.0 - (_safe_int(row.get('failures')) * 100.0 / max(1, _safe_int(row.get('requests')))))}",
                 f"  cost: {_format_usd(_safe_float(row.get('cost_usd')))} | latency: {_format_latency_ms(_safe_float(row.get('avg_latency_ms')))} | tokens: {_format_tokens(_safe_int(row.get('total_tokens')))}",
@@ -802,10 +847,15 @@ def _render_provider_detail(report: dict[str, Any], provider_name: str) -> str:
     if transport:
         lines.extend(
             [
+                f"Transport profile {transport.get('profile') or 'n/a'}",
+                f"Compatibility     {transport.get('compatibility') or 'n/a'}",
+                f"Probe confidence  {transport.get('probe_confidence') or 'n/a'}",
                 f"Probe strategy    {transport.get('probe_strategy') or 'n/a'}",
                 f"Chat path         {transport.get('chat_path') or 'n/a'}",
             ]
         )
+        for note in list(transport.get("notes") or [])[:2]:
+            lines.append(f"Transport note    {note}")
     runtime_state = row.get("route_runtime_state") or {}
     if runtime_state:
         lines.extend(

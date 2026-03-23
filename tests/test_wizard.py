@@ -889,9 +889,11 @@ providers:
     by_name = {row["provider"]: row for row in report["providers"]}
     assert by_name["deepseek-chat"]["status"] == "ready"
     assert by_name["anthropic-claude"]["status"] == "missing-key"
+    assert by_name["deepseek-chat"]["transport_profile"] == "openai-compatible"
     rendered = render_provider_probe_text(report)
     assert "Configured: 2 | Ready now: 1" in rendered
     assert "- deepseek-chat  (ready)" in rendered
+    assert "transport: openai-compatible | native | confidence: high" in rendered
 
 
 def test_list_client_scenarios_exposes_opencode_quality_path(tmp_path: Path):
