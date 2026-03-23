@@ -197,6 +197,101 @@ _BENCHMARK_POSTURE_SCORES = {
     },
 }
 
+_BENCHMARK_SIGNAL_WEIGHTS = {
+    "architecture": {
+        "reasoning-coding": 4,
+        "quality-coding": 4,
+        "balanced-coding": 2,
+    },
+    "change-risk": {
+        "reasoning-coding": 4,
+        "quality-coding": 3,
+        "balanced-coding": 2,
+    },
+    "concurrency": {
+        "reasoning-coding": 4,
+        "quality-coding": 3,
+        "balanced-coding": 2,
+    },
+    "debugging": {
+        "reasoning-coding": 4,
+        "quality-coding": 3,
+        "balanced-coding": 2,
+        "fast-general": 1,
+    },
+    "quality": {
+        "quality-coding": 4,
+        "reasoning-coding": 3,
+        "balanced-coding": 2,
+    },
+}
+
+_COST_TIER_POSTURE_SCORES = {
+    "quality": {
+        "premium": 3,
+        "standard": 2,
+        "cheap": 1,
+        "marketplace": 1,
+        "budget": 0,
+        "free": -1,
+        "variable": 0,
+    },
+    "balanced": {
+        "premium": 1,
+        "standard": 4,
+        "cheap": 5,
+        "marketplace": 3,
+        "budget": 4,
+        "free": 4,
+        "variable": 2,
+    },
+    "eco": {
+        "premium": -2,
+        "standard": 3,
+        "cheap": 7,
+        "marketplace": 5,
+        "budget": 6,
+        "free": 8,
+        "variable": 3,
+    },
+    "free": {
+        "premium": -4,
+        "standard": 1,
+        "cheap": 5,
+        "marketplace": 6,
+        "budget": 7,
+        "free": 10,
+        "variable": 4,
+    },
+}
+
+_ESTIMATED_COST_POSTURE_BANDS = {
+    "quality": [
+        (0.0008, 3),
+        (0.0025, 2),
+        (0.0080, 0),
+        (0.0200, -1),
+    ],
+    "balanced": [
+        (0.0006, 6),
+        (0.0015, 5),
+        (0.0040, 3),
+        (0.0100, 0),
+    ],
+    "eco": [
+        (0.0004, 10),
+        (0.0010, 8),
+        (0.0030, 5),
+        (0.0080, 1),
+    ],
+    "free": [
+        (0.0002, 12),
+        (0.0007, 9),
+        (0.0020, 5),
+        (0.0060, 0),
+    ],
+}
+
 _FALLBACK_RELATION_WEIGHTS = {
     "quality": {
         "same_model_route": 40,
@@ -304,6 +399,34 @@ def _request_length_bucket(total_tokens: int) -> str:
     return "brief"
 
 
+def _estimated_request_cost_usd(provider: dict[str, Any], ctx: _RoutingContext | None) -> float:
+    """Estimate one rough request cost from provider pricing and current request shape."""
+    if ctx is None:
+        return 0.0
+    pricing = dict(provider.get("pricing") or {})
+    if not pricing:
+        return 0.0
+    prompt_rate = float(pricing.get("input", 0) or 0)
+    output_rate = float(pricing.get("output", 0) or 0)
+    cache_rate = float(pricing.get("cache_read", prompt_rate) or 0)
+    prompt_tokens = max(1, int(ctx.total_tokens or 0))
+    output_tokens = int(ctx.requested_output_tokens or 0)
+    if output_tokens <= 0:
+        output_tokens = min(1024, max(128, prompt_tokens // 2))
+
+    cache_mode = str((provider.get("cache") or {}).get("mode") or "none")
+    if ctx.stable_prefix_tokens >= 64 and cache_mode != "none":
+        cached_tokens = min(prompt_tokens, int(ctx.stable_prefix_tokens))
+        prompt_cost = (
+            (cached_tokens * cache_rate) + ((prompt_tokens - cached_tokens) * prompt_rate)
+        ) / 1_000_000
+    else:
+        prompt_cost = (prompt_tokens * prompt_rate) / 1_000_000
+
+    output_cost = (output_tokens * output_rate) / 1_000_000
+    return round(prompt_cost + output_cost, 6)
+
+
 def _build_request_insights(
     *,
     last_user_message: str,
@@ -356,6 +479,84 @@ def _build_request_insights(
             "high",
         },
     }
+
+
+def _benchmark_request_score(lane: dict[str, Any], ctx: _RoutingContext | None) -> int:
+    """Score one lane against the current request shape, not just the posture."""
+    if ctx is None or not lane:
+        return 0
+
+    benchmark_cluster = str(lane.get("benchmark_cluster") or "")
+    if not benchmark_cluster:
+        return 0
+
+    request_insights = dict(getattr(ctx, "request_insights", {}) or {})
+    signal_groups = [str(item) for item in (request_insights.get("signal_groups") or []) if item]
+    complexity_profile = str(request_insights.get("complexity_profile") or "")
+    length_bucket = str(request_insights.get("length_bucket") or "")
+    tool_context = bool(request_insights.get("tool_context"))
+
+    score = 0
+    for group in signal_groups:
+        score += _BENCHMARK_SIGNAL_WEIGHTS.get(group, {}).get(benchmark_cluster, 0)
+
+    if complexity_profile == "high":
+        if benchmark_cluster in {"reasoning-coding", "quality-coding"}:
+            score += 3
+        elif benchmark_cluster == "balanced-coding":
+            score += 1
+        elif benchmark_cluster in {"budget-chat", "free-coding"}:
+            score -= 1
+    elif complexity_profile == "medium":
+        if benchmark_cluster in {"reasoning-coding", "quality-coding", "balanced-coding"}:
+            score += 2
+        elif benchmark_cluster in {"budget-chat", "free-coding"}:
+            score -= 1
+    elif complexity_profile == "low":
+        if benchmark_cluster in {"budget-chat", "free-coding", "fast-general"}:
+            score += 1
+
+    if tool_context:
+        tool_strength = str(lane.get("tool_strength") or "").lower()
+        if tool_strength == "high":
+            score += 2
+        elif tool_strength == "mid":
+            score += 1
+
+    if length_bucket == "long":
+        context_strength = str(lane.get("context_strength") or "").lower()
+        if context_strength == "high":
+            score += 2
+        elif context_strength == "mid":
+            score += 1
+
+    return score
+
+
+def _cost_posture_score(
+    *,
+    estimated_cost_usd: float,
+    routing_posture: str,
+    cost_tier: str,
+) -> int:
+    """Convert rough cost fit into one posture-aware score."""
+    normalized_tier = str(cost_tier or "").lower()
+    tier_score = _COST_TIER_POSTURE_SCORES.get(
+        routing_posture,
+        _COST_TIER_POSTURE_SCORES["balanced"],
+    ).get(normalized_tier, 0)
+
+    if estimated_cost_usd <= 0:
+        return tier_score
+
+    bands = _ESTIMATED_COST_POSTURE_BANDS.get(
+        routing_posture,
+        _ESTIMATED_COST_POSTURE_BANDS["balanced"],
+    )
+    for threshold, score in bands:
+        if estimated_cost_usd <= threshold:
+            return score + max(0, tier_score // 2)
+    return -4 if routing_posture in {"eco", "free"} else -2
 
 
 def _merge_select_constraints(*selects: dict[str, Any]) -> dict[str, Any]:
@@ -959,6 +1160,10 @@ class Router:
                 "lane_score": 0,
                 "route_score": 0,
                 "benchmark_score": 0,
+                "benchmark_request_score": 0,
+                "cost_score": 0,
+                "estimated_request_cost_usd": 0.0,
+                "cost_tier": "",
                 "adaptation_penalty": 0,
                 "headroom": 0,
                 "sort_key": (0, 0, 0),
@@ -1025,6 +1230,14 @@ class Router:
         lane_score = self._lane_posture_score(lane, routing_posture)
         route_score = self._route_posture_score(lane, routing_posture)
         benchmark_score = self._benchmark_posture_score(lane, routing_posture)
+        benchmark_request_score = _benchmark_request_score(lane, ctx)
+        cost_tier = str(capabilities.get("cost_tier") or lane.get("quality_tier") or "")
+        estimated_request_cost_usd = _estimated_request_cost_usd(provider, ctx)
+        cost_score = _cost_posture_score(
+            estimated_cost_usd=estimated_request_cost_usd,
+            routing_posture=routing_posture,
+            cost_tier=cost_tier,
+        )
         adaptation_penalty = int(runtime_state.get("penalty", 0) or 0)
         recovery_score = self._recovery_posture_score(lane, runtime_state, routing_posture)
         image_score = 0
@@ -1082,6 +1295,8 @@ class Router:
             + lane_score
             + route_score
             + benchmark_score
+            + benchmark_request_score
+            + cost_score
             + recovery_score
             + image_score
             + image_policy_score
@@ -1101,6 +1316,10 @@ class Router:
             "lane_score": lane_score,
             "route_score": route_score,
             "benchmark_score": benchmark_score,
+            "benchmark_request_score": benchmark_request_score,
+            "cost_score": cost_score,
+            "estimated_request_cost_usd": estimated_request_cost_usd,
+            "cost_tier": cost_tier,
             "adaptation_penalty": adaptation_penalty,
             "recovery_score": recovery_score,
             "image_score": image_score,
@@ -1419,6 +1638,10 @@ class Router:
                     "route_type": details["route_type"],
                     "lane_cluster": details["lane_cluster"],
                     "benchmark_cluster": details["benchmark_cluster"],
+                    "benchmark_request_score": details["benchmark_request_score"],
+                    "cost_score": details["cost_score"],
+                    "estimated_request_cost_usd": details["estimated_request_cost_usd"],
+                    "cost_tier": details["cost_tier"],
                     "runtime_penalty": details["runtime_penalty"],
                     "runtime_issue_type": details["runtime_issue_type"],
                     "runtime_recovered_recently": details["runtime_recovered_recently"],

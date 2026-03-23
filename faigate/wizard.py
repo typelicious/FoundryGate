@@ -1869,6 +1869,29 @@ def _scenario_route_addition_lines(additions: list[dict[str, Any]], *, limit: in
     return lines
 
 
+def _scenario_routing_rationale_lines(
+    provider_names: list[str],
+    *,
+    limit: int = 4,
+) -> list[str]:
+    lines: list[str] = []
+    for provider_name in provider_names[:limit]:
+        lane = get_provider_lane_binding(provider_name)
+        if not lane:
+            continue
+        benchmark_cluster = str(lane.get("benchmark_cluster") or "general")
+        provider_factory = _PROVIDER_FACTORIES.get(provider_name) or {}
+        provider_caps = dict((provider_factory.get("provider") or {}).get("capabilities") or {})
+        cost_tier = str(provider_caps.get("cost_tier") or "variable")
+        route_type = str(lane.get("route_type") or "default")
+        role = _scenario_provider_role(provider_name)
+        line = f"{provider_name}: {benchmark_cluster} / {cost_tier} / {route_type}"
+        if role:
+            line += f" ({role})"
+        lines.append(line)
+    return lines
+
+
 def build_route_add_setup_plan(
     *,
     config_path: str | Path | None = None,
@@ -2140,6 +2163,16 @@ def render_client_scenario_summary(payload: dict[str, Any]) -> str:
     actionable_additions = list(route_add_setup_plan.get("actionable_additions") or [])
     route_additions = payload.get("route_additions") or []
     scenario_spec = _CLIENT_SCENARIOS.get(str(scenario.get("id", "")), {})
+    rationale_provider_names = [
+        str(item)
+        for item in (
+            summary.get("added_providers")
+            or summary.get("fallback_additions")
+            or _scenario_provider_selection_for_spec(scenario_spec)
+        )
+        if str(item)
+    ]
+    routing_rationale = _scenario_routing_rationale_lines(rationale_provider_names)
     lines = [
         "Client scenario summary",
         "",
@@ -2171,6 +2204,10 @@ def render_client_scenario_summary(payload: dict[str, Any]) -> str:
             )
     if lines[-1] == "Change preview":
         lines.append("- no config changes beyond confirming the current scenario")
+    if routing_rationale:
+        lines.extend(["", "Routing rationale"])
+        for line in routing_rationale:
+            lines.append("- " + line)
     if actionable_additions:
         lines.extend(["", "Operator follow-up"])
         for item in actionable_additions[:3]:

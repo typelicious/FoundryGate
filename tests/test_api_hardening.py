@@ -384,12 +384,24 @@ providers:
     api_key: "secret"
     model: "deepseek-reasoner"
     tier: reasoning
+    capabilities:
+      cost_tier: standard
+    pricing:
+      input: 0.55
+      output: 2.19
+      cache_read: 0.14
   gemini-flash-lite:
     backend: google-genai
     base_url: "https://google.example.com/v1beta"
     api_key: "secret"
     model: "gemini-2.5-flash-lite"
     tier: cheap
+    capabilities:
+      cost_tier: cheap
+    pricing:
+      input: 0.08
+      output: 0.30
+      cache_read: 0.02
 client_profiles:
   enabled: true
   default: generic
@@ -491,8 +503,16 @@ metrics:
     assert body["route_summary"]["complexity_profile"] in {"medium", "high"}
     assert "architecture" in body["route_summary"]["matched_keywords"]
     assert body["route_summary"]["selected"]["canonical_model"] == "deepseek/reasoner"
+    assert body["route_summary"]["selected"]["benchmark_cluster"] == "reasoning-coding"
+    assert body["route_summary"]["selected"]["cost_tier"] == "standard"
+    assert body["route_summary"]["selected"]["estimated_request_cost_usd"] > 0
     assert any("Opencode complexity bias" in item for item in body["route_summary"]["why_selected"])
+    assert any(
+        "Benchmark fit favored reasoning-coding" in item
+        for item in body["route_summary"]["why_selected"]
+    )
     assert body["route_summary"]["alternatives"][0]["provider"] == "gemini-flash-lite"
+    assert body["route_summary"]["alternatives"][0]["estimated_request_cost_usd"] > 0
 
 
 def test_image_edit_rejects_large_upload(api_client):

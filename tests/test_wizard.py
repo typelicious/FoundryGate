@@ -1272,6 +1272,8 @@ client_profiles:
     assert "Operator guidance" in summary
     assert "best when:" in summary
     assert "Change preview" in summary
+    assert "Routing rationale" in summary
+    assert "quality-coding" in summary or "reasoning-coding" in summary
     assert "Operator follow-up" in summary
     assert "Provider Setup -> Guided Route Additions" in summary
     assert "add route:" in summary

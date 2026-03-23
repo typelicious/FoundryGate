@@ -347,6 +347,12 @@ def _enrich_provider_rows_with_lane(
                 "lane_name": str(lane.get("name") or ""),
                 "route_type": str(lane.get("route_type") or ""),
                 "lane_cluster": str(lane.get("cluster") or ""),
+                "benchmark_cluster": str(lane.get("benchmark_cluster") or ""),
+                "cost_tier": str(
+                    ((provider_inventory.get("capabilities") or {}).get("cost_tier"))
+                    or lane.get("quality_tier")
+                    or ""
+                ),
                 "transport": dict(provider_inventory.get("transport") or {}),
                 "request_readiness": dict(provider_inventory.get("request_readiness") or {}),
                 "route_runtime_state": dict(provider_inventory.get("route_runtime_state") or {}),
@@ -388,6 +394,19 @@ def _route_add_summary(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         key=lambda row: (row["providers"], row["family"]),
         reverse=True,
     )
+
+
+def _provider_routing_fit(row: dict[str, Any]) -> str:
+    benchmark_cluster = str(row.get("benchmark_cluster") or "")
+    cost_tier = str(row.get("cost_tier") or "")
+    route_type = str(row.get("route_type") or "")
+    if benchmark_cluster and cost_tier:
+        return f"{benchmark_cluster} with a {cost_tier} cost posture over {route_type or 'default'} routing"
+    if benchmark_cluster:
+        return f"{benchmark_cluster} over {route_type or 'default'} routing"
+    if cost_tier:
+        return f"{cost_tier} cost posture over {route_type or 'default'} routing"
+    return route_type or "n/a"
 
 
 def _recommended_scenario_for_client(client_profile: str, *, expensive: bool = False) -> str | None:
@@ -856,6 +875,11 @@ def _render_overview(report: dict[str, Any]) -> str:
         f"  Top provider        {top_provider.get('provider')} ({top_provider.get('requests')} req, {_format_usd(_safe_float(top_provider.get('cost_usd')))})"
         if top_provider
         else "  Top provider        no traffic yet",
+        (
+            f"  Route fit           {_provider_routing_fit(top_provider)}"
+            if top_provider
+            else "  Route fit           n/a"
+        ),
         f"  Top client          {top_client.get('client_tag') or top_client.get('client_profile')} ({top_client.get('requests')} req, {_format_usd(_safe_float(top_client.get('cost_usd')))})"
         if top_client
         else "  Top client          no traffic yet",
@@ -1122,6 +1146,9 @@ def _render_provider_detail(report: dict[str, Any], provider_name: str) -> str:
         f"Canonical lane    {row.get('canonical_model') or 'n/a'}",
         f"Route type        {row.get('route_type') or 'n/a'}",
         f"Lane cluster      {row.get('lane_cluster') or 'n/a'}",
+        f"Benchmark focus   {row.get('benchmark_cluster') or 'n/a'}",
+        f"Cost tier         {row.get('cost_tier') or 'n/a'}",
+        f"Routing fit       {_provider_routing_fit(row)}",
         f"Request-ready     {request_readiness.get('status') or 'n/a'}",
     ]
     if request_readiness.get("reason"):
