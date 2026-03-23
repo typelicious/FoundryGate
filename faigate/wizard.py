@@ -1177,6 +1177,11 @@ def build_provider_probe_report(
             (provider.get("lane") or {}).get("family") or lane_binding.get("family") or ""
         )
         operator_hint = str(request_readiness.get("operator_hint") or "")
+        next_action = operator_hint or _default_probe_action_hint(
+            action_group=action_group,
+            provider_name=name,
+            family=family,
+        )
         rows.append(
             {
                 "provider": name,
@@ -1218,12 +1223,7 @@ def build_provider_probe_report(
                 "verified_via": str(request_readiness.get("verified_via") or ""),
                 "operator_hint": operator_hint,
                 "action_group": action_group,
-                "next_action": operator_hint
-                or _default_probe_action_hint(
-                    action_group=action_group,
-                    provider_name=name,
-                    family=family,
-                ),
+                "next_action": next_action,
             }
         )
 
@@ -1388,7 +1388,6 @@ def _default_probe_action_hint(*, action_group: str, provider_name: str, family:
         return f"route can carry live traffic for the {family_label} lane"
     return f"inspect runtime hints for {provider_name} before making it a primary lane"
 
-
 def _build_probe_family_summaries(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     summaries: dict[str, dict[str, Any]] = {}
     for row in rows:
@@ -1487,8 +1486,6 @@ def _combine_probe_next_action(
     if action_group in {"fix-now", "inspect"}:
         return f"{current_hint}; route {family} traffic through {preferred_route} until fixed"
     return current_hint
-
-
 def _scenario_provider_selection(*, purpose: str, client: str) -> list[str]:
     preferred = _preferred_provider_set(list(_PROVIDER_FACTORIES), purpose=purpose, client=client)
     return [

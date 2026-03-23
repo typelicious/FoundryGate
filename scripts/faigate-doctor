@@ -143,7 +143,12 @@ if health_raw:
     family_rows = []
 
     def classify_action(
-        *, status: str, ready: bool, cooldown_active: bool, window_state: str, recovered_recently: bool
+        *,
+        status: str,
+        ready: bool,
+        cooldown_active: bool,
+        window_state: str,
+        recovered_recently: bool,
     ) -> str:
         if status in {"missing-key", "unresolved-key", "auth-invalid", "endpoint-mismatch", "model-unavailable"}:
             return "fix-now"
@@ -173,7 +178,6 @@ if health_raw:
             global_routes.sort(key=lambda row: row["provider"])
             return global_routes[0]["provider"]
         return ""
-
     for provider_name, payload in sorted(providers.items()):
         total += 1
         request_readiness = payload.get("request_readiness") or {}
@@ -224,6 +228,7 @@ if health_raw:
             print(f"[ok] request-ready: {provider_name} -> {status}{profile_suffix} ({reason})")
         else:
             print(f"[warn] request-ready: {provider_name} -> {status}{profile_suffix} ({reason})")
+        print(f"[ok] request-ready action: {provider_name} -> {action_group} [{family}]")
         print(f"[ok] request-ready action: {provider_name} -> {action_group} [{family}]")
         if probe_payload:
             print(f"[ok] request-ready payload: {provider_name} -> {probe_payload}")
