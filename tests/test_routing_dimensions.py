@@ -616,3 +616,125 @@ metrics:
     assert ranking[0]["provider"] == "stable-alt"
     assert ranking[1]["provider"] == "direct-workhorse"
     assert ranking[1]["adaptation_penalty"] == 28
+
+
+@pytest.mark.asyncio
+async def test_simple_query_keyword_matching_does_not_trigger_on_substrings(tmp_path):
+    cfg = load_config(
+        _write_config(
+            tmp_path,
+            """
+server:
+  host: "127.0.0.1"
+  port: 8090
+providers:
+  deepseek-reasoner:
+    backend: openai-compat
+    base_url: "https://reasoner.example.com/v1"
+    api_key: "secret"
+    model: "reasoner"
+    tier: reasoning
+  gemini-flash-lite:
+    backend: google-genai
+    base_url: "https://google.example.com/v1beta"
+    api_key: "secret"
+    model: "gemini-2.5-flash-lite"
+    tier: cheap
+static_rules:
+  enabled: false
+  rules: []
+heuristic_rules:
+  enabled: true
+  rules:
+    - name: simple-query
+      match:
+        message_keywords:
+          any_of: ["hi"]
+          min_matches: 1
+      route_to: gemini-flash-lite
+fallback_chain:
+  - deepseek-reasoner
+metrics:
+  enabled: false
+""",
+        )
+    )
+    router = Router(cfg)
+
+    decision = await router.route(
+        [{"role": "user", "content": "Should this architecture hold under load?"}],
+        model_requested="auto",
+        client_profile="generic",
+        profile_hints={},
+        provider_health={
+            "deepseek-reasoner": {"healthy": True},
+            "gemini-flash-lite": {"healthy": True},
+        },
+    )
+
+    assert decision.provider_name == "deepseek-reasoner"
+
+
+@pytest.mark.asyncio
+async def test_opencode_complexity_bias_promotes_single_strong_architecture_hit(tmp_path):
+    cfg = load_config(
+        _write_config(
+            tmp_path,
+            """
+server:
+  host: "127.0.0.1"
+  port: 8090
+providers:
+  deepseek-reasoner:
+    backend: openai-compat
+    base_url: "https://reasoner.example.com/v1"
+    api_key: "secret"
+    model: "reasoner"
+    tier: reasoning
+  gemini-flash-lite:
+    backend: google-genai
+    base_url: "https://google.example.com/v1beta"
+    api_key: "secret"
+    model: "gemini-2.5-flash-lite"
+    tier: cheap
+heuristic_rules:
+  enabled: true
+  rules:
+    - name: complex-code
+      match:
+        message_keywords:
+          any_of: ["architecture", "debug", "refactor"]
+          min_matches: 2
+      route_to: deepseek-reasoner
+    - name: simple-query
+      match:
+        message_keywords:
+          any_of: ["hello", "hi"]
+          min_matches: 1
+      route_to: gemini-flash-lite
+fallback_chain:
+  - deepseek-reasoner
+metrics:
+  enabled: false
+""",
+        )
+    )
+    router = Router(cfg)
+
+    decision = await router.route(
+        [
+            {
+                "role": "user",
+                "content": "Need an architecture plan for rollback-safe event processing.",
+            }
+        ],
+        model_requested="auto",
+        client_profile="opencode",
+        profile_hints={"routing_mode": "auto"},
+        provider_health={
+            "deepseek-reasoner": {"healthy": True},
+            "gemini-flash-lite": {"healthy": True},
+        },
+    )
+
+    assert decision.provider_name == "deepseek-reasoner"

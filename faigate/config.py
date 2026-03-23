@@ -29,7 +29,7 @@ import yaml
 from dotenv import load_dotenv
 
 from .hooks import get_registered_request_hooks
-from .lane_registry import get_provider_lane_binding
+from .lane_registry import get_provider_lane_binding, get_provider_transport_binding
 
 _SUPPORTED_BACKENDS = {"openai-compat", "google-genai", "anthropic-compat"}
 _SUPPORTED_PROVIDER_CONTRACTS = {"generic", "local-worker", "image-provider"}
@@ -82,6 +82,18 @@ _SUPPORTED_PROVIDER_LANE_KEYS = {
     "degrade_to",
 }
 _SUPPORTED_PROVIDER_ROUTE_TYPES = {"direct", "aggregator", "wallet-router", "local"}
+_SUPPORTED_PROVIDER_TRANSPORT_KEYS = {
+    "auth_mode",
+    "probe_strategy",
+    "models_path",
+    "chat_path",
+    "image_generation_path",
+    "image_edit_path",
+    "requires_api_key",
+    "supports_models_probe",
+}
+_SUPPORTED_PROVIDER_TRANSPORT_AUTH_MODES = {"bearer", "query", "none"}
+_SUPPORTED_PROVIDER_TRANSPORT_PROBE_STRATEGIES = {"models", "none"}
 
 _CLIENT_PROFILE_PRESET_SPECS: dict[str, dict[str, Any]] = {
     "openclaw": {
@@ -477,6 +489,77 @@ def _normalize_provider_lane(name: str, cfg: dict[str, Any]) -> dict[str, Any]:
     return normalized
 
 
+def _normalize_provider_transport(name: str, cfg: dict[str, Any]) -> dict[str, Any]:
+    """Validate provider transport metadata used by runtime request-readiness."""
+    defaults = get_provider_transport_binding(
+        name,
+        backend=str(cfg.get("backend", "openai-compat") or "openai-compat"),
+        contract=str(cfg.get("contract", "generic") or "generic"),
+    )
+    raw = cfg.get("transport", {})
+    if raw in (None, ""):
+        raw = {}
+    if not isinstance(raw, dict):
+        raise ConfigError(f"Provider '{name}' field 'transport' must be a mapping")
+
+    transport = {**defaults, **raw}
+    unknown = sorted(set(transport) - _SUPPORTED_PROVIDER_TRANSPORT_KEYS)
+    if unknown:
+        unknown_list = ", ".join(unknown)
+        raise ConfigError(f"Provider '{name}' transport has unknown keys: {unknown_list}")
+
+    normalized: dict[str, Any] = {}
+    auth_mode = str(transport.get("auth_mode", "bearer") or "bearer").strip().lower()
+    if auth_mode not in _SUPPORTED_PROVIDER_TRANSPORT_AUTH_MODES:
+        supported = ", ".join(sorted(_SUPPORTED_PROVIDER_TRANSPORT_AUTH_MODES))
+        raise ConfigError(
+            f"Provider '{name}' transport.auth_mode uses unsupported value "
+            f"'{auth_mode}' (supported: {supported})"
+        )
+    normalized["auth_mode"] = auth_mode
+
+    probe_strategy = str(transport.get("probe_strategy", "models") or "models").strip().lower()
+    if probe_strategy not in _SUPPORTED_PROVIDER_TRANSPORT_PROBE_STRATEGIES:
+        supported = ", ".join(sorted(_SUPPORTED_PROVIDER_TRANSPORT_PROBE_STRATEGIES))
+        raise ConfigError(
+            f"Provider '{name}' transport.probe_strategy uses unsupported value "
+            f"'{probe_strategy}' (supported: {supported})"
+        )
+    normalized["probe_strategy"] = probe_strategy
+
+    for field_name in (
+        "models_path",
+        "chat_path",
+        "image_generation_path",
+        "image_edit_path",
+    ):
+        value = transport.get(field_name, "")
+        if value in (None, ""):
+            normalized[field_name] = ""
+            continue
+        if not isinstance(value, str) or not value.strip():
+            raise ConfigError(f"Provider '{name}' transport.{field_name} must be a string")
+        cleaned = value.strip()
+        if not cleaned.startswith("/"):
+            raise ConfigError(
+                f"Provider '{name}' transport.{field_name} must start with '/' when set"
+            )
+        normalized[field_name] = cleaned
+
+    for field_name in ("requires_api_key", "supports_models_probe"):
+        value = transport.get(field_name)
+        if not isinstance(value, bool):
+            raise ConfigError(f"Provider '{name}' transport.{field_name} must be a boolean")
+        normalized[field_name] = value
+
+    if normalized["probe_strategy"] == "models" and not normalized["models_path"]:
+        raise ConfigError(
+            f"Provider '{name}' transport.probe_strategy=models requires transport.models_path"
+        )
+
+    return normalized
+
+
 def _normalize_provider(name: str, cfg: Any) -> dict[str, Any]:
     """Validate a provider definition and attach normalized capability metadata."""
     if not isinstance(cfg, dict):
@@ -567,6 +650,7 @@ def _normalize_provider(name: str, cfg: Any) -> dict[str, Any]:
     normalized["image"] = _normalize_provider_image(name, normalized)
     normalized["capabilities"] = _normalize_provider_capabilities(name, normalized)
     normalized["lane"] = _normalize_provider_lane(name, normalized)
+    normalized["transport"] = _normalize_provider_transport(name, normalized)
     return normalized
 
 

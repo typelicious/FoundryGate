@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -11,6 +12,48 @@ from .config import Config
 from .lane_registry import get_canonical_model_routes
 
 logger = logging.getLogger("faigate.router")
+_BOUNDARY_TEXT_RE = re.compile(r"[a-z0-9]")
+_OPENCODE_COMPLEXITY_HINTS = (
+    "architecture",
+    "tradeoff",
+    "trade-off",
+    "rollback",
+    "idempot",
+    "backpressure",
+    "migration",
+    "failure mode",
+    "failure modes",
+    "concurrency",
+    "refactor",
+    "debug",
+    "code review",
+    "performance bottleneck",
+    "race condition",
+    "deadlock",
+)
+_OPENCODE_COMPLEXITY_RULE_KEYWORDS = {
+    "refactor",
+    "debug",
+    "architecture",
+    "design pattern",
+    "race condition",
+    "memory leak",
+    "optimize",
+    "complexity",
+    "security vulnerability",
+    "code review",
+    "performance bottleneck",
+    "type error",
+    "deadlock",
+    "tradeoff",
+    "trade-off",
+    "migration",
+    "rollback",
+    "idempotency",
+    "backpressure",
+    "failure mode",
+    "reliability",
+}
 
 
 _QUALITY_TIER_SCORES = {
@@ -314,6 +357,21 @@ def _normalize_routing_posture(value: str) -> str:
     if normalized in {"free"}:
         return "free"
     return "balanced"
+
+
+def _keyword_matches_text(keyword: str, search_text: str) -> bool:
+    normalized = str(keyword or "").strip().lower()
+    if not normalized:
+        return False
+    if not _BOUNDARY_TEXT_RE.search(normalized):
+        return normalized in search_text
+
+    pattern = re.escape(normalized)
+    if _BOUNDARY_TEXT_RE.match(normalized[0]):
+        pattern = rf"(?<![a-z0-9]){pattern}"
+    if _BOUNDARY_TEXT_RE.match(normalized[-1]):
+        pattern = rf"{pattern}(?![a-z0-9])"
+    return re.search(pattern, search_text) is not None
 
 
 class Router:
@@ -1344,7 +1402,21 @@ class Router:
             # ClawRouter insight: OpenClaw's system prompt is keyword-rich
             # and would inflate every request to the reasoning tier.
             search_text = ctx.last_user_message.lower()
-            hit_count = sum(1 for kw in keywords if kw.lower() in search_text)
+            matched_keywords = [
+                str(kw).strip().lower()
+                for kw in keywords
+                if _keyword_matches_text(str(kw), search_text)
+            ]
+            hit_count = len(matched_keywords)
+
+            if (
+                ctx.client_profile == "opencode"
+                and any(
+                    _keyword_matches_text(term, search_text) for term in _OPENCODE_COMPLEXITY_HINTS
+                )
+                and any(term in _OPENCODE_COMPLEXITY_RULE_KEYWORDS for term in matched_keywords)
+            ):
+                min_matches = max(1, int(min_matches) - 1)
 
             if hit_count < min_matches:
                 return False

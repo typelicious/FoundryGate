@@ -230,6 +230,35 @@ metrics:
     assert cfg.providers["cloud-default"]["lane"]["degrade_to"] == ["custom/backup-model"]
 
 
+def test_provider_transport_metadata_is_normalized(tmp_path):
+    path = tmp_path / "config.yaml"
+    path.write_text(
+        """
+server:
+  host: "127.0.0.1"
+  port: 8090
+providers:
+  cloud-default:
+    backend: openai-compat
+    base_url: "https://api.example.com/v1"
+    api_key: "secret"
+    model: "chat-model"
+    transport:
+      chat_path: /responses/chat
+fallback_chain: []
+metrics:
+  enabled: false
+""",
+        encoding="utf-8",
+    )
+
+    cfg = load_config(path)
+
+    assert cfg.providers["cloud-default"]["transport"]["auth_mode"] == "bearer"
+    assert cfg.providers["cloud-default"]["transport"]["models_path"] == "/models"
+    assert cfg.providers["cloud-default"]["transport"]["chat_path"] == "/responses/chat"
+
+
 def test_client_profile_rejects_unknown_routing_mode(tmp_path):
     path = tmp_path / "config.yaml"
     path.write_text(

@@ -874,7 +874,9 @@ heuristic_rules:
           any_of: ["refactor", "debug", "architecture", "design pattern",
                    "race condition", "memory leak", "optimize", "complexity",
                    "security vulnerability", "code review",
-                   "performance bottleneck", "type error", "deadlock"]
+                   "performance bottleneck", "type error", "deadlock",
+                   "tradeoff", "trade-off", "migration", "rollback",
+                   "idempotency", "backpressure", "failure mode", "reliability"]
           min_matches: 2
       route_to: deepseek-reasoner
 

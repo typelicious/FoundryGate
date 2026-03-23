@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
@@ -11,6 +12,7 @@ from typing import Any
 import httpx
 
 logger = logging.getLogger("faigate.providers")
+_UNRESOLVED_ENV_RE = re.compile(r"\$\{[^}]+}")
 
 
 @dataclass
@@ -76,6 +78,7 @@ class ProviderBackend:
         self.cache = dict(cfg.get("cache", {}))
         self.image = dict(cfg.get("image", {}))
         self.lane = dict(cfg.get("lane", {}))
+        self.transport = dict(cfg.get("transport", {}))
         self.health = ProviderHealth(name=name)
 
         self._client = httpx.AsyncClient(
@@ -86,19 +89,102 @@ class ProviderBackend:
     async def close(self) -> None:
         await self._client.aclose()
 
+    def _transport_path(self, key: str, default: str = "") -> str:
+        value = str(self.transport.get(key, default) or default).strip()
+        return value
+
+    def _transport_url(self, path: str) -> str:
+        cleaned = str(path or "").strip()
+        if not cleaned:
+            return self.base_url
+        return f"{self.base_url}{cleaned}"
+
+    def _authorization_headers(self, *, content_type: str | None = None) -> dict[str, str]:
+        headers: dict[str, str] = {}
+        auth_mode = str(self.transport.get("auth_mode", "bearer") or "bearer").strip().lower()
+        if auth_mode == "bearer" and self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        if content_type:
+            headers["Content-Type"] = content_type
+        if "openrouter" in self.base_url:
+            headers["HTTP-Referer"] = "https://faigate.local"
+            headers["X-Title"] = "fusionAIze Gate"
+        return headers
+
+    def _classify_request_readiness_issue(self, detail: str) -> tuple[str, str]:
+        lowered = str(detail or "").lower()
+        if not lowered:
+            return "degraded", "runtime reported an unspecified provider issue"
+        if "quota" in lowered or "insufficient_quota" in lowered:
+            return "quota-exhausted", "quota appears exhausted for this route"
+        if "rate limit" in lowered or "429" in lowered:
+            return "rate-limited", "rate-limit pressure is active on this route"
+        if (
+            "auth" in lowered
+            or "unauthorized" in lowered
+            or "forbidden" in lowered
+            or "invalid api key" in lowered
+            or "incorrect api key" in lowered
+        ):
+            return "auth-invalid", "authentication failed for this route"
+        if "model" in lowered and ("unavailable" in lowered or "not found" in lowered):
+            return "model-unavailable", "the configured model is not currently available"
+        if "not found" in lowered or "unknown url" in lowered or "unsupported path" in lowered:
+            return "endpoint-mismatch", "the configured endpoint path does not look compatible"
+        if "timeout" in lowered:
+            return "timeout", "upstream timed out recently"
+        if "connection error" in lowered or "transport" in lowered:
+            return "transport-error", "the route is reachable by config but not transport-ready"
+        return "degraded", detail[:160]
+
+    def request_readiness(self) -> dict[str, Any]:
+        """Return operator-facing request-readiness for one configured route."""
+        requires_api_key = bool(self.transport.get("requires_api_key", True))
+        probe_strategy = str(self.transport.get("probe_strategy", "models") or "models")
+
+        if requires_api_key and not self.api_key:
+            return {
+                "ready": False,
+                "status": "missing-key",
+                "reason": "provider is configured without an API key",
+                "probe_strategy": probe_strategy,
+            }
+        if requires_api_key and _UNRESOLVED_ENV_RE.search(self.api_key or ""):
+            return {
+                "ready": False,
+                "status": "unresolved-key",
+                "reason": "provider still carries an unresolved ${ENV_VAR} placeholder",
+                "probe_strategy": probe_strategy,
+            }
+        if self.health.last_error:
+            status, reason = self._classify_request_readiness_issue(self.health.last_error)
+            recovered = self.health.healthy and status == "degraded"
+            return {
+                "ready": recovered,
+                "status": "ready" if recovered else status,
+                "reason": "route responded successfully" if recovered else reason,
+                "probe_strategy": probe_strategy,
+            }
+        return {
+            "ready": True,
+            "status": "ready",
+            "reason": "route looks request-ready from config and recent runtime state",
+            "probe_strategy": probe_strategy,
+        }
+
     async def probe_health(self, timeout_seconds: float = 10.0) -> bool:
         """Probe a provider without sending a completion request.
 
         For OpenAI-compatible providers this uses GET /models. For Google GenAI,
         which does not expose a compatible models listing here, probing is skipped.
         """
-        if self.backend_type == "google-genai":
+        if self.backend_type == "google-genai" or not self.transport.get(
+            "supports_models_probe", True
+        ):
             return self.health.healthy
 
-        url = f"{self.base_url}/models"
-        headers = {}
-        if self.api_key:
-            headers["Authorization"] = f"Bearer {self.api_key}"
+        url = self._transport_url(self._transport_path("models_path", "/models"))
+        headers = self._authorization_headers()
 
         t0 = time.time()
         try:
@@ -161,15 +247,10 @@ class ProviderBackend:
         if extra_body:
             body.update(extra_body)
 
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-        }
-        if "openrouter" in self.base_url:
-            headers["HTTP-Referer"] = "https://faigate.local"
-            headers["X-Title"] = "fusionAIze Gate"
-
-        url = f"{self.base_url}/images/generations"
+        headers = self._authorization_headers(content_type="application/json")
+        url = self._transport_url(
+            self._transport_path("image_generation_path", "/images/generations")
+        )
         t0 = time.time()
 
         try:
@@ -259,12 +340,8 @@ class ProviderBackend:
                 )
             )
 
-        headers = {"Authorization": f"Bearer {self.api_key}"}
-        if "openrouter" in self.base_url:
-            headers["HTTP-Referer"] = "https://faigate.local"
-            headers["X-Title"] = "fusionAIze Gate"
-
-        url = f"{self.base_url}/images/edits"
+        headers = self._authorization_headers()
+        url = self._transport_url(self._transport_path("image_edit_path", "/images/edits"))
         t0 = time.time()
 
         try:
@@ -335,16 +412,8 @@ class ProviderBackend:
         if extra_body:
             body.update(extra_body)
 
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-        }
-        # OpenRouter wants extra headers
-        if "openrouter" in self.base_url:
-            headers["HTTP-Referer"] = "https://faigate.local"
-            headers["X-Title"] = "fusionAIze Gate"
-
-        url = f"{self.base_url}/chat/completions"
+        headers = self._authorization_headers(content_type="application/json")
+        url = self._transport_url(self._transport_path("chat_path", "/chat/completions"))
 
         try:
             if stream:

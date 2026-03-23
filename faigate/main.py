@@ -392,6 +392,102 @@ def _provider_runtime_state_snapshot() -> dict[str, dict[str, Any]]:
     return _adaptive_state.snapshot() if "_adaptive_state" in globals() else {}
 
 
+def _provider_transport_snapshot(provider: Any) -> dict[str, Any]:
+    return dict(getattr(provider, "transport", {}) or {})
+
+
+def _provider_request_readiness(provider: Any) -> dict[str, Any]:
+    if hasattr(provider, "request_readiness"):
+        return dict(provider.request_readiness() or {})
+    ready = bool(getattr(getattr(provider, "health", None), "healthy", True))
+    return {
+        "ready": ready,
+        "status": "ready" if ready else "degraded",
+        "reason": "provider stub does not expose request-readiness details",
+        "probe_strategy": "unknown",
+    }
+
+
+def _request_readiness_summary() -> dict[str, Any]:
+    statuses: dict[str, int] = {}
+    ready = 0
+    for provider in _providers.values():
+        state = _provider_request_readiness(provider)
+        status = str(state.get("status") or "unknown")
+        statuses[status] = statuses.get(status, 0) + 1
+        if state.get("ready"):
+            ready += 1
+
+    total = len(_providers)
+    return {
+        "providers_total": total,
+        "providers_ready": ready,
+        "providers_not_ready": max(0, total - ready),
+        "statuses": dict(sorted(statuses.items())),
+    }
+
+
+def _runtime_provider_lane_summary(provider_name: str) -> dict[str, Any]:
+    provider = _providers.get(provider_name)
+    lane = dict(getattr(provider, "lane", {}) or {}) if provider else {}
+    return {
+        "family": str(lane.get("family") or ""),
+        "name": str(lane.get("name") or ""),
+        "canonical_model": str(lane.get("canonical_model") or ""),
+        "route_type": str(lane.get("route_type") or ""),
+        "cluster": str(lane.get("cluster") or ""),
+        "benchmark_cluster": str(lane.get("benchmark_cluster") or ""),
+        "quality_tier": str(lane.get("quality_tier") or ""),
+        "reasoning_strength": str(lane.get("reasoning_strength") or ""),
+        "context_strength": str(lane.get("context_strength") or ""),
+        "tool_strength": str(lane.get("tool_strength") or ""),
+        "same_model_group": str(lane.get("same_model_group") or ""),
+        "degrade_to": list(lane.get("degrade_to") or []),
+    }
+
+
+def _attempt_relation_details(selected_provider: str, attempted_provider: str) -> dict[str, Any]:
+    selected_lane = _runtime_provider_lane_summary(selected_provider)
+    attempted_lane = _runtime_provider_lane_summary(attempted_provider)
+
+    same_model_route = bool(
+        selected_lane.get("same_model_group")
+        and selected_lane.get("same_model_group") == attempted_lane.get("same_model_group")
+    ) or bool(
+        selected_lane.get("canonical_model")
+        and selected_lane.get("canonical_model") == attempted_lane.get("canonical_model")
+    )
+    same_cluster = bool(
+        selected_lane.get("cluster")
+        and selected_lane.get("cluster") == attempted_lane.get("cluster")
+    )
+    same_benchmark_cluster = bool(
+        selected_lane.get("benchmark_cluster")
+        and selected_lane.get("benchmark_cluster") == attempted_lane.get("benchmark_cluster")
+    )
+    preferred_degrade = bool(
+        attempted_lane.get("canonical_model")
+        and attempted_lane.get("canonical_model") in (selected_lane.get("degrade_to") or [])
+    )
+    selection_path = "fallback-chain"
+    if same_model_route:
+        selection_path = "same-lane-route"
+    elif same_cluster:
+        selection_path = "same-cluster-degrade"
+    elif same_benchmark_cluster:
+        selection_path = "same-benchmark-degrade"
+    elif preferred_degrade:
+        selection_path = "preferred-degrade"
+
+    return {
+        "same_model_route": same_model_route,
+        "same_cluster": same_cluster,
+        "same_benchmark_cluster": same_benchmark_cluster,
+        "preferred_degrade": preferred_degrade,
+        "selection_path": selection_path,
+    }
+
+
 def _decision_metric_fields(decision: RoutingDecision) -> dict[str, Any]:
     details = dict(decision.details or {})
     return {
@@ -399,6 +495,55 @@ def _decision_metric_fields(decision: RoutingDecision) -> dict[str, Any]:
         "route_type": str(details.get("route_type") or ""),
         "lane_cluster": str(details.get("lane_cluster") or ""),
         "selection_path": str(details.get("selection_path") or ""),
+        "decision_details": details,
+    }
+
+
+def _attempt_metric_fields(
+    decision: RoutingDecision,
+    attempted_provider: str,
+    *,
+    attempt_order: list[str] | None = None,
+) -> dict[str, Any]:
+    order = list(attempt_order or [])
+    attempt_index = order.index(attempted_provider) + 1 if attempted_provider in order else 1
+    actual_lane = _runtime_provider_lane_summary(attempted_provider)
+    details = dict(decision.details or {})
+
+    if attempted_provider == decision.provider_name:
+        relation = {
+            "same_model_route": False,
+            "same_cluster": False,
+            "same_benchmark_cluster": False,
+            "preferred_degrade": False,
+            "selection_path": str(details.get("selection_path") or "primary-selected"),
+        }
+    else:
+        relation = _attempt_relation_details(decision.provider_name, attempted_provider)
+
+    details.update(
+        {
+            "selected_provider": decision.provider_name,
+            "attempted_provider": attempted_provider,
+            "attempt_index": attempt_index,
+            "attempt_count": len(order),
+            "actual_lane": actual_lane,
+            "actual_canonical_model": str(actual_lane.get("canonical_model") or ""),
+            "actual_route_type": str(actual_lane.get("route_type") or ""),
+            "actual_lane_cluster": str(actual_lane.get("cluster") or ""),
+            **relation,
+        }
+    )
+
+    return {
+        "canonical_model": str(
+            actual_lane.get("canonical_model") or details.get("canonical_model") or ""
+        ),
+        "route_type": str(actual_lane.get("route_type") or details.get("route_type") or ""),
+        "lane_cluster": str(actual_lane.get("cluster") or details.get("lane_cluster") or ""),
+        "selection_path": str(
+            relation.get("selection_path") or details.get("selection_path") or ""
+        ),
         "decision_details": details,
     }
 
@@ -441,6 +586,10 @@ def _serialize_provider(name: str) -> dict[str, Any] | None:
         "limits": provider.limits,
         "cache": provider.cache,
         "image": getattr(provider, "image", {}),
+        "lane": getattr(provider, "lane", {}),
+        "transport": _provider_transport_snapshot(provider),
+        "request_readiness": _provider_request_readiness(provider),
+        "route_runtime_state": _provider_runtime_state_snapshot().get(name, {}),
     }
 
 
@@ -471,6 +620,8 @@ def _build_provider_inventory(
                 "cache": provider.cache,
                 "image": getattr(provider, "image", {}),
                 "lane": getattr(provider, "lane", {}),
+                "transport": _provider_transport_snapshot(provider),
+                "request_readiness": _provider_request_readiness(provider),
                 "route_runtime_state": _provider_runtime_state_snapshot().get(name, {}),
                 "last_error": getattr(provider.health, "last_error", ""),
                 "avg_latency_ms": getattr(provider.health, "avg_latency_ms", 0.0),
@@ -1109,6 +1260,7 @@ async def apply_security_headers(request: Request, call_next):
 @app.get("/health")
 async def health():
     await _refresh_local_worker_probes()
+    readiness = _request_readiness_summary()
     providers = {
         name: {
             **p.health.to_dict(),
@@ -1120,12 +1272,23 @@ async def health():
             "limits": p.limits,
             "cache": p.cache,
             "image": getattr(p, "image", {}),
+            "lane": getattr(p, "lane", {}),
+            "transport": _provider_transport_snapshot(p),
+            "request_readiness": _provider_request_readiness(p),
+            "route_runtime_state": _provider_runtime_state_snapshot().get(name, {}),
         }
         for name, p in _providers.items()
     }
     return {
         "status": "ok",
-        "summary": _health_summary(),
+        "service_status": "ok",
+        "runtime_status": "ok",
+        "summary": {
+            **_health_summary(),
+            "providers_request_ready": readiness["providers_ready"],
+            "providers_request_not_ready": readiness["providers_not_ready"],
+        },
+        "request_readiness": readiness,
         "coverage": _build_capability_coverage(),
         "providers": providers,
     }
@@ -1141,6 +1304,7 @@ async def provider_inventory(
     rows = _build_provider_inventory(capability=capability, healthy=healthy)
     return {
         "providers": rows,
+        "request_readiness": _request_readiness_summary(),
         "coverage": _build_capability_coverage(),
     }
 
@@ -1542,7 +1706,11 @@ async def image_generations(request: Request):
                     client_tag=client_tag,
                     decision_reason=decision.reason,
                     confidence=decision.confidence,
-                    **_decision_metric_fields(decision),
+                    **_attempt_metric_fields(
+                        decision,
+                        provider_name,
+                        attempt_order=attempt_order,
+                    ),
                     attempt_order=attempt_order,
                 )
 
@@ -1580,7 +1748,11 @@ async def image_generations(request: Request):
                     client_tag=client_tag,
                     decision_reason=decision.reason,
                     confidence=decision.confidence,
-                    **_decision_metric_fields(decision),
+                    **_attempt_metric_fields(
+                        decision,
+                        provider_name,
+                        attempt_order=attempt_order,
+                    ),
                     attempt_order=attempt_order,
                 )
 
@@ -1681,7 +1853,11 @@ async def image_edits(request: Request):
                     client_tag=client_tag,
                     decision_reason=decision.reason,
                     confidence=decision.confidence,
-                    **_decision_metric_fields(decision),
+                    **_attempt_metric_fields(
+                        decision,
+                        provider_name,
+                        attempt_order=attempt_order,
+                    ),
                     attempt_order=attempt_order,
                 )
 
@@ -1719,7 +1895,11 @@ async def image_edits(request: Request):
                     client_tag=client_tag,
                     decision_reason=decision.reason,
                     confidence=decision.confidence,
-                    **_decision_metric_fields(decision),
+                    **_attempt_metric_fields(
+                        decision,
+                        provider_name,
+                        attempt_order=attempt_order,
+                    ),
                     attempt_order=attempt_order,
                 )
 
@@ -1842,7 +2022,11 @@ async def chat_completions(request: Request):
                     client_tag=client_tag,
                     decision_reason=decision.reason,
                     confidence=decision.confidence,
-                    **_decision_metric_fields(decision),
+                    **_attempt_metric_fields(
+                        decision,
+                        provider_name,
+                        attempt_order=attempt_order,
+                    ),
                     attempt_order=attempt_order,
                 )
 
@@ -1890,7 +2074,11 @@ async def chat_completions(request: Request):
                     client_tag=client_tag,
                     decision_reason=decision.reason,
                     confidence=decision.confidence,
-                    **_decision_metric_fields(decision),
+                    **_attempt_metric_fields(
+                        decision,
+                        provider_name,
+                        attempt_order=attempt_order,
+                    ),
                     attempt_order=attempt_order,
                 )
             continue

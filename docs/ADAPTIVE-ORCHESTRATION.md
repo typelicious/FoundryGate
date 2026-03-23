@@ -208,20 +208,300 @@ Guardrails:
 - keep old provider-only configs valid
 - do not pretend full adaptive routing already exists once lane metadata ships
 
-## `v1.9.0`: scoring and explainability
+### Observed `v1.8.0` smoke findings
+
+The first live operator smoke on `v1.8.0` validated the lane vocabulary and route-preview
+surfaces, but it also exposed a second track of work that must land before adaptive routing
+can be trusted operationally.
+
+What worked:
+
+- route previews now surface `canonical_model`, `route_type`, `lane_cluster`,
+  `known_routes`, and `degrade_to`
+- complex coding prompts can already escalate into stronger reasoning lanes
+- `/api/providers` and the shell dashboard expose live lane metadata
+
+What did not hold up strongly enough in live execution:
+
+- env and key handling still left room for unresolved or invalid auth values to make it
+  into real provider attempts
+- provider-specific path assumptions were still too generic for some aggregators
+- metrics and traces still favored the *initial chosen lane* over the *actual attempted route*
+- `/health` still answered the question "is the service up?" better than
+  "is this gateway request-ready against real upstreams?"
+
+That means the next line must prioritize runtime trust and observability before pushing live
+adaptation harder.
+
+## `v1.8.1`: runtime request-readiness hardening
 
 Primary goals:
 
-- add lane-aware scoring to the router
-- let scenarios influence the lane score threshold and degrade policy
-- emit richer decision traces that explain *why* one lane won
+- ensure live requests fail early and clearly when env, auth, or endpoint assumptions are wrong
+- move provider health closer to real request-readiness rather than basic process liveness
+- reduce avoidable runtime surprises before any aggressive adaptive behavior is layered on top
 
-Recommended minimal slices:
+Required slices:
 
-1. lane-aware candidate scoring in the router
-2. scenario-aware lane preference weights
-3. route-decision traces with chosen lane vs chosen route
-4. operator-facing "why this lane?" detail in dashboard and API traces
+1. env and key resolution hardening
+2. provider-specific endpoint normalization
+3. shallow auth and request-readiness probes
+4. clearer health separation between service state and upstream readiness
+
+### 1. Env and key resolution hardening
+
+Gate currently expands env placeholders in config, but live smoke showed that request paths can
+still encounter effectively unusable auth state.
+
+The runtime needs stricter handling for:
+
+- unresolved placeholder-shaped values such as `${OPENAI_API_KEY}`
+- self-referential or accidentally re-saved placeholder values in `faigate.env`
+- empty-but-present auth values
+- provider keys that are present syntactically but clearly invalid for the target provider
+
+Implementation expectations:
+
+- normalize auth-related config values into one explicit runtime form before provider backends are built
+- detect unresolved placeholder-shaped values as invalid runtime secrets, not usable API keys
+- surface those invalid states in doctor, provider probe, and request-readiness views
+- keep operator messaging concrete:
+  - missing key
+  - unresolved placeholder
+  - key shape invalid for provider family
+
+Relevant code surfaces:
+
+- `faigate/config.py`
+- `faigate/providers.py`
+- `faigate/main.py`
+- `scripts/faigate-doctor`
+- `scripts/faigate-provider-probe`
+
+### 2. Provider-specific endpoint normalization
+
+The current `openai-compat` path assumes one generic shape:
+
+- `GET /models`
+- `POST /chat/completions`
+
+That is too coarse for aggregators and gateway-style providers.
+
+We need route-specific transport metadata so that a provider route can declare:
+
+- models path
+- chat-completions path
+- image-generation path
+- whether a `/v1` prefix is already included in `base_url`
+- whether extra headers are required
+- whether a probe should use `GET /models`, a lightweight `POST`, or provider-specific auth validation
+
+The route registry should stop being capability-only metadata and start owning transport-level
+differences too.
+
+Implementation expectations:
+
+- extend provider or route metadata with per-route path overrides
+- remove provider-specific URL heuristics from scattered conditional branches
+- make OpenRouter, Kilo, BLACKBOX, and similar aggregators first-class route shapes instead of
+  "generic OpenAI-compatible providers with a different base URL"
+
+Relevant code surfaces:
+
+- `faigate/providers.py`
+- `faigate/lane_registry.py`
+- `faigate/wizard.py`
+- `faigate/provider_catalog.py`
+
+### 3. Shallow auth and request-readiness probes
+
+The current health path and provider probe are still too close to "config present + service up".
+
+We need one cheap readiness layer that can answer:
+
+- can this provider be reached?
+- does auth look accepted?
+- is the configured endpoint shape plausible?
+- is the configured model likely available?
+
+This should not become a full completion request for every check, but it must be stronger than
+basic `/models` reachability alone.
+
+Recommended readiness states:
+
+- `ready`
+- `missing-key`
+- `placeholder-key`
+- `invalid-auth`
+- `endpoint-mismatch`
+- `model-unavailable`
+- `quota-limited`
+- `rate-limited`
+- `transport-error`
+
+Implementation expectations:
+
+- add one request-readiness snapshot per provider or route
+- expose it in `/health`, `/api/providers`, provider probe, and dashboard drilldowns
+- keep the probe lightweight enough for regular operator use
+
+Relevant code surfaces:
+
+- `faigate/providers.py`
+- `faigate/main.py`
+- `faigate/dashboard.py`
+- `scripts/faigate-provider-probe`
+
+### 4. Health separation
+
+The live smoke showed that "service healthy" is not the same as "request-ready".
+
+Gate should surface at least four layers clearly:
+
+- `service`: process and service manager state
+- `runtime`: API reachable and config loaded
+- `provider`: provider object and last known provider-health state
+- `request_ready`: current live confidence that real routed requests can succeed
+
+Operator-facing outputs should stop collapsing these into one binary health line.
+
+Implementation expectations:
+
+- keep `/health` compact, but add explicit readiness buckets
+- update the shell dashboard and menu summary to distinguish:
+  - service healthy
+  - runtime healthy
+  - providers healthy
+  - providers request-ready
+
+Relevant code surfaces:
+
+- `faigate/main.py`
+- `faigate/dashboard.py`
+- `scripts/faigate-menu`
+- `scripts/faigate-health`
+
+## `v1.8.2`: trace and metrics hardening
+
+Primary goals:
+
+- make routing traces reflect the route that actually ran, not only the lane that originally won
+- record same-lane fallback and cluster downgrade behavior explicitly
+- make stats trustworthy enough for operator decisions and later adaptation work
+
+### Current gap
+
+The `v1.8.0` smoke showed that trace payloads already carry rich decision metadata, but the
+persisted runtime picture is still incomplete:
+
+- `selection_path` is not consistently recorded for real attempts
+- traces lean toward the initial decision context even when later attempts differ
+- stats cannot yet cleanly answer:
+  - which route actually ran?
+  - was this a same-lane fallback?
+  - was this a cluster downgrade?
+  - how many attempts did one request actually need?
+
+### Required slices
+
+1. persist the *actual attempted route* per attempt
+2. distinguish chosen lane from executed route in traces and stats
+3. record fallback semantics explicitly
+4. expose that model cleanly in dashboard and API responses
+
+### Target trace fields
+
+Per request or per attempt, Gate should preserve:
+
+- chosen canonical lane
+- chosen execution route
+- attempted routes in order
+- final route
+- final outcome
+- `selection_path`
+- `same_lane_fallback_used`
+- `cluster_degrade_used`
+- route penalty at decision time
+- rejected or skipped route reasons where practical
+
+Relevant code surfaces:
+
+- `faigate/main.py`
+- `faigate/metrics.py`
+- `faigate/router.py`
+- `faigate/dashboard.py`
+
+## `v1.9.0`: complexity scoring and explainable lane choice
+
+Primary goals:
+
+- improve how Gate reads prompt complexity, especially for coding-heavy clients
+- make `opencode` and similar coding clients escalate out of cheap lanes earlier and more reliably
+- turn route preview from "plausible" into "operator-trustworthy"
+
+### Current gap
+
+`v1.8.0` can already choose better lanes for obviously complex coding prompts, but it still
+misclassifies some architecture- or tradeoff-heavy requests as simple enough for cheap lanes.
+
+This means complexity scoring still overweights:
+
+- message brevity
+- generic short-message heuristics
+
+and underweights:
+
+- architecture signals
+- refactor and migration signals
+- rollback and failure-mode reasoning
+- design-tradeoff language
+- code review and implementation planning language
+
+### Required slices
+
+1. improve request-dimension extraction before heuristic routing
+2. add stronger client-aware coding complexity cues for `opencode`
+3. make short-but-complex coding prompts escalate earlier
+4. explain not only which lane won, but why cheaper lanes lost
+
+Implementation expectations:
+
+- expand heuristic dimensions beyond raw length
+- use coding-specific complexity vocabularies and signal clusters
+- let client and scenario posture influence the threshold for premium or reasoning lanes
+- retain explainability in route preview and traces
+
+Relevant code surfaces:
+
+- `faigate/router.py`
+- `faigate/main.py`
+- `tests/test_routing.py`
+- `tests/test_routing_dimensions.py`
+
+## `v1.9.x`: health-aware operator trust surfaces
+
+Primary goals:
+
+- make health and routing confidence understandable to operators at a glance
+- prevent a "green service" from hiding a "red request path"
+
+Recommended slices:
+
+1. request-readiness summary cards in dashboard
+2. route-pressure and degraded-lane visibility
+3. provider-family and lane-family readiness summaries
+4. explicit operator hints when auth, path, or model issues dominate failures
+
+## Why live adaptation waits
+
+Live adaptation should become a first-class routing force only after:
+
+- env and endpoint handling are hardened
+- request-readiness is visible and trustworthy
+- traces and stats describe *actual* route behavior cleanly
+- complexity scoring is strong enough to pick the right canonical lane more often
+
+Otherwise Gate risks adapting on top of noisy, misleading, or transport-layer failure causes.
 
 ## `v1.10.0`: live adaptation
 

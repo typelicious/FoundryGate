@@ -42,6 +42,7 @@ sys.modules["httpx"] = _httpx
 import faigate.main as main_module
 from faigate.config import load_config
 from faigate.main import (
+    _attempt_metric_fields,
     _extract_image_edit_request_fields,
     _normalize_image_request_body,
     _refresh_local_worker_probes,
@@ -751,6 +752,8 @@ class TestProviderCoverage:
 
         assert response["summary"]["providers_total"] == 4
         assert response["summary"]["providers_healthy"] == 4
+        assert response["summary"]["providers_request_ready"] == 4
+        assert response["providers"]["cloud-default"]["request_readiness"]["status"] == "ready"
         assert response["coverage"]["image_generation"]["total"] == 2
         assert response["coverage"]["image_generation"]["healthy"] == 2
         assert response["coverage"]["image_editing"]["providers"] == [
@@ -767,3 +770,61 @@ class TestProviderCoverage:
         assert provider_names == ["image-cloud", "image-large"]
         assert response["coverage"]["image_editing"]["total"] == 2
         assert response["providers"][0]["contract"] == "image-provider"
+        assert "request_readiness" in response
+        assert "transport" in response["providers"][0]
+
+
+@pytest.mark.asyncio
+async def test_attempt_metric_fields_capture_same_lane_fallback(monkeypatch):
+    monkeypatch.setattr(
+        main_module,
+        "_providers",
+        {
+            "anthropic-direct": _ProviderStub(
+                name="anthropic-direct",
+                model="claude-opus-4-6",
+                lane={
+                    "family": "anthropic",
+                    "name": "quality",
+                    "canonical_model": "anthropic/opus-4.6",
+                    "route_type": "direct",
+                    "cluster": "elite-reasoning",
+                    "benchmark_cluster": "quality-coding",
+                    "same_model_group": "anthropic/opus-4.6",
+                    "degrade_to": ["anthropic/sonnet-4.6"],
+                },
+            ),
+            "anthropic-marketplace": _ProviderStub(
+                name="anthropic-marketplace",
+                model="claude-opus-4-6",
+                lane={
+                    "family": "openrouter",
+                    "name": "quality",
+                    "canonical_model": "anthropic/opus-4.6",
+                    "route_type": "aggregator",
+                    "cluster": "elite-reasoning",
+                    "benchmark_cluster": "quality-coding",
+                    "same_model_group": "anthropic/opus-4.6",
+                    "degrade_to": ["anthropic/sonnet-4.6"],
+                },
+            ),
+        },
+        raising=False,
+    )
+
+    metric_fields = _attempt_metric_fields(
+        main_module.RoutingDecision(
+            provider_name="anthropic-direct",
+            layer="heuristic",
+            rule_name="complex-code",
+            confidence=0.8,
+            reason="Heuristic matched",
+        ),
+        "anthropic-marketplace",
+        attempt_order=["anthropic-direct", "anthropic-marketplace"],
+    )
+
+    assert metric_fields["canonical_model"] == "anthropic/opus-4.6"
+    assert metric_fields["route_type"] == "aggregator"
+    assert metric_fields["selection_path"] == "same-lane-route"
+    assert metric_fields["decision_details"]["same_model_route"] is True

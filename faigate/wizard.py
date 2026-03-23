@@ -1045,6 +1045,7 @@ def build_provider_probe_report(
         health = provider_health.get(name) or {}
         healthy = bool(health.get("healthy"))
         last_error = str(health.get("last_error", "") or "").strip()
+        request_readiness = health.get("request_readiness") or {}
         contract = str(provider.get("contract", "generic") or "generic")
         if missing_key:
             status = "missing-key"
@@ -1052,6 +1053,9 @@ def build_provider_probe_report(
         elif health_payload is None:
             status = "configured"
             status_reason = "health endpoint unavailable; config and env look present"
+        elif request_readiness and not bool(request_readiness.get("ready")):
+            status = str(request_readiness.get("status") or "unhealthy")
+            status_reason = str(request_readiness.get("reason") or "route is not request-ready")
         elif healthy:
             status = "ready"
             status_reason = "responding through /health"

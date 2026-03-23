@@ -345,6 +345,60 @@ _PROVIDER_LANE_BINDINGS: dict[str, dict[str, Any]] = {
     },
 }
 
+_DEFAULT_TRANSPORT_BY_BACKEND: dict[str, dict[str, Any]] = {
+    "openai-compat": {
+        "auth_mode": "bearer",
+        "probe_strategy": "models",
+        "models_path": "/models",
+        "chat_path": "/chat/completions",
+        "image_generation_path": "/images/generations",
+        "image_edit_path": "/images/edits",
+        "requires_api_key": True,
+        "supports_models_probe": True,
+    },
+    "anthropic-compat": {
+        "auth_mode": "bearer",
+        "probe_strategy": "models",
+        "models_path": "/models",
+        "chat_path": "/chat/completions",
+        "image_generation_path": "/images/generations",
+        "image_edit_path": "/images/edits",
+        "requires_api_key": True,
+        "supports_models_probe": True,
+    },
+    "google-genai": {
+        "auth_mode": "query",
+        "probe_strategy": "none",
+        "models_path": "",
+        "chat_path": "",
+        "image_generation_path": "",
+        "image_edit_path": "",
+        "requires_api_key": True,
+        "supports_models_probe": False,
+    },
+}
+
+_PROVIDER_TRANSPORT_BINDINGS: dict[str, dict[str, Any]] = {
+    "openrouter-fallback": {
+        "auth_mode": "bearer",
+        "probe_strategy": "models",
+        "models_path": "/models",
+        "chat_path": "/chat/completions",
+    },
+    "kilocode": {
+        "auth_mode": "bearer",
+        "probe_strategy": "models",
+        "models_path": "/models",
+        "chat_path": "/chat/completions",
+    },
+    "blackbox-free": {
+        "auth_mode": "bearer",
+        "probe_strategy": "models",
+        "models_path": "/models",
+        "chat_path": "/chat/completions",
+    },
+}
+
 _CANONICAL_MODEL_ROUTE_REGISTRY: dict[str, list[dict[str, Any]]] = {
     "anthropic/opus-4.6": [
         {
@@ -490,6 +544,20 @@ def get_provider_lane_binding(provider_name: str) -> dict[str, Any]:
     """Return lane metadata for one configured provider or route."""
     binding = _PROVIDER_LANE_BINDINGS.get(provider_name, {})
     return deepcopy(binding)
+
+
+def get_provider_transport_binding(
+    provider_name: str,
+    *,
+    backend: str = "openai-compat",
+    contract: str = "generic",
+) -> dict[str, Any]:
+    """Return normalized transport defaults for one provider backend/route."""
+    binding = deepcopy(_DEFAULT_TRANSPORT_BY_BACKEND.get(backend, {}))
+    if contract == "local-worker":
+        binding["requires_api_key"] = False
+    binding.update(deepcopy(_PROVIDER_TRANSPORT_BINDINGS.get(provider_name, {})))
+    return binding
 
 
 def get_canonical_model_routes(canonical_model: str) -> list[dict[str, Any]]:

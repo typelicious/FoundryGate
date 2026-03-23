@@ -178,6 +178,23 @@ class TestProviderHealthProbes:
         assert "Probe HTTP 503" in backend.health.last_error
 
     @pytest.mark.asyncio
+    async def test_provider_request_readiness_flags_unresolved_key(self):
+        backend = ProviderBackend(
+            "cloud-default",
+            {
+                "backend": "openai-compat",
+                "base_url": "https://api.example.com/v1",
+                "api_key": "${OPENAI_API_KEY}",
+                "model": "gpt-4o",
+            },
+        )
+
+        readiness = backend.request_readiness()
+
+        assert readiness["ready"] is False
+        assert readiness["status"] == "unresolved-key"
+
+    @pytest.mark.asyncio
     async def test_assistant_none_content_converted_to_empty_string(self):
         """assistant message with content=None (tool-call turn) must produce text=''."""
         backend = _make_google_backend()
@@ -223,6 +240,42 @@ class TestProviderHealthProbes:
 
 
 class TestImageGeneration:
+    @pytest.mark.asyncio
+    async def test_openai_completion_honors_custom_transport_chat_path(self):
+        backend = ProviderBackend(
+            "cloud-default",
+            {
+                "backend": "openai-compat",
+                "base_url": "https://api.example.com/v1",
+                "api_key": "secret",
+                "model": "gpt-4o",
+                "transport": {"chat_path": "/responses/chat"},
+            },
+        )
+        captured: dict = {}
+
+        class _FakeResp:
+            status_code = 200
+
+            def json(self):
+                return {
+                    "id": "chatcmpl-test",
+                    "choices": [{"message": {"role": "assistant", "content": "ok"}}],
+                    "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+                }
+
+        async def _fake_post(url, json=None, headers=None, **_kw):
+            captured["url"] = url
+            captured["json"] = json or {}
+            captured["headers"] = headers or {}
+            return _FakeResp()
+
+        backend._client.post = _fake_post  # type: ignore[attr-defined]
+
+        await backend.complete([{"role": "user", "content": "hello"}])
+
+        assert captured["url"] == "https://api.example.com/v1/responses/chat"
+
     @pytest.mark.asyncio
     async def test_openai_image_generation_posts_to_images_endpoint(self):
         backend = ProviderBackend(
