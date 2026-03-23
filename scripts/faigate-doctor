@@ -150,6 +150,11 @@ if health_raw:
         compatibility = str(request_readiness.get("compatibility") or "")
         confidence = str(request_readiness.get("probe_confidence") or "")
         verified_via = str(request_readiness.get("verified_via") or "")
+        probe_payload = str(request_readiness.get("probe_payload") or "")
+        operator_hint = str(request_readiness.get("operator_hint") or "")
+        runtime_penalty = int(request_readiness.get("runtime_penalty") or 0)
+        runtime_issue_type = str(request_readiness.get("runtime_issue_type") or "")
+        cooldown_active = bool(request_readiness.get("runtime_cooldown_active"))
         profile_bits = []
         if profile:
             profile_bits.append(profile)
@@ -165,6 +170,16 @@ if health_raw:
             print(f"[ok] request-ready: {provider_name} -> {status}{profile_suffix} ({reason})")
         else:
             print(f"[warn] request-ready: {provider_name} -> {status}{profile_suffix} ({reason})")
+        if probe_payload:
+            print(f"[ok] request-ready payload: {provider_name} -> {probe_payload}")
+        if operator_hint:
+            print(f"[ok] request-ready next step: {provider_name} -> {operator_hint}")
+        if runtime_penalty or runtime_issue_type:
+            cooldown_suffix = " | cooldown active" if cooldown_active else ""
+            print(
+                f"[ok] request-ready runtime: {provider_name} -> penalty={runtime_penalty}"
+                f" | issue={runtime_issue_type or 'n/a'}{cooldown_suffix}"
+            )
     if total:
         print(f"[ok] request readiness summary: {ready}/{total} provider routes look request-ready")
 PY

@@ -407,6 +407,11 @@ providers:
                                 "profile": "openai-compatible",
                                 "compatibility": "native",
                                 "probe_confidence": "high",
+                                "probe_payload": "openai-chat-minimal | user='ping' | max_tokens=1",
+                                "operator_hint": "route can carry live traffic",
+                                "runtime_penalty": 0,
+                                "runtime_issue_type": "",
+                                "runtime_cooldown_active": False,
                             },
                         }
                     },
@@ -435,6 +440,8 @@ providers:
     assert "request-ready: deepseek-chat -> ready" in result.stdout
     assert "request readiness summary: 1/1 provider routes look request-ready" in result.stdout
     assert "[openai-compatible | native | confidence=high]" in result.stdout
+    assert "request-ready payload: deepseek-chat -> openai-chat-minimal" in result.stdout
+    assert "request-ready next step: deepseek-chat -> route can carry live traffic" in result.stdout
 
 
 def test_faigate_service_lib_detects_homebrew_runtime_paths(tmp_path: Path):

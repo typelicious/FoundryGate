@@ -763,6 +763,24 @@ class TestProviderCoverage:
         assert response["providers"]["image-cloud"]["image"]["max_outputs"] == 1
 
     @pytest.mark.asyncio
+    async def test_health_request_readiness_enters_cooldown_under_runtime_pressure(
+        self, preview_config
+    ):
+        main_module._adaptive_state.record_failure("cloud-default", error="429 rate limit")
+        main_module._adaptive_state.record_failure("cloud-default", error="429 rate limit")
+
+        response = await health()
+
+        readiness = response["providers"]["cloud-default"]["request_readiness"]
+        assert readiness["ready"] is False
+        assert readiness["status"] == "rate-limited"
+        assert readiness["runtime_penalty"] >= 20
+        assert readiness["runtime_cooldown_active"] is True
+        assert readiness["operator_hint"] == (
+            "keep this route out of primary traffic until the cooldown pressure drops"
+        )
+
+    @pytest.mark.asyncio
     async def test_provider_inventory_filters_by_capability(self, preview_config):
         response = await provider_inventory(capability="image_editing")
 

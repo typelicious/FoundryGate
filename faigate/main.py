@@ -397,15 +397,50 @@ def _provider_transport_snapshot(provider: Any) -> dict[str, Any]:
 
 
 def _provider_request_readiness(provider: Any) -> dict[str, Any]:
+    runtime_state = _provider_runtime_state_snapshot().get(getattr(provider, "name", ""), {})
+    runtime_penalty = int(runtime_state.get("penalty", 0) or 0)
+    runtime_issue_type = str(runtime_state.get("last_issue_type") or "")
+
     if hasattr(provider, "request_readiness"):
-        return dict(provider.request_readiness() or {})
-    ready = bool(getattr(getattr(provider, "health", None), "healthy", True))
-    return {
-        "ready": ready,
-        "status": "ready" if ready else "degraded",
-        "reason": "provider stub does not expose request-readiness details",
-        "probe_strategy": "unknown",
-    }
+        state = dict(provider.request_readiness() or {})
+    else:
+        ready = bool(getattr(getattr(provider, "health", None), "healthy", True))
+        state = {
+            "ready": ready,
+            "status": "ready" if ready else "degraded",
+            "reason": "provider stub does not expose request-readiness details",
+            "probe_strategy": "unknown",
+        }
+
+    state["runtime_penalty"] = runtime_penalty
+    state["runtime_issue_type"] = runtime_issue_type
+    state["runtime_cooldown_active"] = False
+
+    if runtime_penalty >= 20 and runtime_issue_type in {
+        "quota-exhausted",
+        "rate-limited",
+        "model-unavailable",
+    }:
+        state["ready"] = False
+        state["status"] = runtime_issue_type
+        state["reason"] = (
+            "route is in runtime cooldown after recent "
+            f"{runtime_issue_type.replace('-', ' ')} failures"
+        )
+        state["runtime_cooldown_active"] = True
+        state["operator_hint"] = (
+            "keep this route out of primary traffic until the cooldown pressure drops"
+        )
+    elif runtime_penalty >= 12 and runtime_issue_type and bool(state.get("ready")):
+        state["status"] = "ready-degraded"
+        state["reason"] = (
+            "route is still request-ready but operating under recent "
+            f"{runtime_issue_type.replace('-', ' ')} pressure"
+        )
+        state["operator_hint"] = (
+            "prefer lower-pressure siblings while this route recovers"
+        )
+    return state
 
 
 def _request_readiness_summary() -> dict[str, Any]:
