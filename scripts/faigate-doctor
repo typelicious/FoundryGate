@@ -85,7 +85,11 @@ import yaml
 from faigate.onboarding import collect_provider_env_requirements
 from faigate.provider_catalog import build_provider_catalog_report
 from faigate.config import ConfigError, load_config
-from faigate.lane_registry import get_canonical_model_routes, get_route_add_recommendations
+from faigate.lane_registry import (
+    get_canonical_model_routes,
+    get_provider_lane_binding,
+    get_route_add_recommendations,
+)
 
 config_path = Path(os.environ.get("FAIGATE_CONFIG_FILE", ""))
 raw_config = {}
@@ -211,7 +215,8 @@ if health_raw:
         runtime_last_recovered_issue = str(
             request_readiness.get("runtime_last_recovered_issue_type") or ""
         )
-        lane = payload.get("lane") or {}
+        lane = dict(get_provider_lane_binding(provider_name))
+        lane.update(payload.get("lane") or {})
         family = str(lane.get("family") or "")
         action_group = classify_action(
             status=status,
@@ -246,6 +251,9 @@ if health_raw:
                 "family": family or "unclassified",
                 "canonical_model": canonical_model,
                 "lane_cluster": lane_cluster,
+                "freshness_status": str(lane.get("freshness_status") or ""),
+                "review_age_days": int(lane.get("review_age_days") or -1),
+                "freshness_hint": str(lane.get("freshness_hint") or ""),
                 "degrade_to": degrade_to,
                 "known_mirror_gaps": known_mirror_gaps,
                 "add_recommendations": add_recommendations,
@@ -319,10 +327,22 @@ if health_raw:
             details.append(row["canonical_model"])
         if row["lane_cluster"]:
             details.append(row["lane_cluster"])
+        if row["freshness_status"]:
+            details.append(f"freshness={row['freshness_status']}")
         print(
             f"[ok] request-ready action: {row['provider']} -> {row['action']} "
             f"[{' | '.join(details)}]"
         )
+        if row["review_age_days"] >= 0 or row["freshness_hint"]:
+            freshness_bits = []
+            if row["review_age_days"] >= 0:
+                freshness_bits.append(f"review_age={row['review_age_days']}d")
+            if row["freshness_hint"]:
+                freshness_bits.append(row["freshness_hint"])
+            print(
+                f"[ok] request-ready freshness: {row['provider']} -> "
+                + " | ".join(freshness_bits)
+            )
         if row["probe_payload"]:
             print(f"[ok] request-ready payload: {row['provider']} -> {row['probe_payload']}")
         if row["operator_hint"]:

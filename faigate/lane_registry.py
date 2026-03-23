@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from datetime import date
 from typing import Any
 
 _CANONICAL_MODEL_LANES: dict[str, dict[str, Any]] = {
@@ -345,6 +346,52 @@ _PROVIDER_LANE_BINDINGS: dict[str, dict[str, Any]] = {
     },
 }
 
+
+def _freshness_state_from_review(last_reviewed: str) -> dict[str, Any]:
+    reviewed = str(last_reviewed or "").strip()
+    if not reviewed:
+        return {
+            "last_reviewed": "",
+            "review_age_days": -1,
+            "freshness_status": "unknown",
+            "freshness_hint": "review date not recorded",
+        }
+
+    reviewed_on = date.fromisoformat(reviewed)
+    age_days = max(0, (date.today() - reviewed_on).days)
+    if age_days <= 7:
+        status = "fresh"
+        hint = "benchmark and cost assumptions were reviewed recently"
+    elif age_days <= 21:
+        status = "aging"
+        hint = "benchmark and cost assumptions are aging and worth rechecking soon"
+    else:
+        status = "stale"
+        hint = "benchmark and cost assumptions are stale; review before trusting them heavily"
+    return {
+        "last_reviewed": reviewed,
+        "review_age_days": age_days,
+        "freshness_status": status,
+        "freshness_hint": hint,
+    }
+
+
+def _lane_binding_with_freshness(binding: dict[str, Any]) -> dict[str, Any]:
+    lane = deepcopy(binding)
+    canonical_model = str(lane.get("canonical_model") or "")
+    canonical = _CANONICAL_MODEL_LANES.get(canonical_model, {})
+    freshness = _freshness_state_from_review(str(canonical.get("last_reviewed") or ""))
+    lane.update(
+        {
+            "last_reviewed": freshness["last_reviewed"],
+            "review_age_days": freshness["review_age_days"],
+            "freshness_status": freshness["freshness_status"],
+            "freshness_hint": freshness["freshness_hint"],
+        }
+    )
+    return lane
+
+
 _DEFAULT_TRANSPORT_BY_BACKEND: dict[str, dict[str, Any]] = {
     "openai-compat": {
         "profile": "openai-compatible",
@@ -591,13 +638,21 @@ _CANONICAL_MODEL_ROUTE_REGISTRY: dict[str, list[dict[str, Any]]] = {
 
 def get_canonical_model_catalog() -> dict[str, dict[str, Any]]:
     """Return the canonical model-lane catalog."""
-    return deepcopy(_CANONICAL_MODEL_LANES)
+    payload: dict[str, dict[str, Any]] = {}
+    for canonical_model, item in _CANONICAL_MODEL_LANES.items():
+        payload[canonical_model] = {
+            **deepcopy(item),
+            **_freshness_state_from_review(str(item.get("last_reviewed") or "")),
+        }
+    return payload
 
 
 def get_provider_lane_binding(provider_name: str) -> dict[str, Any]:
     """Return lane metadata for one configured provider or route."""
     binding = _PROVIDER_LANE_BINDINGS.get(provider_name, {})
-    return deepcopy(binding)
+    if not binding:
+        return {}
+    return _lane_binding_with_freshness(binding)
 
 
 def get_provider_transport_binding(

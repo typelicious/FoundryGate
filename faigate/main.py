@@ -27,6 +27,7 @@ from . import __version__
 from .adaptation import AdaptiveRouteState
 from .config import Config, load_config
 from .hooks import AppliedHooks, HookExecutionError, RequestHookContext, apply_request_hooks
+from .lane_registry import get_provider_lane_binding
 from .metrics import MetricsStore, calc_cost
 from .provider_catalog import build_provider_catalog_report, build_provider_discovery_view
 from .providers import ProviderBackend, ProviderError
@@ -694,6 +695,12 @@ def _build_route_summary(decision: RoutingDecision) -> dict[str, Any]:
         ),
         "cost_tier": str(details.get("cost_tier") or selected_row.get("cost_tier") or ""),
         "estimated_request_cost_usd": float(selected_row.get("estimated_request_cost_usd") or 0.0),
+        "freshness_status": str(
+            details.get("freshness_status") or selected_row.get("freshness_status") or ""
+        ),
+        "review_age_days": int(
+            details.get("review_age_days") or selected_row.get("review_age_days") or -1
+        ),
         "selection_path": str(details.get("selection_path") or "primary-selected"),
     }
 
@@ -734,6 +741,11 @@ def _build_route_summary(decision: RoutingDecision) -> dict[str, Any]:
             + f"${selected['estimated_request_cost_usd']:.6f}"
             + f" on the {selected.get('cost_tier') or 'current'} cost lane."
         )
+    if selected.get("freshness_status"):
+        freshness_text = str(selected["freshness_status"])
+        if selected.get("review_age_days", -1) >= 0:
+            freshness_text += f" ({selected['review_age_days']}d since review)"
+        why_selected.append(f"Benchmark/cost assumptions are currently {freshness_text}.")
     if selected["canonical_model"]:
         why_selected.append(
             f"Selected canonical lane {selected['canonical_model']} via {selected['route_type'] or 'default'} route."
@@ -763,6 +775,10 @@ def _build_route_summary(decision: RoutingDecision) -> dict[str, Any]:
             reason_bits.append(f"weaker benchmark fit ({row.get('benchmark_cluster')})")
         if row.get("estimated_request_cost_usd"):
             reason_bits.append(f"est. ${float(row.get('estimated_request_cost_usd') or 0.0):.6f}")
+        if row.get("freshness_status") and row.get("freshness_status") != selected.get(
+            "freshness_status"
+        ):
+            reason_bits.append(f"{row.get('freshness_status')} assumptions")
         alternatives.append(
             {
                 "provider": provider_name,
@@ -772,6 +788,8 @@ def _build_route_summary(decision: RoutingDecision) -> dict[str, Any]:
                 "benchmark_cluster": str(row.get("benchmark_cluster") or ""),
                 "cost_tier": str(row.get("cost_tier") or ""),
                 "estimated_request_cost_usd": float(row.get("estimated_request_cost_usd") or 0.0),
+                "freshness_status": str(row.get("freshness_status") or ""),
+                "review_age_days": int(row.get("review_age_days") or -1),
                 "reason": ", ".join(reason_bits)
                 if reason_bits
                 else "ranked below the selected route",
@@ -852,6 +870,8 @@ def _build_provider_inventory(
         if healthy is not None and bool(provider.health.healthy) != bool(healthy):
             continue
 
+        lane = dict(get_provider_lane_binding(name))
+        lane.update(dict(getattr(provider, "lane", {}) or {}))
         rows.append(
             {
                 "name": name,
@@ -865,7 +885,7 @@ def _build_provider_inventory(
                 "limits": provider.limits,
                 "cache": provider.cache,
                 "image": getattr(provider, "image", {}),
-                "lane": getattr(provider, "lane", {}),
+                "lane": lane,
                 "transport": _provider_transport_snapshot(provider),
                 "request_readiness": _provider_request_readiness(provider),
                 "route_runtime_state": _provider_runtime_state_snapshot().get(name, {}),

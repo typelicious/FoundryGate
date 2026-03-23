@@ -80,6 +80,10 @@ _SUPPORTED_PROVIDER_LANE_KEYS = {
     "tool_strength",
     "same_model_group",
     "degrade_to",
+    "last_reviewed",
+    "review_age_days",
+    "freshness_status",
+    "freshness_hint",
 }
 _SUPPORTED_PROVIDER_ROUTE_TYPES = {"direct", "aggregator", "wallet-router", "local"}
 _SUPPORTED_PROVIDER_TRANSPORT_KEYS = {
@@ -494,6 +498,24 @@ def _normalize_provider_lane(name: str, cfg: dict[str, Any]) -> dict[str, Any]:
         if not isinstance(item, str) or not item.strip():
             raise ConfigError(f"Provider '{name}' lane.degrade_to must contain non-empty strings")
         normalized["degrade_to"].append(item.strip())
+
+    last_reviewed = str(lane.get("last_reviewed", "") or "").strip()
+    normalized["last_reviewed"] = last_reviewed
+
+    review_age_days = lane.get("review_age_days", -1)
+    if review_age_days in (None, ""):
+        normalized["review_age_days"] = -1
+    else:
+        try:
+            normalized["review_age_days"] = int(review_age_days)
+        except (TypeError, ValueError) as exc:
+            raise ConfigError(f"Provider '{name}' lane.review_age_days must be an integer") from exc
+
+    freshness_status = str(lane.get("freshness_status", "") or "").strip()
+    normalized["freshness_status"] = freshness_status
+
+    freshness_hint = str(lane.get("freshness_hint", "") or "").strip()
+    normalized["freshness_hint"] = freshness_hint
 
     return normalized
 

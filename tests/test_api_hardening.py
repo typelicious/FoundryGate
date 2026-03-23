@@ -506,9 +506,14 @@ metrics:
     assert body["route_summary"]["selected"]["benchmark_cluster"] == "reasoning-coding"
     assert body["route_summary"]["selected"]["cost_tier"] == "standard"
     assert body["route_summary"]["selected"]["estimated_request_cost_usd"] > 0
+    assert body["route_summary"]["selected"]["freshness_status"]
     assert any("Opencode complexity bias" in item for item in body["route_summary"]["why_selected"])
     assert any(
         "Benchmark fit favored reasoning-coding" in item
+        for item in body["route_summary"]["why_selected"]
+    )
+    assert any(
+        "Benchmark/cost assumptions are currently" in item
         for item in body["route_summary"]["why_selected"]
     )
     assert body["route_summary"]["alternatives"][0]["provider"] == "gemini-flash-lite"

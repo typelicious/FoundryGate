@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .config import Config
-from .lane_registry import get_canonical_model_routes
+from .lane_registry import get_canonical_model_catalog, get_canonical_model_routes
 
 logger = logging.getLogger("faigate.router")
 _BOUNDARY_TEXT_RE = re.compile(r"[a-z0-9]")
@@ -292,6 +292,13 @@ _ESTIMATED_COST_POSTURE_BANDS = {
     ],
 }
 
+_FRESHNESS_POSTURE_SCORES = {
+    "quality": {"fresh": 3, "aging": 1, "stale": -3, "unknown": -1},
+    "balanced": {"fresh": 2, "aging": 0, "stale": -2, "unknown": -1},
+    "eco": {"fresh": 1, "aging": 0, "stale": -1, "unknown": -1},
+    "free": {"fresh": 0, "aging": 0, "stale": -1, "unknown": -1},
+}
+
 _FALLBACK_RELATION_WEIGHTS = {
     "quality": {
         "same_model_route": 40,
@@ -557,6 +564,17 @@ def _cost_posture_score(
         if estimated_cost_usd <= threshold:
             return score + max(0, tier_score // 2)
     return -4 if routing_posture in {"eco", "free"} else -2
+
+
+def _freshness_posture_score(lane: dict[str, Any], routing_posture: str) -> int:
+    """Reward fresh benchmark assumptions and temper stale ones."""
+    if not lane:
+        return 0
+    freshness_status = str(lane.get("freshness_status") or "unknown")
+    return _FRESHNESS_POSTURE_SCORES.get(
+        routing_posture,
+        _FRESHNESS_POSTURE_SCORES["balanced"],
+    ).get(freshness_status, 0)
 
 
 def _merge_select_constraints(*selects: dict[str, Any]) -> dict[str, Any]:
@@ -1164,6 +1182,9 @@ class Router:
                 "cost_score": 0,
                 "estimated_request_cost_usd": 0.0,
                 "cost_tier": "",
+                "freshness_score": 0,
+                "freshness_status": "unknown",
+                "review_age_days": -1,
                 "adaptation_penalty": 0,
                 "headroom": 0,
                 "sort_key": (0, 0, 0),
@@ -1238,6 +1259,7 @@ class Router:
             routing_posture=routing_posture,
             cost_tier=cost_tier,
         )
+        freshness_score = _freshness_posture_score(lane, routing_posture)
         adaptation_penalty = int(runtime_state.get("penalty", 0) or 0)
         recovery_score = self._recovery_posture_score(lane, runtime_state, routing_posture)
         image_score = 0
@@ -1297,6 +1319,7 @@ class Router:
             + benchmark_score
             + benchmark_request_score
             + cost_score
+            + freshness_score
             + recovery_score
             + image_score
             + image_policy_score
@@ -1320,6 +1343,9 @@ class Router:
             "cost_score": cost_score,
             "estimated_request_cost_usd": estimated_request_cost_usd,
             "cost_tier": cost_tier,
+            "freshness_score": freshness_score,
+            "freshness_status": str(lane.get("freshness_status") or ""),
+            "review_age_days": int(lane.get("review_age_days") or -1),
             "adaptation_penalty": adaptation_penalty,
             "recovery_score": recovery_score,
             "image_score": image_score,
@@ -1360,6 +1386,8 @@ class Router:
             "benchmark_cluster": lane.get("benchmark_cluster", ""),
             "quality_tier": lane.get("quality_tier", ""),
             "reasoning_strength": lane.get("reasoning_strength", ""),
+            "last_reviewed": lane.get("last_reviewed", ""),
+            "freshness_hint": lane.get("freshness_hint", ""),
             "same_model_group": lane.get("same_model_group", ""),
             "degrade_to": list(lane.get("degrade_to", [])),
             "sort_key": (
@@ -1371,7 +1399,11 @@ class Router:
 
     def _provider_lane_summary(self, name: str) -> dict[str, Any]:
         provider = self.config.provider(name) or {}
-        lane = provider.get("lane", {})
+        lane = get_canonical_model_catalog().get(
+            str((provider.get("lane") or {}).get("canonical_model") or ""),
+            {},
+        )
+        lane.update(provider.get("lane", {}) if isinstance(provider.get("lane", {}), dict) else {})
         if not isinstance(lane, dict):
             return {}
         return {
@@ -1385,6 +1417,10 @@ class Router:
             "reasoning_strength": str(lane.get("reasoning_strength") or ""),
             "context_strength": str(lane.get("context_strength") or ""),
             "tool_strength": str(lane.get("tool_strength") or ""),
+            "last_reviewed": str(lane.get("last_reviewed") or ""),
+            "review_age_days": int(lane.get("review_age_days") or -1),
+            "freshness_status": str(lane.get("freshness_status") or ""),
+            "freshness_hint": str(lane.get("freshness_hint") or ""),
             "same_model_group": str(lane.get("same_model_group") or ""),
             "degrade_to": list(lane.get("degrade_to") or []),
         }
@@ -1642,6 +1678,9 @@ class Router:
                     "cost_score": details["cost_score"],
                     "estimated_request_cost_usd": details["estimated_request_cost_usd"],
                     "cost_tier": details["cost_tier"],
+                    "freshness_score": details["freshness_score"],
+                    "freshness_status": details["freshness_status"],
+                    "review_age_days": details["review_age_days"],
                     "runtime_penalty": details["runtime_penalty"],
                     "runtime_issue_type": details["runtime_issue_type"],
                     "runtime_recovered_recently": details["runtime_recovered_recently"],

@@ -1184,7 +1184,8 @@ def build_provider_probe_report(
                 (provider.get("lane") or {}).get("family") or lane_binding.get("family") or ""
             ),
         )
-        lane = dict(provider.get("lane") or lane_binding or {})
+        lane = dict(lane_binding or {})
+        lane.update(dict(provider.get("lane") or {}))
         canonical_model = str(lane.get("canonical_model") or "")
         known_routes = get_canonical_model_routes(canonical_model) if canonical_model else []
         unconfigured_mirrors = [
@@ -1209,6 +1210,9 @@ def build_provider_probe_report(
                 "canonical_model": canonical_model,
                 "lane_family": str(lane.get("family") or ""),
                 "lane_cluster": str(lane.get("cluster") or ""),
+                "freshness_status": str(lane.get("freshness_status") or ""),
+                "review_age_days": int(lane.get("review_age_days") or -1),
+                "freshness_hint": str(lane.get("freshness_hint") or ""),
                 "degrade_to": [str(item) for item in (lane.get("degrade_to") or []) if str(item)],
                 "known_mirror_gaps": unconfigured_mirrors,
                 "transport_profile": str(
@@ -1300,6 +1304,11 @@ def build_provider_probe_report(
             "health_live": health_payload is not None,
             "live_probe": live_probe,
             "actions": action_counts,
+            "freshness": {
+                "fresh": sum(1 for row in rows if row.get("freshness_status") == "fresh"),
+                "aging": sum(1 for row in rows if row.get("freshness_status") == "aging"),
+                "stale": sum(1 for row in rows if row.get("freshness_status") == "stale"),
+            },
             "families": list(family_summaries.values()),
             "mirror_gaps": sum(1 for row in rows if row.get("known_mirror_gaps")),
             "recommendations": recommendation_counts,
@@ -1330,6 +1339,7 @@ def render_provider_probe_text(report: dict[str, Any]) -> str:
     ]
     lines.append("Action summary: " + " | ".join(action_bits))
     families = summary.get("families") or []
+    freshness_counts = dict(summary.get("freshness") or {})
     if families:
         family_bits = []
         for family in families[:3]:
@@ -1340,6 +1350,12 @@ def render_provider_probe_text(report: dict[str, Any]) -> str:
         lines.append("Family actions: " + " | ".join(family_bits))
         mirror_gap_count = summary.get("mirror_gaps", 0)
         lines.append(f"Mirror gaps: {mirror_gap_count} routes with known mirrors not configured")
+    lines.append(
+        "Freshness: "
+        + f"fresh={freshness_counts['fresh']} | "
+        + f"aging={freshness_counts['aging']} | "
+        + f"stale={freshness_counts['stale']}"
+    )
     recommendations = summary.get("recommendations") or {}
     lines.append(
         "Fallback guidance: "
@@ -1376,7 +1392,13 @@ def render_provider_probe_text(report: dict[str, Any]) -> str:
                 bits.append(f"canonical: {row['canonical_model']}")
             if row.get("lane_cluster"):
                 bits.append(f"cluster: {row['lane_cluster']}")
+            if row.get("freshness_status"):
+                bits.append(f"freshness: {row['freshness_status']}")
             lines.append("  " + " | ".join(bits))
+        if int(row.get("review_age_days", -1)) >= 0:
+            lines.append("  " + f"review age: {row['review_age_days']}d")
+        if row.get("freshness_hint"):
+            lines.append("  " + f"freshness hint: {row['freshness_hint']}")
         if row.get("transport_profile"):
             lines.append(
                 "  "
@@ -1884,8 +1906,14 @@ def _scenario_routing_rationale_lines(
         provider_caps = dict((provider_factory.get("provider") or {}).get("capabilities") or {})
         cost_tier = str(provider_caps.get("cost_tier") or "variable")
         route_type = str(lane.get("route_type") or "default")
+        freshness_status = str(lane.get("freshness_status") or "")
+        review_age_days = int(lane.get("review_age_days") or -1)
         role = _scenario_provider_role(provider_name)
         line = f"{provider_name}: {benchmark_cluster} / {cost_tier} / {route_type}"
+        if freshness_status:
+            line += f" / {freshness_status}"
+        if review_age_days >= 0:
+            line += f" ({review_age_days}d)"
         if role:
             line += f" ({role})"
         lines.append(line)

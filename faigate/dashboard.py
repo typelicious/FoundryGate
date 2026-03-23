@@ -353,6 +353,9 @@ def _enrich_provider_rows_with_lane(
                     or lane.get("quality_tier")
                     or ""
                 ),
+                "freshness_status": str(lane.get("freshness_status") or ""),
+                "review_age_days": int(lane.get("review_age_days") or -1),
+                "freshness_hint": str(lane.get("freshness_hint") or ""),
                 "transport": dict(provider_inventory.get("transport") or {}),
                 "request_readiness": dict(provider_inventory.get("request_readiness") or {}),
                 "route_runtime_state": dict(provider_inventory.get("route_runtime_state") or {}),
@@ -407,6 +410,14 @@ def _provider_routing_fit(row: dict[str, Any]) -> str:
     if cost_tier:
         return f"{cost_tier} cost posture over {route_type or 'default'} routing"
     return route_type or "n/a"
+
+
+def _freshness_summary(rows: list[dict[str, Any]]) -> dict[str, int]:
+    summary = {"fresh": 0, "aging": 0, "stale": 0, "unknown": 0}
+    for row in rows:
+        status = str(row.get("freshness_status") or "unknown")
+        summary[status] = summary.get(status, 0) + 1
+    return summary
 
 
 def _recommended_scenario_for_client(client_profile: str, *, expensive: bool = False) -> str | None:
@@ -479,6 +490,7 @@ def build_dashboard_report(
     readiness_breakdown = _request_readiness_breakdown(
         list(inventory_provider_map.values()) if inventory_provider_map else providers
     )
+    freshness = _freshness_summary(providers)
     routing = stats.get("routing") or []
     routing_paths = _routing_path_summary(routing)
     client_totals = stats.get("client_totals") or []
@@ -747,6 +759,14 @@ def build_dashboard_report(
             hints.append(
                 f"{family_recoveries} route(s) are currently under recovery watch across the live lane families."
             )
+    if freshness.get("stale"):
+        decision_support.append(
+            f"{freshness['stale']} route assumption(s) are stale. Review benchmark or pricing guidance before leaning too hard on those lanes."
+        )
+    elif freshness.get("aging"):
+        hints.append(
+            f"{freshness['aging']} route assumption(s) are aging and worth rechecking soon."
+        )
     if route_additions:
         top_addition = route_additions[0]
         decision_support.append(
@@ -816,6 +836,9 @@ def build_dashboard_report(
                 "cooldown_routes": sum(_safe_int(item.get("cooldown")) for item in lane_families),
                 "recovered_routes": sum(_safe_int(item.get("recovered")) for item in lane_families),
                 "route_additions": len(route_additions),
+                "fresh_routes": freshness.get("fresh", 0),
+                "aging_routes": freshness.get("aging", 0),
+                "stale_routes": freshness.get("stale", 0),
             },
             "drivers": {
                 "top_provider": top_provider,
@@ -894,6 +917,8 @@ def _render_overview(report: dict[str, Any]) -> str:
                 f"  Top family         {top_family.get('family')} ({_safe_int(top_family.get('providers'))} routes / {_safe_int(top_family.get('requests'))} req)",
                 f"  Cooldown routes    {_safe_int(report['cards']['lane_families']['cooldown_routes'])}",
                 f"  Recovery watch     {_safe_int(report['cards']['lane_families']['recovered_routes'])}",
+                f"  Aging assumptions  {_safe_int(report['cards']['lane_families']['aging_routes'])}",
+                f"  Stale assumptions  {_safe_int(report['cards']['lane_families']['stale_routes'])}",
                 f"  Add opportunities  {_safe_int(report['cards']['lane_families']['route_additions'])}",
             ]
         )
@@ -1149,8 +1174,13 @@ def _render_provider_detail(report: dict[str, Any], provider_name: str) -> str:
         f"Benchmark focus   {row.get('benchmark_cluster') or 'n/a'}",
         f"Cost tier         {row.get('cost_tier') or 'n/a'}",
         f"Routing fit       {_provider_routing_fit(row)}",
+        f"Freshness         {row.get('freshness_status') or 'n/a'}",
         f"Request-ready     {request_readiness.get('status') or 'n/a'}",
     ]
+    if _safe_int(row.get("review_age_days")) >= 0:
+        lines.append(f"Review age        {_safe_int(row.get('review_age_days'))}d")
+    if row.get("freshness_hint"):
+        lines.append(f"Freshness hint    {row.get('freshness_hint')}")
     if request_readiness.get("reason"):
         lines.append(f"Readiness detail  {request_readiness.get('reason')}")
     if request_readiness.get("verified_via"):

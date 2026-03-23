@@ -1,5 +1,6 @@
 """Tests for context-window, provider-limit, and cache-aware routing."""
 
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
@@ -829,6 +830,110 @@ metrics:
     assert ranking[0]["provider"] == "cheap-workhorse"
     assert ranking[0]["cost_score"] > ranking[1]["cost_score"]
     assert ranking[0]["estimated_request_cost_usd"] < ranking[1]["estimated_request_cost_usd"]
+
+
+@pytest.mark.asyncio
+async def test_quality_posture_prefers_fresh_benchmark_assumptions(tmp_path):
+    fresh_date = date.today().isoformat()
+    stale_date = (date.today() - timedelta(days=45)).isoformat()
+    cfg = load_config(
+        _write_config(
+            tmp_path,
+            f"""
+server:
+  host: "127.0.0.1"
+  port: 8090
+providers:
+  fresh-quality:
+    backend: openai-compat
+    base_url: "https://fresh.example.com/v1"
+    api_key: "secret"
+    model: "quality-a"
+    tier: mid
+    capabilities:
+      cost_tier: premium
+    lane:
+      family: custom
+      name: quality
+      canonical_model: custom/quality-a
+      route_type: direct
+      cluster: quality-workhorse
+      benchmark_cluster: quality-coding
+      quality_tier: high
+      reasoning_strength: high
+      context_strength: high
+      tool_strength: high
+      same_model_group: custom/quality-a
+      last_reviewed: "{fresh_date}"
+      review_age_days: 0
+      freshness_status: fresh
+      freshness_hint: benchmark and cost assumptions were reviewed recently
+  stale-quality:
+    backend: openai-compat
+    base_url: "https://stale.example.com/v1"
+    api_key: "secret"
+    model: "quality-b"
+    tier: mid
+    capabilities:
+      cost_tier: premium
+    lane:
+      family: custom
+      name: quality
+      canonical_model: custom/quality-b
+      route_type: direct
+      cluster: quality-workhorse
+      benchmark_cluster: quality-coding
+      quality_tier: high
+      reasoning_strength: high
+      context_strength: high
+      tool_strength: high
+      same_model_group: custom/quality-b
+      last_reviewed: "{stale_date}"
+      review_age_days: 45
+      freshness_status: stale
+      freshness_hint: benchmark and cost assumptions are stale; review before trusting them heavily
+client_profiles:
+  enabled: true
+  default: generic
+  profiles:
+    generic:
+      routing_mode: premium
+      prefer_tiers: ["mid"]
+routing_modes:
+  enabled: true
+  default: premium
+  modes:
+    premium:
+      select:
+        prefer_tiers: ["mid"]
+heuristic_rules:
+  enabled: false
+  rules: []
+fallback_chain: []
+metrics:
+  enabled: false
+""",
+        )
+    )
+    router = Router(cfg)
+
+    decision = await router.route(
+        [{"role": "user", "content": "Review this architecture plan carefully."}],
+        model_requested="auto",
+        client_profile="generic",
+        profile_hints=cfg.client_profiles["profiles"]["generic"],
+        provider_health={
+            "fresh-quality": {"healthy": True, "avg_latency_ms": 110, "consecutive_failures": 0},
+            "stale-quality": {"healthy": True, "avg_latency_ms": 110, "consecutive_failures": 0},
+        },
+    )
+
+    assert decision.provider_name == "fresh-quality"
+    ranking = decision.details["candidate_ranking"]
+    assert ranking[0]["provider"] == "fresh-quality"
+    assert ranking[0]["freshness_score"] > ranking[1]["freshness_score"]
+    assert ranking[0]["freshness_status"] == "fresh"
+    assert ranking[1]["freshness_status"] == "stale"
 
 
 @pytest.mark.asyncio
