@@ -442,7 +442,10 @@ providers:
 
     assert "request-ready: deepseek-chat -> ready" in result.stdout
     assert "request readiness summary: 1/1 provider routes look request-ready" in result.stdout
-    assert "request-ready action: deepseek-chat -> route [unclassified]" in result.stdout
+    assert (
+        "request-ready action: deepseek-chat -> route "
+        "[deepseek | deepseek/chat | balanced-workhorse | freshness="
+    ) in result.stdout
     assert (
         "request-ready actions: fix-now=0 | hold=0 | watch=0 | route=1 | inspect=0" in result.stdout
     )
@@ -523,7 +526,10 @@ def test_faigate_doctor_reports_runtime_cooldown_windows(tmp_path: Path):
     )
 
     assert "request-ready: deepseek-chat -> rate-limited" in result.stdout
-    assert "request-ready action: deepseek-chat -> hold [unclassified]" in result.stdout
+    assert (
+        "request-ready action: deepseek-chat -> hold "
+        "[deepseek | deepseek/chat | balanced-workhorse | freshness="
+    ) in result.stdout
     assert (
         "request-ready runtime: deepseek-chat -> penalty=24 | issue=rate-limited "
         "| cooldown active | cooldown 120s left" in result.stdout
@@ -608,7 +614,10 @@ def test_faigate_doctor_reports_recent_route_recovery(tmp_path: Path):
     )
 
     assert "request-ready: deepseek-chat -> ready-recovered" in result.stdout
-    assert "request-ready action: deepseek-chat -> watch [unclassified]" in result.stdout
+    assert (
+        "request-ready action: deepseek-chat -> watch "
+        "[deepseek | deepseek/chat | balanced-workhorse | freshness="
+    ) in result.stdout
     assert (
         "request-ready recovery: deepseek-chat -> recovered from rate-limited | watch 240s"
         in result.stdout
@@ -2118,7 +2127,7 @@ def test_faigate_doctor_prefers_same_lane_route_before_cluster_degrade(tmp_path:
 
     assert (
         "request-ready action: anthropic-claude -> hold "
-        "[anthropic | anthropic/opus-4.6 | elite-reasoning]"
+        "[anthropic | anthropic/opus-4.6 | elite-reasoning | freshness="
     ) in result.stdout
     assert (
         "request-ready preferred route: anthropic-claude -> "
@@ -2196,10 +2205,13 @@ def test_faigate_doctor_prefers_family_route_when_route_is_on_hold(tmp_path: Pat
         check=True,
     )
 
-    assert "request-ready action: deepseek-reasoner -> hold [deepseek]" in result.stdout
     assert (
-        "request-ready preferred route: deepseek-reasoner -> deepseek-chat (family-route)"
-        in result.stdout
+        "request-ready action: deepseek-reasoner -> hold "
+        "[deepseek | deepseek/reasoner | elite-reasoning | freshness="
+    ) in result.stdout
+    assert (
+        "request-ready preferred route: deepseek-reasoner -> deepseek-chat "
+        "(cluster-degrade)" in result.stdout
     )
 
 
