@@ -922,6 +922,7 @@ class Router:
         route_score = self._route_posture_score(lane, routing_posture)
         benchmark_score = self._benchmark_posture_score(lane, routing_posture)
         adaptation_penalty = int(runtime_state.get("penalty", 0) or 0)
+        recovery_score = self._recovery_posture_score(lane, runtime_state, routing_posture)
         image_score = 0
         image_policy_score = 0
         image_outputs_fit = True
@@ -977,6 +978,7 @@ class Router:
             + lane_score
             + route_score
             + benchmark_score
+            + recovery_score
             + image_score
             + image_policy_score
             - adaptation_penalty
@@ -996,6 +998,7 @@ class Router:
             "route_score": route_score,
             "benchmark_score": benchmark_score,
             "adaptation_penalty": adaptation_penalty,
+            "recovery_score": recovery_score,
             "image_score": image_score,
             "image_policy_score": image_policy_score,
             "headroom": headroom,
@@ -1018,6 +1021,11 @@ class Router:
             "runtime_issue_type": str(runtime_state.get("last_issue_type") or ""),
             "runtime_issue_detail": str(runtime_state.get("last_issue_detail") or ""),
             "runtime_penalty": adaptation_penalty,
+            "runtime_recovered_recently": bool(runtime_state.get("recovered_recently")),
+            "runtime_recovery_remaining_s": int(runtime_state.get("recovery_remaining_s") or 0),
+            "runtime_last_recovered_issue_type": str(
+                runtime_state.get("last_recovered_issue_type") or ""
+            ),
             "cache_mode": cache.get("mode", "none"),
             "locality_preference": locality_preference or "balanced",
             "routing_posture": routing_posture,
@@ -1104,6 +1112,36 @@ class Router:
             _BENCHMARK_POSTURE_SCORES["balanced"],
         )
         return benchmark_scores.get(str(lane.get("benchmark_cluster") or ""), 0)
+
+    def _recovery_posture_score(
+        self,
+        lane: dict[str, Any],
+        runtime_state: dict[str, Any],
+        routing_posture: str,
+    ) -> int:
+        if not bool(runtime_state.get("recovered_recently")):
+            return 0
+
+        recovery_window = max(1, int(runtime_state.get("recovery_window_s") or 0))
+        recovery_remaining = max(0, int(runtime_state.get("recovery_remaining_s") or 0))
+        freshness = min(1.0, recovery_remaining / recovery_window)
+
+        route_type = str(lane.get("route_type") or "").lower()
+        trust_bonus_by_route = {
+            "local": 5.0,
+            "direct": 4.0,
+            "aggregator": 2.0,
+        }
+        caution_penalty_by_posture = {
+            "quality": 5.0,
+            "balanced": 3.0,
+            "eco": 2.0,
+            "free": 1.0,
+        }
+        trust_bonus = trust_bonus_by_route.get(route_type, 2.0)
+        caution_penalty = caution_penalty_by_posture.get(routing_posture, 3.0)
+        score = (trust_bonus * (1.0 - freshness)) - (caution_penalty * freshness)
+        return int(round(score))
 
     def _fallback_relation_details(
         self,

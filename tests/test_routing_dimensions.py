@@ -451,6 +451,197 @@ metrics:
 
 
 @pytest.mark.asyncio
+async def test_quality_posture_tempers_freshly_recovered_route(tmp_path):
+    cfg = load_config(
+        _write_config(
+            tmp_path,
+            """
+server:
+  host: "127.0.0.1"
+  port: 8090
+providers:
+  stable-direct:
+    backend: openai-compat
+    base_url: "https://stable.example.com/v1"
+    api_key: "secret"
+    model: "claude-sonnet-4-6"
+    tier: mid
+    lane:
+      family: anthropic
+      name: workhorse
+      canonical_model: anthropic/sonnet-4.6
+      route_type: direct
+      cluster: quality-workhorse
+      benchmark_cluster: quality-coding
+      quality_tier: high
+      reasoning_strength: high
+      same_model_group: anthropic/sonnet-4.6
+  recovered-direct:
+    backend: openai-compat
+    base_url: "https://recovered.example.com/v1"
+    api_key: "secret"
+    model: "claude-sonnet-4-6"
+    tier: mid
+    lane:
+      family: anthropic
+      name: workhorse
+      canonical_model: anthropic/sonnet-4.6
+      route_type: direct
+      cluster: quality-workhorse
+      benchmark_cluster: quality-coding
+      quality_tier: high
+      reasoning_strength: high
+      same_model_group: anthropic/sonnet-4.6
+client_profiles:
+  enabled: true
+  default: generic
+  profiles:
+    generic:
+      routing_mode: premium
+      prefer_tiers: ["mid"]
+routing_modes:
+  enabled: true
+  default: auto
+  modes:
+    premium:
+      select:
+        prefer_tiers: ["mid"]
+heuristic_rules:
+  enabled: false
+  rules: []
+fallback_chain: []
+metrics:
+  enabled: false
+""",
+        )
+    )
+    router = Router(cfg)
+
+    decision = await router.route(
+        [{"role": "user", "content": "Review this architecture decision in depth."}],
+        model_requested="auto",
+        client_profile="generic",
+        profile_hints=cfg.client_profiles["profiles"]["generic"],
+        provider_health={
+            "stable-direct": {"healthy": True, "avg_latency_ms": 110, "consecutive_failures": 0},
+            "recovered-direct": {"healthy": True, "avg_latency_ms": 95, "consecutive_failures": 0},
+        },
+        provider_runtime_state={
+            "recovered-direct": {
+                "penalty": 0,
+                "window_state": "clear",
+                "recovered_recently": True,
+                "recovery_window_s": 300,
+                "recovery_remaining_s": 280,
+                "last_recovered_issue_type": "rate-limited",
+            }
+        },
+    )
+
+    assert decision.provider_name == "stable-direct"
+    ranking = decision.details["candidate_ranking"]
+    assert ranking[0]["provider"] == "stable-direct"
+    recovered_row = next(row for row in ranking if row["provider"] == "recovered-direct")
+    assert recovered_row["recovery_score"] < 0
+    assert recovered_row["runtime_recovered_recently"] is True
+
+
+@pytest.mark.asyncio
+async def test_balanced_posture_allows_older_recovered_route_back_to_top(tmp_path):
+    cfg = load_config(
+        _write_config(
+            tmp_path,
+            """
+server:
+  host: "127.0.0.1"
+  port: 8090
+providers:
+  stable-direct:
+    backend: openai-compat
+    base_url: "https://stable.example.com/v1"
+    api_key: "secret"
+    model: "deepseek-chat"
+    tier: default
+    lane:
+      family: deepseek
+      name: workhorse
+      canonical_model: deepseek/chat
+      route_type: direct
+      cluster: balanced-workhorse
+      benchmark_cluster: balanced-coding
+      quality_tier: mid
+      reasoning_strength: mid
+      same_model_group: deepseek/chat
+  recovered-direct:
+    backend: openai-compat
+    base_url: "https://recovered.example.com/v1"
+    api_key: "secret"
+    model: "deepseek-chat"
+    tier: default
+    lane:
+      family: deepseek
+      name: workhorse
+      canonical_model: deepseek/chat
+      route_type: direct
+      cluster: balanced-workhorse
+      benchmark_cluster: balanced-coding
+      quality_tier: mid
+      reasoning_strength: mid
+      same_model_group: deepseek/chat
+client_profiles:
+  enabled: true
+  default: generic
+  profiles:
+    generic:
+      routing_mode: auto
+      prefer_tiers: ["default"]
+routing_modes:
+  enabled: true
+  default: auto
+  modes:
+    auto:
+      select:
+        prefer_tiers: ["default"]
+heuristic_rules:
+  enabled: false
+  rules: []
+fallback_chain: []
+metrics:
+  enabled: false
+""",
+        )
+    )
+    router = Router(cfg)
+
+    decision = await router.route(
+        [{"role": "user", "content": "Keep this coding answer pragmatic and concise."}],
+        model_requested="auto",
+        client_profile="generic",
+        profile_hints=cfg.client_profiles["profiles"]["generic"],
+        provider_health={
+            "stable-direct": {"healthy": True, "avg_latency_ms": 180, "consecutive_failures": 0},
+            "recovered-direct": {"healthy": True, "avg_latency_ms": 90, "consecutive_failures": 0},
+        },
+        provider_runtime_state={
+            "recovered-direct": {
+                "penalty": 0,
+                "window_state": "clear",
+                "recovered_recently": True,
+                "recovery_window_s": 300,
+                "recovery_remaining_s": 40,
+                "last_recovered_issue_type": "timeout",
+            }
+        },
+    )
+
+    assert decision.provider_name == "recovered-direct"
+    ranking = decision.details["candidate_ranking"]
+    recovered_row = next(row for row in ranking if row["provider"] == "recovered-direct")
+    assert recovered_row["recovery_score"] > 0
+    assert recovered_row["runtime_last_recovered_issue_type"] == "timeout"
+
+
+@pytest.mark.asyncio
 async def test_eco_posture_prefers_budget_lane_over_premium_direct_provider(tmp_path):
     cfg = load_config(
         _write_config(
