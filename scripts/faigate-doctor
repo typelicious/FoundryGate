@@ -139,6 +139,25 @@ if health_raw:
     providers = (health_payload.get("providers") or {})
     ready = 0
     total = 0
+    action_counts = {
+        "fix-now": 0,
+        "hold": 0,
+        "watch": 0,
+        "route": 0,
+        "inspect": 0,
+    }
+
+    def classify_action(*, status: str, ready: bool, cooldown_active: bool, window_state: str, recovered_recently: bool) -> str:
+        if status in {"missing-key", "unresolved-key", "auth-invalid", "endpoint-mismatch", "model-unavailable"}:
+            return "fix-now"
+        if cooldown_active or window_state == "cooldown" or status in {"quota-exhausted", "rate-limited"}:
+            return "hold"
+        if recovered_recently or window_state == "degraded" or status == "ready-recovered":
+            return "watch"
+        if ready or status in {"ready", "ready-verified", "ready-compat"}:
+            return "route"
+        return "inspect"
+
     for provider_name, payload in sorted(providers.items()):
         total += 1
         request_readiness = payload.get("request_readiness") or {}
@@ -163,6 +182,16 @@ if health_raw:
         runtime_last_recovered_issue = str(
             request_readiness.get("runtime_last_recovered_issue_type") or ""
         )
+        lane = payload.get("lane") or {}
+        family = str(lane.get("family") or "")
+        action_group = classify_action(
+            status=status,
+            ready=bool(request_readiness.get("ready")),
+            cooldown_active=cooldown_active,
+            window_state=runtime_window_state,
+            recovered_recently=runtime_recovered_recently,
+        )
+        action_counts[action_group] += 1
         profile_bits = []
         if profile:
             profile_bits.append(profile)
@@ -178,6 +207,9 @@ if health_raw:
             print(f"[ok] request-ready: {provider_name} -> {status}{profile_suffix} ({reason})")
         else:
             print(f"[warn] request-ready: {provider_name} -> {status}{profile_suffix} ({reason})")
+        if family or action_group:
+            family_label = family or "unclassified"
+            print(f"[ok] request-ready action: {provider_name} -> {action_group} [{family_label}]")
         if probe_payload:
             print(f"[ok] request-ready payload: {provider_name} -> {probe_payload}")
         if operator_hint:
@@ -200,6 +232,12 @@ if health_raw:
             )
     if total:
         print(f"[ok] request readiness summary: {ready}/{total} provider routes look request-ready")
+        print(
+            "[ok] request-ready actions: "
+            f"fix-now={action_counts['fix-now']} | hold={action_counts['hold']} | "
+            f"watch={action_counts['watch']} | route={action_counts['route']} | "
+            f"inspect={action_counts['inspect']}"
+        )
 PY
 then
   status=1

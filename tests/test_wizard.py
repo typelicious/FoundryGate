@@ -891,9 +891,13 @@ providers:
     assert by_name["deepseek-chat"]["status"] == "ready"
     assert by_name["anthropic-claude"]["status"] == "missing-key"
     assert by_name["deepseek-chat"]["transport_profile"] == "openai-compatible"
+    assert by_name["deepseek-chat"]["action_group"] == "route"
+    assert by_name["anthropic-claude"]["action_group"] == "fix-now"
     rendered = render_provider_probe_text(report)
     assert "Configured: 2 | Ready now: 1" in rendered
+    assert "Action summary: fix-now=1 | hold=0 | watch=0 | route=1 | inspect=0" in rendered
     assert "- deepseek-chat  (ready)" in rendered
+    assert "family: deepseek | action: route" in rendered
     assert "transport: openai-compatible | native | confidence: high | strategy: models" in rendered
 
 
@@ -940,6 +944,7 @@ providers:
 
     row = report["providers"][0]
     assert row["status"] == "ready-verified"
+    assert row["action_group"] == "route"
     assert row["verified_via"] == "chat"
     assert "kilo-chat-minimal" in row["probe_payload"]
     rendered = render_provider_probe_text(report)
@@ -997,11 +1002,13 @@ providers:
     row = report["providers"][0]
     assert report["summary"]["live_probe"] is True
     assert row["status"] == "ready-verified"
+    assert row["action_group"] == "route"
     assert row["probe_strategy"] == "chat"
     assert row["verified_via"] == "chat"
     rendered = render_provider_probe_text(report)
     assert "Live probe: enabled" in rendered
     assert "verified via: chat" in rendered
+    assert "Action summary: fix-now=0 | hold=0 | watch=0 | route=1 | inspect=0" in rendered
 
 
 def test_list_client_scenarios_exposes_opencode_quality_path(tmp_path: Path):

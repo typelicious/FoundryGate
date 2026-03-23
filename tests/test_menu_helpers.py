@@ -442,6 +442,11 @@ providers:
 
     assert "request-ready: deepseek-chat -> ready" in result.stdout
     assert "request readiness summary: 1/1 provider routes look request-ready" in result.stdout
+    assert "request-ready action: deepseek-chat -> route [unclassified]" in result.stdout
+    assert (
+        "request-ready actions: fix-now=0 | hold=0 | watch=0 | route=1 | inspect=0"
+        in result.stdout
+    )
     assert "[openai-compatible | native | confidence=high]" in result.stdout
     assert "request-ready payload: deepseek-chat -> openai-chat-minimal" in result.stdout
     assert "request-ready next step: deepseek-chat -> route can carry live traffic" in result.stdout
@@ -519,9 +524,14 @@ def test_faigate_doctor_reports_runtime_cooldown_windows(tmp_path: Path):
     )
 
     assert "request-ready: deepseek-chat -> rate-limited" in result.stdout
+    assert "request-ready action: deepseek-chat -> hold [unclassified]" in result.stdout
     assert (
         "request-ready runtime: deepseek-chat -> penalty=24 | issue=rate-limited "
         "| cooldown active | cooldown 120s left" in result.stdout
+    )
+    assert (
+        "request-ready actions: fix-now=0 | hold=1 | watch=0 | route=0 | inspect=0"
+        in result.stdout
     )
 
 
@@ -600,8 +610,13 @@ def test_faigate_doctor_reports_recent_route_recovery(tmp_path: Path):
     )
 
     assert "request-ready: deepseek-chat -> ready-recovered" in result.stdout
+    assert "request-ready action: deepseek-chat -> watch [unclassified]" in result.stdout
     assert (
         "request-ready recovery: deepseek-chat -> recovered from rate-limited | watch 240s"
+        in result.stdout
+    )
+    assert (
+        "request-ready actions: fix-now=0 | hold=0 | watch=1 | route=0 | inspect=0"
         in result.stdout
     )
 
@@ -1986,6 +2001,7 @@ providers:
 
     assert "Provider probe" in result.stdout
     assert "Configured: 2 | Ready now: 1" in result.stdout
+    assert "Action summary: fix-now=1 | hold=0 | watch=0 | route=1 | inspect=0" in result.stdout
     assert "- deepseek-chat  (ready)" in result.stdout
     assert "- anthropic-claude  (missing-key)" in result.stdout
 
