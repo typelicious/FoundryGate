@@ -1320,14 +1320,19 @@ providers:
     assert plan["actionable_additions"]
     assert plan["actionable_additions"][0]["provider_name"] == "openrouter-anthropic-opus"
     assert plan["actionable_additions"][0]["setup_provider_name"] == "openrouter-fallback"
-    assert [item["setup_provider_name"] for item in plan["auto_apply_additions"]] == [
+    assert {item["setup_provider_name"] for item in plan["auto_apply_additions"]} == {
         "openrouter-fallback"
-    ]
+    }
     assert plan["manual_additions"]
+    assert {
+        item["setup_provider_name"] for item in plan["manual_additions"]
+    } >= {"kilocode", "blackbox-free", "openai-gpt4o", "deepseek-reasoner"}
     rendered = render_route_add_setup_plan_text(plan)
     assert "Guided route additions" in rendered
     assert "Ready to add now" in rendered
+    assert "Need input first" in rendered
     assert "openrouter-fallback" in rendered
+    assert "deepseek-reasoner" in rendered
 
 
 def test_build_route_add_setup_plan_separates_ready_and_manual_additions(tmp_path: Path):
@@ -1360,10 +1365,12 @@ providers:
         source_providers=["anthropic-claude", "deepseek-reasoner"],
     )
 
-    assert [item["setup_provider_name"] for item in plan["auto_apply_additions"]] == [
+    assert {item["setup_provider_name"] for item in plan["auto_apply_additions"]} == {
         "openrouter-fallback"
-    ]
-    assert "deepseek-chat" in [item["setup_provider_name"] for item in plan["manual_additions"]]
+    }
+    assert {
+        item["setup_provider_name"] for item in plan["manual_additions"]
+    } >= {"kilocode", "blackbox-free", "openai-gpt4o", "deepseek-chat"}
     rendered = render_route_add_setup_plan_text(plan)
     assert "Ready to add now" in rendered
     assert "Need input first" in rendered
