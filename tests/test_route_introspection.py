@@ -40,6 +40,7 @@ _httpx.ConnectError = Exception
 sys.modules["httpx"] = _httpx
 
 import faigate.main as main_module
+from faigate.adaptation import AdaptiveRouteState
 from faigate.config import load_config
 from faigate.main import (
     _attempt_metric_fields,
@@ -259,6 +260,7 @@ metrics:
     )
     monkeypatch.setattr(main_module, "_config", cfg, raising=False)
     monkeypatch.setattr(main_module, "_router", Router(cfg), raising=False)
+    monkeypatch.setattr(main_module, "_adaptive_state", AdaptiveRouteState(), raising=False)
     monkeypatch.setattr(
         main_module,
         "_providers",
@@ -783,9 +785,7 @@ class TestProviderCoverage:
         )
 
     @pytest.mark.asyncio
-    async def test_health_request_readiness_marks_timeout_routes_as_degraded(
-        self, preview_config
-    ):
+    async def test_health_request_readiness_marks_timeout_routes_as_degraded(self, preview_config):
         main_module._adaptive_state.record_failure(
             "cloud-default",
             error="Timeout: upstream timed out",
@@ -799,8 +799,7 @@ class TestProviderCoverage:
         assert readiness["runtime_window_state"] == "degraded"
         assert readiness["runtime_degraded_remaining_s"] > 0
         assert (
-            readiness["operator_hint"]
-            == "prefer lower-pressure siblings while this route recovers"
+            readiness["operator_hint"] == "prefer lower-pressure siblings while this route recovers"
         )
 
     @pytest.mark.asyncio
@@ -818,9 +817,7 @@ class TestProviderCoverage:
         assert readiness["runtime_cooldown_active"] is True
 
     @pytest.mark.asyncio
-    async def test_health_request_readiness_marks_recently_recovered_routes(
-        self, preview_config
-    ):
+    async def test_health_request_readiness_marks_recently_recovered_routes(self, preview_config):
         main_module._adaptive_state.record_failure("cloud-default", error="429 rate limit")
         main_module._adaptive_state.record_success("cloud-default", latency_ms=110.0)
 

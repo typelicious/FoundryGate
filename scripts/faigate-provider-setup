@@ -16,6 +16,11 @@ Usage:
   ./scripts/faigate-provider-setup
   ./scripts/faigate-provider-setup --known --text
   ./scripts/faigate-provider-setup --current --text
+  ./scripts/faigate-provider-setup --recommended --text
+  ./scripts/faigate-provider-setup --recommended --json
+  ./scripts/faigate-provider-setup --recommended --interactive
+  ./scripts/faigate-provider-setup --recommended --dry-run
+  ./scripts/faigate-provider-setup --recommended --write
 
 Interactive helper to add provider sources to fusionAIze Gate.
 
@@ -88,6 +93,114 @@ print(
     end="",
 )
 PY
+}
+
+show_recommended_route_additions() {
+  run_wizard_python - <<'PY'
+import os
+from faigate.wizard import build_route_add_setup_plan, render_route_add_setup_plan_text
+
+plan = build_route_add_setup_plan(
+    config_path=os.environ["FAIGATE_PROVIDER_SETUP_CONFIG"],
+    env_file=os.environ["FAIGATE_PROVIDER_SETUP_ENV"],
+)
+print(render_route_add_setup_plan_text(plan), end="")
+PY
+}
+
+recommended_route_additions_json() {
+  run_wizard_python - <<'PY'
+import json
+import os
+from faigate.wizard import build_route_add_setup_plan
+
+plan = build_route_add_setup_plan(
+    config_path=os.environ["FAIGATE_PROVIDER_SETUP_CONFIG"],
+    env_file=os.environ["FAIGATE_PROVIDER_SETUP_ENV"],
+)
+print(json.dumps(plan))
+PY
+}
+
+guided_route_additions_apply() {
+  local requested_mode="$1"
+  local apply_mode="$requested_mode"
+  local payload_file
+  local -a provider_list=()
+
+  if [[ "$requested_mode" == "interactive" ]]; then
+    faigate_ui_header "fusionAIze Gate Provider Setup" "Guided route additions from current lane gaps"
+    show_recommended_route_additions
+    echo ""
+  fi
+
+  while IFS='|' read -r setup_provider route_provider strategy; do
+    [ -n "$setup_provider" ] && provider_list+=("$setup_provider")
+  done < <(
+    recommended_route_additions_json | "$python_bin" - <<'PY'
+import json
+import sys
+
+plan = json.loads(sys.stdin.read() or "{}")
+for item in plan.get("actionable_additions") or []:
+    print(
+        "|".join(
+            [
+                str(item.get("setup_provider_name") or ""),
+                str(item.get("provider_name") or ""),
+                str(item.get("strategy") or ""),
+            ]
+        )
+    )
+PY
+  )
+
+  if [ "${#provider_list[@]}" -eq 0 ]; then
+    if [[ "$requested_mode" == "interactive" ]]; then
+      echo ""
+      show_next_steps "No guided route additions are needed right now." \
+        "Open Current Sources when you want to review the active provider inventory." \
+        "Run Client Scenarios after adding new sources if you want the routing defaults refreshed."
+      faigate_ui_pause
+    else
+      show_recommended_route_additions
+    fi
+    return 0
+  fi
+
+  payload_file="$(mktemp)"
+  collect_known_provider_payload "$payload_file" "${provider_list[@]}" || {
+    rm -f "$payload_file"
+    return 0
+  }
+
+  if [[ "$requested_mode" == "interactive" ]]; then
+    echo ""
+    printf "  %bApply mode%b\n" "$FAIGATE_UI_BOLD"
+    printf "    1)  Dry-run only    Preview guided route additions, no writes\n"
+    printf "    2)  Write setup     Add the guided route additions to config.yaml and faigate.env\n"
+    printf "    c)  Cancel\n"
+    printf "    q)  Quit\n"
+    printf "  ▸ [1]: "
+    read -r apply_mode
+    case "${apply_mode:-1}" in
+      q|Q) rm -f "$payload_file"; exit 0 ;;
+      c|C) rm -f "$payload_file"; return 0 ;;
+    esac
+    apply_mode="$([ "${apply_mode:-1}" = "2" ] && printf write || printf dry)"
+  fi
+
+  echo ""
+  apply_setup_payload "$payload_file" "$apply_mode"
+  rm -f "$payload_file"
+  echo ""
+  show_next_steps "Guided route additions completed." \
+    "Run Validate next to confirm the new route sources are ready enough for live traffic." \
+    "Open Full Config Wizard or Client Scenarios if you want routing defaults refreshed around the added routes." \
+    "Provider Probe will show whether the newly added mirrors are now request-ready."
+  if [[ "$requested_mode" == "interactive" ]]; then
+    faigate_ui_pause
+  fi
 }
 
 provider_meta() {
@@ -226,8 +339,55 @@ prompt_plain() {
   return 0
 }
 
+collect_known_provider_payload() {
+  local payload_file="$1"
+  shift
+  local current_key current_base raw meta provider env_var base_url_env
+  local first=1
+
+  printf '{"known_providers":[' >"$payload_file"
+  for provider in "$@"; do
+    meta="$(provider_meta "$provider")"
+    if [ -z "$meta" ]; then
+      faigate_ui_warn "Skipping unknown provider: $provider"
+      continue
+    fi
+    IFS='|' read -r _ env_var base_url_env _ _ <<<"$meta"
+    current_key="$(faigate_env_value "$env_var" 2>/dev/null || true)"
+    current_base=""
+    if [ -n "$base_url_env" ]; then
+      current_base="$(faigate_env_value "$base_url_env" 2>/dev/null || true)"
+    fi
+    echo ""
+    printf "  %b%s%b\n" "$FAIGATE_UI_BOLD" "$provider" "$FAIGATE_UI_RESET"
+    local entered_key="" entered_base=""
+    prompt_secret "$env_var" "$current_key" entered_key || return 1
+    if [ -n "$base_url_env" ]; then
+      prompt_plain "${base_url_env} (upstream)" "$current_base" entered_base || return 1
+    fi
+    [ "$first" -eq 0 ] && printf ',' >>"$payload_file"
+    first=0
+    FAIGATE_PROVIDER="$provider" FAIGATE_ENV_VAR="$env_var" \
+      FAIGATE_ENV_VALUE="${entered_key:-}" FAIGATE_BASE_ENV="${base_url_env:-}" \
+      FAIGATE_BASE_VALUE="${entered_base:-}" "$python_bin" - <<'PY' >>"$payload_file"
+import json
+import os
+
+payload = {
+    "provider": os.environ["FAIGATE_PROVIDER"],
+}
+if os.environ.get("FAIGATE_ENV_VALUE", ""):
+    payload["env_value"] = os.environ["FAIGATE_ENV_VALUE"]
+if os.environ.get("FAIGATE_BASE_VALUE", ""):
+    payload["base_url_value"] = os.environ["FAIGATE_BASE_VALUE"]
+print(json.dumps(payload), end="")
+PY
+  done
+  printf ']}\n' >>"$payload_file"
+}
+
 known_provider_flow() {
-  local selection apply_mode payload_file current_key current_base raw meta provider env_var base_url_env
+  local selection apply_mode payload_file raw provider
   local -a provider_list=()
 
   faigate_ui_header "fusionAIze Gate Provider Setup" "Curated providers from the current catalog"
@@ -251,46 +411,10 @@ known_provider_flow() {
   done
 
   payload_file="$(mktemp)"
-  printf '{"known_providers":[' >"$payload_file"
-  local first=1
-  for provider in "${provider_list[@]}"; do
-    meta="$(provider_meta "$provider")"
-    if [ -z "$meta" ]; then
-      faigate_ui_warn "Skipping unknown provider: $provider"
-      continue
-    fi
-    IFS='|' read -r _ env_var base_url_env _ _ <<<"$meta"
-    current_key="$(faigate_env_value "$env_var" 2>/dev/null || true)"
-    current_base=""
-    if [ -n "$base_url_env" ]; then
-      current_base="$(faigate_env_value "$base_url_env" 2>/dev/null || true)"
-    fi
-    echo ""
-    printf "  %b%s%b\n" "$FAIGATE_UI_BOLD" "$provider" "$FAIGATE_UI_RESET"
-    local entered_key="" entered_base=""
-    prompt_secret "$env_var" "$current_key" entered_key || return 0
-    if [ -n "$base_url_env" ]; then
-      prompt_plain "${base_url_env} (upstream)" "$current_base" entered_base || return 0
-    fi
-    [ "$first" -eq 0 ] && printf ',' >>"$payload_file"
-    first=0
-    FAIGATE_PROVIDER="$provider" FAIGATE_ENV_VAR="$env_var" \
-      FAIGATE_ENV_VALUE="${entered_key:-}" FAIGATE_BASE_ENV="${base_url_env:-}" \
-      FAIGATE_BASE_VALUE="${entered_base:-}" "$python_bin" - <<'PY' >>"$payload_file"
-import json
-import os
-
-payload = {
-    "provider": os.environ["FAIGATE_PROVIDER"],
-}
-if os.environ.get("FAIGATE_ENV_VALUE", ""):
-    payload["env_value"] = os.environ["FAIGATE_ENV_VALUE"]
-if os.environ.get("FAIGATE_BASE_VALUE", ""):
-    payload["base_url_value"] = os.environ["FAIGATE_BASE_VALUE"]
-print(json.dumps(payload), end="")
-PY
-  done
-  printf ']}\n' >>"$payload_file"
+  collect_known_provider_payload "$payload_file" "${provider_list[@]}" || {
+    rm -f "$payload_file"
+    return 0
+  }
 
   echo ""
   printf "  %bApply mode%b\n" "$FAIGATE_UI_BOLD"
@@ -314,6 +438,10 @@ PY
     "Run Full Config Wizard when you want purpose- and client-aware routing suggestions." \
     "Provider Probe is the natural next UX slice once it lands."
   faigate_ui_pause
+}
+
+guided_route_additions_flow() {
+  guided_route_additions_apply "interactive"
 }
 
 custom_provider_flow() {
@@ -549,6 +677,7 @@ interactive_menu() {
     printf "    2)  Custom Provider   Add an OpenAI-compatible upstream not in the catalog\n"
     printf "    3)  Local Worker      Add a local or LAN OpenAI-compatible worker\n"
     printf "    4)  Current Sources   Review configured provider blocks\n"
+    printf "    5)  Guided Route Additions   Add recommended mirror or fallback sources\n"
     printf "\n"
     printf "    c)  Cancel\n"
     printf "    q)  Quit\n\n"
@@ -559,6 +688,7 @@ interactive_menu() {
       2) custom_provider_flow ;;
       3) local_worker_flow ;;
       4) echo ""; show_current_sources; echo ""; faigate_ui_pause ;;
+      5) guided_route_additions_flow ;;
       c|C|"") return 0 ;;
       q|Q) exit 0 ;;
       *) faigate_ui_warn "Invalid choice."; faigate_ui_pause ;;
@@ -580,6 +710,31 @@ fi
 
 if [[ "${1:-}" == "--current" && "${2:-}" == "--text" ]]; then
   show_current_sources
+  exit 0
+fi
+
+if [[ "${1:-}" == "--recommended" && "${2:-}" == "--text" ]]; then
+  show_recommended_route_additions
+  exit 0
+fi
+
+if [[ "${1:-}" == "--recommended" && "${2:-}" == "--json" ]]; then
+  recommended_route_additions_json
+  exit 0
+fi
+
+if [[ "${1:-}" == "--recommended" && "${2:-}" == "--interactive" ]]; then
+  guided_route_additions_flow
+  exit 0
+fi
+
+if [[ "${1:-}" == "--recommended" && "${2:-}" == "--dry-run" ]]; then
+  guided_route_additions_apply "dry"
+  exit 0
+fi
+
+if [[ "${1:-}" == "--recommended" && "${2:-}" == "--write" ]]; then
+  guided_route_additions_apply "write"
   exit 0
 fi
 

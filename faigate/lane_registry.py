@@ -620,6 +620,19 @@ def get_canonical_model_routes(canonical_model: str) -> list[dict[str, Any]]:
     return deepcopy(routes)
 
 
+def _route_setup_provider_name(provider_name: str, provider_family: str) -> str:
+    if provider_name in _PROVIDER_LANE_BINDINGS:
+        return provider_name
+    family = str(provider_family or "").strip().lower()
+    if family == "openrouter":
+        return "openrouter-fallback"
+    if family == "kilo":
+        return "kilocode"
+    if family == "blackbox":
+        return "blackbox-free"
+    return provider_name
+
+
 def get_route_add_recommendations(
     *,
     configured_provider_names: set[str] | list[str] | tuple[str, ...],
@@ -651,6 +664,10 @@ def get_route_add_recommendations(
             recommendations.append(
                 {
                     "provider_name": provider_name,
+                    "setup_provider_name": _route_setup_provider_name(
+                        provider_name,
+                        str(route.get("provider_family") or ""),
+                    ),
                     "strategy": strategy,
                     "strategy_label": {
                         "same-lane-add": "same lane",
@@ -682,6 +699,7 @@ def get_route_add_recommendations(
             recommendations.append(
                 {
                     "provider_name": provider_name,
+                    "setup_provider_name": provider_name,
                     "strategy": "family-add",
                     "strategy_label": "family lane",
                     "canonical_model": str(binding.get("canonical_model") or ""),
@@ -689,8 +707,7 @@ def get_route_add_recommendations(
                     "route_type": str(binding.get("route_type") or ""),
                     "route_group": "family-lane",
                     "reason": (
-                        f"adds another {family} family lane "
-                        "for recovery and routing flexibility"
+                        f"adds another {family} family lane for recovery and routing flexibility"
                     ),
                 }
             )

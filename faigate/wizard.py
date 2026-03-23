@@ -478,6 +478,7 @@ _ENV_REF_RE = re.compile(r"\$\{([^}]+)}")
 
 def _expand_env_with_values(value: Any, env_values: dict[str, str]) -> Any:
     if isinstance(value, str):
+
         def _replace(match: re.Match[str]) -> str:
             token = match.group(1)
             if ":-" in token:
@@ -1180,9 +1181,7 @@ def build_provider_probe_report(
             action_group=action_group,
             provider_name=name,
             family=str(
-                (provider.get("lane") or {}).get("family")
-                or lane_binding.get("family")
-                or ""
+                (provider.get("lane") or {}).get("family") or lane_binding.get("family") or ""
             ),
         )
         lane = dict(provider.get("lane") or lane_binding or {})
@@ -1340,10 +1339,7 @@ def render_provider_probe_text(report: dict[str, Any]) -> str:
             )
         lines.append("Family actions: " + " | ".join(family_bits))
         mirror_gap_count = summary.get("mirror_gaps", 0)
-        lines.append(
-            "Mirror gaps: "
-            f"{mirror_gap_count} routes with known mirrors not configured"
-        )
+        lines.append(f"Mirror gaps: {mirror_gap_count} routes with known mirrors not configured")
     recommendations = summary.get("recommendations") or {}
     lines.append(
         "Fallback guidance: "
@@ -1391,11 +1387,7 @@ def render_provider_probe_text(report: dict[str, Any]) -> str:
                     if row.get("transport_confidence")
                     else ""
                 )
-                + (
-                    f" | strategy: {row.get('probe_strategy')}"
-                    if row.get("probe_strategy")
-                    else ""
-                )
+                + (f" | strategy: {row.get('probe_strategy')}" if row.get("probe_strategy") else "")
             )
         if row.get("verified_via"):
             lines.append("  " + f"verified via: {row['verified_via']}")
@@ -1413,9 +1405,7 @@ def render_provider_probe_text(report: dict[str, Any]) -> str:
             )
         if row.get("known_mirror_gaps"):
             lines.append(
-                "  "
-                + "known mirrors not configured: "
-                + ", ".join(row["known_mirror_gaps"][:3])
+                "  " + "known mirrors not configured: " + ", ".join(row["known_mirror_gaps"][:3])
             )
         if row.get("recommended_add_provider"):
             lines.append(
@@ -1484,8 +1474,7 @@ def _default_probe_action_hint(*, action_group: str, provider_name: str, family:
     family_label = family or "this route"
     if action_group == "fix-now":
         return (
-            "fix credentials, model mapping, or endpoint settings "
-            f"before routing {provider_name}"
+            f"fix credentials, model mapping, or endpoint settings before routing {provider_name}"
         )
     if action_group == "hold":
         return f"hold {provider_name} out of primary traffic until the cooldown pressure clears"
@@ -1866,15 +1855,93 @@ def _scenario_route_addition_lines(additions: list[dict[str, Any]], *, limit: in
         if not provider_name:
             continue
         strategy = str(item.get("strategy") or "route-addition")
+        setup_provider = str(item.get("setup_provider_name") or provider_name)
         source_provider = str(item.get("source_provider") or "")
         reason = str(item.get("reason") or "")
         line = f"{provider_name} ({strategy})"
+        if setup_provider and setup_provider != provider_name:
+            line += f" via {setup_provider}"
         if source_provider:
             line += f" for {source_provider}"
         if reason:
             line += f" - {reason}"
         lines.append(line)
     return lines
+
+
+def build_route_add_setup_plan(
+    *,
+    config_path: str | Path | None = None,
+    env_file: str | Path | None = None,
+    source_providers: list[str] | None = None,
+) -> dict[str, Any]:
+    configured_names = _load_existing_provider_names(config_path)
+    env_values = _load_env_values(env_file)
+    candidates = source_providers or sorted(configured_names)
+    route_additions = _scenario_route_additions(
+        candidates,
+        configured_names=configured_names,
+    )
+    actionable: list[dict[str, Any]] = []
+    seen_setup = set(configured_names)
+    for item in route_additions:
+        setup_provider = str(item.get("setup_provider_name") or "")
+        if not setup_provider or setup_provider in seen_setup:
+            continue
+        if setup_provider not in _PROVIDER_FACTORIES:
+            continue
+        factory = _PROVIDER_FACTORIES[setup_provider]
+        env_var = str(factory.get("env") or "")
+        base_url_env = str(factory.get("base_url_env") or "")
+        actionable.append(
+            {
+                **item,
+                "setup_provider_name": setup_provider,
+                "env_var": env_var,
+                "base_url_env": base_url_env,
+                "key_present": bool(env_values.get(env_var)),
+                "base_url_present": bool(base_url_env and env_values.get(base_url_env)),
+            }
+        )
+        seen_setup.add(setup_provider)
+    return {
+        "source_providers": candidates,
+        "route_additions": route_additions,
+        "actionable_additions": actionable,
+    }
+
+
+def render_route_add_setup_plan_text(plan: dict[str, Any]) -> str:
+    lines = ["Guided route additions", ""]
+    actionable = list(plan.get("actionable_additions") or [])
+    if not actionable:
+        lines.append("- none right now")
+        lines.append("  why: the current provider inventory already covers")
+        lines.append("       the known setup-capable route additions.")
+        return "\n".join(lines) + "\n"
+    for item in actionable:
+        status_bits = []
+        if item.get("key_present"):
+            status_bits.append("key ready")
+        elif item.get("env_var"):
+            status_bits.append(f"needs {item['env_var']}")
+        if item.get("base_url_env") and not item.get("base_url_present"):
+            status_bits.append(f"optional {item['base_url_env']}")
+        lines.append(
+            f"- {item['setup_provider_name']}  "
+            + f"({' · '.join(status_bits) if status_bits else 'ready to add'})"
+        )
+        lines.append(
+            "  "
+            + f"route target: {item.get('provider_name')} | strategy: {item.get('strategy')} | "
+            + f"source lane: {item.get('source_provider') or 'n/a'}"
+        )
+        if item.get("reason"):
+            lines.append("  " + f"why: {item['reason']}")
+    lines.append("")
+    lines.append("Tip: Use Guided Route Additions in Provider Setup")
+    lines.append("     to add these sources without re-selecting them manually.")
+    return "\n".join(lines) + "\n"
 
 
 def list_client_scenarios(
@@ -2012,6 +2079,11 @@ def apply_client_scenario(
         for name in _scenario_provider_selection_for_spec(spec)
         if name in merged_provider_names
     ]
+    route_add_setup_plan = build_route_add_setup_plan(
+        config_path=config_path,
+        env_file=env_file,
+        source_providers=active_provider_names,
+    )
     route_additions = _scenario_route_additions(
         active_provider_names,
         configured_names=merged_provider_names,
@@ -2026,6 +2098,7 @@ def apply_client_scenario(
         },
         "config": merged,
         "summary": build_config_change_summary(config_path=config_path, updated_config=merged),
+        "route_add_setup_plan": route_add_setup_plan,
         "route_additions": route_additions,
     }
 
@@ -2033,6 +2106,8 @@ def apply_client_scenario(
 def render_client_scenario_summary(payload: dict[str, Any]) -> str:
     scenario = payload.get("scenario") or {}
     summary = payload.get("summary") or {}
+    route_add_setup_plan = payload.get("route_add_setup_plan") or {}
+    actionable_additions = list(route_add_setup_plan.get("actionable_additions") or [])
     route_additions = payload.get("route_additions") or []
     scenario_spec = _CLIENT_SCENARIOS.get(str(scenario.get("id", "")), {})
     lines = [
@@ -2066,18 +2141,27 @@ def render_client_scenario_summary(payload: dict[str, Any]) -> str:
             )
     if lines[-1] == "Change preview":
         lines.append("- no config changes beyond confirming the current scenario")
-    if route_additions:
+    if actionable_additions:
         lines.extend(["", "Operator follow-up"])
-        for item in route_additions[:3]:
+        for item in actionable_additions[:3]:
+            setup_provider = str(item.get("setup_provider_name") or item.get("provider_name") or "")
             lines.append(
                 "- add route: "
-                + f"{item.get('provider_name')} ({item.get('strategy')})"
-                + (
-                    f" for {item.get('source_provider')}"
-                    if item.get("source_provider")
-                    else ""
-                )
+                + f"{setup_provider} for {item.get('provider_name')} "
+                + f"({item.get('strategy')})"
             )
+        lines.append("- next path : Provider Setup -> Guided Route Additions")
+    if route_additions:
+        if "Operator follow-up" not in lines:
+            lines.extend(["", "Operator follow-up"])
+        for item in route_additions[:3]:
+            route_line = (
+                "- route target: "
+                + f"{item.get('provider_name')} ({item.get('strategy')})"
+                + (f" for {item.get('source_provider')}" if item.get("source_provider") else "")
+            )
+            if route_line not in lines:
+                lines.append(route_line)
     return "\n".join(lines) + "\n"
 
 

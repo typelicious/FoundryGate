@@ -444,8 +444,7 @@ providers:
     assert "request readiness summary: 1/1 provider routes look request-ready" in result.stdout
     assert "request-ready action: deepseek-chat -> route [unclassified]" in result.stdout
     assert (
-        "request-ready actions: fix-now=0 | hold=0 | watch=0 | route=1 | inspect=0"
-        in result.stdout
+        "request-ready actions: fix-now=0 | hold=0 | watch=0 | route=1 | inspect=0" in result.stdout
     )
     assert "[openai-compatible | native | confidence=high]" in result.stdout
     assert "request-ready payload: deepseek-chat -> openai-chat-minimal" in result.stdout
@@ -530,8 +529,7 @@ def test_faigate_doctor_reports_runtime_cooldown_windows(tmp_path: Path):
         "| cooldown active | cooldown 120s left" in result.stdout
     )
     assert (
-        "request-ready actions: fix-now=0 | hold=1 | watch=0 | route=0 | inspect=0"
-        in result.stdout
+        "request-ready actions: fix-now=0 | hold=1 | watch=0 | route=0 | inspect=0" in result.stdout
     )
 
 
@@ -616,8 +614,7 @@ def test_faigate_doctor_reports_recent_route_recovery(tmp_path: Path):
         in result.stdout
     )
     assert (
-        "request-ready actions: fix-now=0 | hold=0 | watch=1 | route=0 | inspect=0"
-        in result.stdout
+        "request-ready actions: fix-now=0 | hold=0 | watch=1 | route=0 | inspect=0" in result.stdout
     )
 
 
@@ -2108,10 +2105,7 @@ def test_faigate_doctor_prefers_same_lane_route_before_cluster_degrade(tmp_path:
         "request-ready preferred route: anthropic-claude -> "
         "openrouter-anthropic-opus (same-lane-route)"
     ) in result.stdout
-    assert (
-        "request-ready fallback guidance: same-lane=1 | cluster=0 | family=0"
-        in result.stdout
-    )
+    assert "request-ready fallback guidance: same-lane=1 | cluster=0 | family=0" in result.stdout
 
 
 def test_faigate_doctor_prefers_family_route_when_route_is_on_hold(tmp_path: Path):
@@ -2260,18 +2254,14 @@ providers:
     )
 
     assert (
-        "request-ready mirror gap: anthropic-claude -> openrouter-anthropic-opus"
-        in result.stdout
+        "request-ready mirror gap: anthropic-claude -> openrouter-anthropic-opus" in result.stdout
     )
     assert (
         "request-ready add route: anthropic-claude -> openrouter-anthropic-opus (same-lane-add)"
         in result.stdout
     )
     assert "request-ready add guidance: same-lane=1 | cluster=0 | family=0" in result.stdout
-    assert (
-        "request-ready mirror gaps: 1 routes have known mirrors not configured"
-        in result.stdout
-    )
+    assert "request-ready mirror gaps: 1 routes have known mirrors not configured" in result.stdout
 
 
 def test_faigate_client_scenarios_help_lists_usage():
@@ -2532,6 +2522,139 @@ providers:
     assert "Known providers" in result.stdout
     assert "deepseek-chat  (key ready · already in config)" in result.stdout
     assert "anthropic-claude  (needs ANTHROPIC_API_KEY)" in result.stdout
+
+
+def test_faigate_provider_setup_recommended_text_lists_guided_route_additions(tmp_path: Path):
+    env_file = tmp_path / ".env"
+    env_file.write_text("ANTHROPIC_API_KEY=sk-ant\n", encoding="utf-8")
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(
+        """
+providers:
+  anthropic-claude:
+    backend: anthropic-compat
+    api_key: "${ANTHROPIC_API_KEY}"
+    base_url: "https://api.anthropic.com/v1"
+    model: "claude-opus-4-6"
+""".strip(),
+        encoding="utf-8",
+    )
+
+    env = os.environ.copy()
+    env["FAIGATE_ENV_FILE"] = str(env_file)
+    env["FAIGATE_CONFIG_FILE"] = str(config_file)
+    env["FAIGATE_PYTHON"] = sys.executable
+
+    result = subprocess.run(
+        ["bash", "scripts/faigate-provider-setup", "--recommended", "--text"],
+        cwd=REPO_ROOT,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert "Guided route additions" in result.stdout
+    assert "openrouter-fallback" in result.stdout
+    assert "route target: openrouter-anthropic-opus" in result.stdout
+
+
+def test_faigate_provider_setup_recommended_json_lists_actionable_additions(tmp_path: Path):
+    env_file = tmp_path / ".env"
+    env_file.write_text("ANTHROPIC_API_KEY=sk-ant\n", encoding="utf-8")
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(
+        """
+providers:
+  anthropic-claude:
+    backend: anthropic-compat
+    api_key: "${ANTHROPIC_API_KEY}"
+    base_url: "https://api.anthropic.com/v1"
+    model: "claude-opus-4-6"
+""".strip(),
+        encoding="utf-8",
+    )
+
+    env = os.environ.copy()
+    env["FAIGATE_ENV_FILE"] = str(env_file)
+    env["FAIGATE_CONFIG_FILE"] = str(config_file)
+    env["FAIGATE_PYTHON"] = sys.executable
+
+    result = subprocess.run(
+        ["bash", "scripts/faigate-provider-setup", "--recommended", "--json"],
+        cwd=REPO_ROOT,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    payload = json.loads(result.stdout)
+    assert payload["actionable_additions"]
+    assert payload["actionable_additions"][0]["setup_provider_name"] == "openrouter-fallback"
+    assert payload["actionable_additions"][0]["provider_name"] == "openrouter-anthropic-opus"
+
+
+def test_faigate_client_scenarios_write_plus_routes_hands_off_to_guided_setup(tmp_path: Path):
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "\n".join(
+            [
+                "DEEPSEEK_API_KEY=sk-demo",
+                "OPENAI_API_KEY=sk-openai",
+                "ANTHROPIC_API_KEY=sk-ant",
+                "OPENROUTER_API_KEY=sk-openrouter",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(
+        """
+server:
+  host: "127.0.0.1"
+  port: 8090
+providers:
+  deepseek-chat:
+    backend: openai-compat
+    api_key: "${DEEPSEEK_API_KEY}"
+    base_url: "https://api.deepseek.com/v1"
+    model: "deepseek-chat"
+    tier: default
+fallback_chain:
+  - deepseek-chat
+client_profiles:
+  enabled: true
+  default: generic
+  profiles:
+    generic: {}
+    opencode:
+      routing_mode: auto
+""".strip(),
+        encoding="utf-8",
+    )
+
+    env = os.environ.copy()
+    env["FAIGATE_ENV_FILE"] = str(env_file)
+    env["FAIGATE_CONFIG_FILE"] = str(config_file)
+    env["FAIGATE_PYTHON"] = sys.executable
+    env["PYTHONPATH"] = str(REPO_ROOT)
+
+    result = subprocess.run(
+        ["bash", "scripts/faigate-client-scenarios"],
+        cwd=REPO_ROOT,
+        env=env,
+        input="3\n3\n\n\n1\n\n\n",
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert "Write + routes" in result.stdout
+    assert "Guided route additions" in result.stdout
+    assert "Opening Guided Route Additions" in result.stdout
+    assert "Scenario updated and guided route review returned." in result.stdout
 
 
 def test_faigate_menu_quick_setup_lists_provider_setup(tmp_path: Path):

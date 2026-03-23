@@ -258,8 +258,7 @@ metrics:
     assert cfg.providers["cloud-default"]["transport"]["profile"] == "openai-compatible"
     assert cfg.providers["cloud-default"]["transport"]["compatibility"] == "native"
     assert (
-        cfg.providers["cloud-default"]["transport"]["probe_payload_kind"]
-        == "openai-chat-minimal"
+        cfg.providers["cloud-default"]["transport"]["probe_payload_kind"] == "openai-chat-minimal"
     )
     assert cfg.providers["cloud-default"]["transport"]["probe_payload_text"] == "ping"
     assert cfg.providers["cloud-default"]["transport"]["probe_payload_max_tokens"] == 1

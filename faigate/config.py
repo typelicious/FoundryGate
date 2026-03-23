@@ -560,9 +560,9 @@ def _normalize_provider_transport(name: str, cfg: dict[str, Any]) -> dict[str, A
         )
     normalized["probe_strategy"] = probe_strategy
 
-    probe_payload_kind = str(
-        transport.get("probe_payload_kind", "default") or "default"
-    ).strip().lower()
+    probe_payload_kind = (
+        str(transport.get("probe_payload_kind", "default") or "default").strip().lower()
+    )
     if not probe_payload_kind:
         raise ConfigError(f"Provider '{name}' transport.probe_payload_kind must be non-empty")
     normalized["probe_payload_kind"] = probe_payload_kind

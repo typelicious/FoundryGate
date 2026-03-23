@@ -453,9 +453,7 @@ def _provider_request_readiness(provider: Any) -> dict[str, Any]:
             "route is still request-ready but operating under recent "
             f"{runtime_issue_type.replace('-', ' ')} pressure for another {runtime_degraded_remaining}s"
         )
-        state["operator_hint"] = (
-            "prefer lower-pressure siblings while this route recovers"
-        )
+        state["operator_hint"] = "prefer lower-pressure siblings while this route recovers"
     elif runtime_recovered_recently and bool(state.get("ready")):
         state["status"] = "ready-recovered"
         state["reason"] = (
@@ -487,9 +485,7 @@ def _provider_request_readiness(provider: Any) -> dict[str, Any]:
             "route is still request-ready but operating under recent "
             f"{runtime_issue_type.replace('-', ' ')} pressure"
         )
-        state["operator_hint"] = (
-            "prefer lower-pressure siblings while this route recovers"
-        )
+        state["operator_hint"] = "prefer lower-pressure siblings while this route recovers"
     return state
 
 

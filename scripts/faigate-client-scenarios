@@ -10,6 +10,7 @@ python_bin="$(faigate_python_bin)"
 mode="interactive"
 scenario_id=""
 interactive_choice="0"
+route_mode="scenario-only"
 
 usage() {
   cat <<'EOF'
@@ -18,6 +19,7 @@ Usage:
   ./scripts/faigate-client-scenarios --text
   ./scripts/faigate-client-scenarios --json
   ./scripts/faigate-client-scenarios --scenario ID --apply
+  ./scripts/faigate-client-scenarios --scenario ID --apply-with-routes
   ./scripts/faigate-client-scenarios --interactive
 
 Review or apply named client scenario templates such as:
@@ -44,6 +46,11 @@ while [[ $# -gt 0 ]]; do
       ;;
     --apply)
       mode="apply"
+      shift
+      ;;
+    --apply-with-routes)
+      mode="apply"
+      route_mode="guided-routes"
       shift
       ;;
     --interactive)
@@ -159,6 +166,30 @@ if os.environ["FAIGATE_SCENARIO_WRITE"] == "write":
 PY
 }
 
+scenario_route_addition_count() {
+  local scenario="$1"
+  FAIGATE_SCENARIO_ID="$scenario" \
+    FAIGATE_SCENARIO_CONFIG="$config_file" \
+    FAIGATE_SCENARIO_ENV="$env_file" \
+    "$python_bin" - <<'PY'
+import os
+
+from faigate.wizard import apply_client_scenario
+
+payload = apply_client_scenario(
+    scenario_id=os.environ["FAIGATE_SCENARIO_ID"],
+    config_path=os.environ["FAIGATE_SCENARIO_CONFIG"],
+    env_file=os.environ.get("FAIGATE_SCENARIO_ENV") or None,
+)
+plan = payload.get("route_add_setup_plan") or {}
+print(len(plan.get("actionable_additions") or []))
+PY
+}
+
+open_guided_route_additions() {
+  bash "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/faigate-provider-setup" --recommended --interactive
+}
+
 if [[ "$mode" == "text" || "$mode" == "json" ]]; then
   render_scenarios "$mode"
   exit 0
@@ -170,6 +201,9 @@ if [[ "$mode" == "apply" ]]; then
     exit 2
   fi
   apply_scenario "$scenario_id" "write"
+  if [[ "$route_mode" == "guided-routes" ]]; then
+    open_guided_route_additions
+  fi
   exit 0
 fi
 
@@ -210,10 +244,14 @@ while true; do
   fi
   echo ""
   apply_scenario "$scenario_id" "dry"
+  route_add_count="$(scenario_route_addition_count "$scenario_id")"
   echo ""
   printf "  %bApply mode%b\n" "$FAIGATE_UI_BOLD"
   printf "    1)  Dry-run only    Keep this as a preview\n"
   printf "    2)  Write config    Update config.yaml with this scenario\n"
+  if [[ "${route_add_count:-0}" -gt 0 ]]; then
+    printf "    3)  Write + routes  Update config.yaml, then open Guided Route Additions\n"
+  fi
   printf "    c)  Cancel\n"
   printf "    q)  Quit\n"
   printf "  ▸ [1]: "
@@ -238,6 +276,34 @@ while true; do
           "Restart + Verify next so the running gateway picks up the new client profile default." \
           "Open Client Quickstarts to grab the matching client-specific connection details." \
           "Provider Probe is useful when the scenario added providers you have not tested yet."
+      fi
+      faigate_ui_pause
+      exit 0
+      ;;
+    3)
+      if [[ "${route_add_count:-0}" -le 0 ]]; then
+        faigate_ui_warn "No guided route additions are available for this scenario."
+        faigate_ui_pause
+        continue
+      fi
+      scenario_client="$(scenario_client_name "$scenario_id")"
+      echo ""
+      apply_scenario "$scenario_id" "write"
+      echo ""
+      faigate_ui_tip "Opening Guided Route Additions so you can add the recommended mirrors next."
+      echo ""
+      open_guided_route_additions
+      echo ""
+      if [[ -n "$scenario_client" ]]; then
+        show_next_steps "Scenario updated and guided route review returned." \
+          "Restart + Verify next so the running gateway picks up the new ${scenario_client} routing posture." \
+          "Run Provider Probe if you want a fresh request-ready view for the newly added mirrors." \
+          "Open Client Quickstarts and drill into ${scenario_client} Details for the exact connection settings."
+      else
+        show_next_steps "Scenario updated and guided route review returned." \
+          "Restart + Verify next so the running gateway picks up the new routing posture." \
+          "Run Provider Probe if you want a fresh request-ready view for the newly added mirrors." \
+          "Open Client Quickstarts for the matching client-specific connection details."
       fi
       faigate_ui_pause
       exit 0

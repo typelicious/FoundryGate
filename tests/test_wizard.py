@@ -16,6 +16,7 @@ from faigate.wizard import (
     build_initial_config,
     build_interactive_candidate_sections,
     build_provider_probe_report,
+    build_route_add_setup_plan,
     build_update_suggestions,
     detect_wizard_providers,
     list_client_scenarios,
@@ -29,6 +30,7 @@ from faigate.wizard import (
     render_known_provider_sources_text,
     render_provider_probe_text,
     render_provider_setup_summary,
+    render_route_add_setup_plan_text,
     write_env_updates,
     write_output_file,
 )
@@ -1268,6 +1270,7 @@ client_profiles:
     assert "best when:" in summary
     assert "Change preview" in summary
     assert "Operator follow-up" in summary
+    assert "Provider Setup -> Guided Route Additions" in summary
     assert "add route:" in summary
 
 
@@ -1284,3 +1287,33 @@ def test_render_client_scenarios_text_mentions_opencode_free(tmp_path: Path):
     assert "known route mirrors:" in rendered or "degrade chain:" in rendered
     assert "add for fuller coverage:" in rendered
     assert "ready now" in rendered or "needs keys for" in rendered
+
+
+def test_build_route_add_setup_plan_maps_catalog_route_to_setup_provider(tmp_path: Path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        """
+providers:
+  anthropic-claude:
+    backend: anthropic-compat
+    api_key: "${ANTHROPIC_API_KEY}"
+    base_url: "https://api.anthropic.com/v1"
+    model: "claude-opus-4-6"
+""".strip(),
+        encoding="utf-8",
+    )
+    env_file = tmp_path / ".env"
+    env_file.write_text("ANTHROPIC_API_KEY=sk-ant\n", encoding="utf-8")
+
+    plan = build_route_add_setup_plan(
+        config_path=config_path,
+        env_file=env_file,
+        source_providers=["anthropic-claude"],
+    )
+
+    assert plan["actionable_additions"]
+    assert plan["actionable_additions"][0]["provider_name"] == "openrouter-anthropic-opus"
+    assert plan["actionable_additions"][0]["setup_provider_name"] == "openrouter-fallback"
+    rendered = render_route_add_setup_plan_text(plan)
+    assert "Guided route additions" in rendered
+    assert "openrouter-fallback" in rendered

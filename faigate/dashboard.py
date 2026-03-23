@@ -174,7 +174,9 @@ def _lane_family_summary(
     provider_map: dict[str, dict[str, Any]],
 ) -> list[dict[str, Any]]:
     metric_rows_by_provider = {
-        str(row.get("provider") or ""): row for row in provider_rows if str(row.get("provider") or "")
+        str(row.get("provider") or ""): row
+        for row in provider_rows
+        if str(row.get("provider") or "")
     }
     source_rows: list[dict[str, Any]] = []
     if provider_map:
@@ -187,7 +189,9 @@ def _lane_family_summary(
                     "cost_usd": _safe_float(metrics_row.get("cost_usd")),
                     "lane": dict((inventory_row or {}).get("lane") or {}),
                     "request_readiness": dict((inventory_row or {}).get("request_readiness") or {}),
-                    "route_runtime_state": dict((inventory_row or {}).get("route_runtime_state") or {}),
+                    "route_runtime_state": dict(
+                        (inventory_row or {}).get("route_runtime_state") or {}
+                    ),
                 }
             )
     else:
@@ -353,9 +357,7 @@ def _enrich_provider_rows_with_lane(
                     else ""
                 ),
                 "recommended_add_strategy": (
-                    str(add_recommendations[0].get("strategy") or "")
-                    if add_recommendations
-                    else ""
+                    str(add_recommendations[0].get("strategy") or "") if add_recommendations else ""
                 ),
             }
         )
@@ -1157,9 +1159,13 @@ def _render_provider_detail(report: dict[str, Any], provider_name: str) -> str:
         if runtime_state.get("window_state") and runtime_state.get("window_state") != "clear":
             lines.append(f"Runtime window    {runtime_state.get('window_state')}")
         if runtime_state.get("cooldown_remaining_s"):
-            lines.append(f"Cooldown left     {_safe_int(runtime_state.get('cooldown_remaining_s'))}s")
+            lines.append(
+                f"Cooldown left     {_safe_int(runtime_state.get('cooldown_remaining_s'))}s"
+            )
         if runtime_state.get("degraded_remaining_s"):
-            lines.append(f"Degraded left     {_safe_int(runtime_state.get('degraded_remaining_s'))}s")
+            lines.append(
+                f"Degraded left     {_safe_int(runtime_state.get('degraded_remaining_s'))}s"
+            )
         if runtime_state.get("recovered_recently"):
             lines.append(
                 f"Recovered from    {runtime_state.get('last_recovered_issue_type') or 'n/a'}"

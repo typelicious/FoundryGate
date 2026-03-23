@@ -176,9 +176,7 @@ class ProviderBackend:
         payload_text = str(self.transport.get("probe_payload_text", "ping") or "ping")
         payload_max_tokens = int(self.transport.get("probe_payload_max_tokens", 1) or 1)
         text_preview = payload_text if len(payload_text) <= 24 else payload_text[:21] + "..."
-        return (
-            f"{payload_kind} | user='{text_preview}' | max_tokens={payload_max_tokens}"
-        )
+        return f"{payload_kind} | user='{text_preview}' | max_tokens={payload_max_tokens}"
 
     def _mark_probe_success(self, strategy: str, latency_ms: float) -> None:
         self._last_probe_strategy = strategy
