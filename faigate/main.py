@@ -677,6 +677,11 @@ def _build_route_summary(decision: RoutingDecision) -> dict[str, Any]:
     details = dict(decision.details or {})
     request_insights = dict(details.get("request_insights") or {})
     heuristic_match = dict(details.get("heuristic_match") or {})
+    rankings = list(details.get("candidate_ranking") or details.get("score_ranking") or [])
+    selected_row = next(
+        (row for row in rankings if str(row.get("provider") or "") == decision.provider_name),
+        {},
+    )
     selected = {
         "provider": decision.provider_name,
         "canonical_model": str(details.get("canonical_model") or ""),
@@ -684,6 +689,11 @@ def _build_route_summary(decision: RoutingDecision) -> dict[str, Any]:
         "lane_name": str(details.get("lane_name") or ""),
         "route_type": str(details.get("route_type") or ""),
         "lane_cluster": str(details.get("lane_cluster") or ""),
+        "benchmark_cluster": str(
+            details.get("benchmark_cluster") or selected_row.get("benchmark_cluster") or ""
+        ),
+        "cost_tier": str(details.get("cost_tier") or selected_row.get("cost_tier") or ""),
+        "estimated_request_cost_usd": float(selected_row.get("estimated_request_cost_usd") or 0.0),
         "selection_path": str(details.get("selection_path") or "primary-selected"),
     }
 
@@ -712,13 +722,24 @@ def _build_route_summary(decision: RoutingDecision) -> dict[str, Any]:
         why_selected.append(
             "Simple-query routing was suppressed because the request looked riskier."
         )
+    if selected.get("benchmark_cluster") and request_insights.get("signal_groups"):
+        why_selected.append(
+            f"Benchmark fit favored {selected['benchmark_cluster']} for "
+            + ", ".join(str(item) for item in request_insights.get("signal_groups") or [])
+            + "."
+        )
+    if selected.get("estimated_request_cost_usd"):
+        why_selected.append(
+            "Estimated request cost is about "
+            + f"${selected['estimated_request_cost_usd']:.6f}"
+            + f" on the {selected.get('cost_tier') or 'current'} cost lane."
+        )
     if selected["canonical_model"]:
         why_selected.append(
             f"Selected canonical lane {selected['canonical_model']} via {selected['route_type'] or 'default'} route."
         )
 
     alternatives: list[dict[str, Any]] = []
-    rankings = list(details.get("candidate_ranking") or details.get("score_ranking") or [])
     selected_score = None
     if rankings:
         for row in rankings:
@@ -736,12 +757,21 @@ def _build_route_summary(decision: RoutingDecision) -> dict[str, Any]:
             reason_bits.append(f"runtime penalty {row.get('runtime_penalty')}")
         if row.get("route_type") and row.get("route_type") != selected["route_type"]:
             reason_bits.append(f"{row.get('route_type')} route")
+        if row.get("benchmark_cluster") and row.get("benchmark_cluster") != selected.get(
+            "benchmark_cluster"
+        ):
+            reason_bits.append(f"weaker benchmark fit ({row.get('benchmark_cluster')})")
+        if row.get("estimated_request_cost_usd"):
+            reason_bits.append(f"est. ${float(row.get('estimated_request_cost_usd') or 0.0):.6f}")
         alternatives.append(
             {
                 "provider": provider_name,
                 "canonical_model": str(row.get("canonical_model") or ""),
                 "route_type": str(row.get("route_type") or ""),
                 "lane_cluster": str(row.get("lane_cluster") or ""),
+                "benchmark_cluster": str(row.get("benchmark_cluster") or ""),
+                "cost_tier": str(row.get("cost_tier") or ""),
+                "estimated_request_cost_usd": float(row.get("estimated_request_cost_usd") or 0.0),
                 "reason": ", ".join(reason_bits)
                 if reason_bits
                 else "ranked below the selected route",

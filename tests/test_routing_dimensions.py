@@ -727,6 +727,111 @@ metrics:
 
 
 @pytest.mark.asyncio
+async def test_eco_posture_prefers_cheaper_same_cluster_route(tmp_path):
+    cfg = load_config(
+        _write_config(
+            tmp_path,
+            """
+server:
+  host: "127.0.0.1"
+  port: 8090
+providers:
+  standard-workhorse:
+    backend: openai-compat
+    base_url: "https://standard.example.com/v1"
+    api_key: "secret"
+    model: "deepseek-chat"
+    tier: default
+    pricing:
+      input: 1.20
+      output: 4.80
+      cache_read: 0.60
+    lane:
+      family: deepseek
+      name: workhorse
+      canonical_model: deepseek/chat
+      route_type: direct
+      cluster: balanced-workhorse
+      benchmark_cluster: balanced-coding
+      quality_tier: mid
+      reasoning_strength: mid
+      context_strength: mid
+      tool_strength: medium
+      same_model_group: deepseek/chat
+  cheap-workhorse:
+    backend: openai-compat
+    base_url: "https://cheap.example.com/v1"
+    api_key: "secret"
+    model: "deepseek-chat"
+    tier: default
+    pricing:
+      input: 0.08
+      output: 0.32
+      cache_read: 0.02
+    lane:
+      family: deepseek
+      name: workhorse
+      canonical_model: deepseek/chat
+      route_type: direct
+      cluster: balanced-workhorse
+      benchmark_cluster: balanced-coding
+      quality_tier: mid
+      reasoning_strength: mid
+      context_strength: mid
+      tool_strength: medium
+      same_model_group: deepseek/chat
+client_profiles:
+  enabled: true
+  default: generic
+  profiles:
+    generic:
+      routing_mode: eco
+      prefer_tiers: ["default"]
+routing_modes:
+  enabled: true
+  default: eco
+  modes:
+    eco:
+      select:
+        prefer_tiers: ["default"]
+heuristic_rules:
+  enabled: false
+  rules: []
+fallback_chain: []
+metrics:
+  enabled: false
+""",
+        )
+    )
+    router = Router(cfg)
+
+    decision = await router.route(
+        [{"role": "user", "content": "Summarize this coding diff briefly and pragmatically."}],
+        model_requested="auto",
+        client_profile="generic",
+        profile_hints=cfg.client_profiles["profiles"]["generic"],
+        provider_health={
+            "standard-workhorse": {
+                "healthy": True,
+                "avg_latency_ms": 120,
+                "consecutive_failures": 0,
+            },
+            "cheap-workhorse": {
+                "healthy": True,
+                "avg_latency_ms": 120,
+                "consecutive_failures": 0,
+            },
+        },
+    )
+
+    assert decision.provider_name == "cheap-workhorse"
+    ranking = decision.details["candidate_ranking"]
+    assert ranking[0]["provider"] == "cheap-workhorse"
+    assert ranking[0]["cost_score"] > ranking[1]["cost_score"]
+    assert ranking[0]["estimated_request_cost_usd"] < ranking[1]["estimated_request_cost_usd"]
+
+
+@pytest.mark.asyncio
 async def test_runtime_route_pressure_penalty_demotes_hot_provider(tmp_path):
     cfg = load_config(
         _write_config(

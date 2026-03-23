@@ -1777,7 +1777,9 @@ def test_faigate_dashboard_provider_detail_shows_canonical_lane(tmp_path: Path):
                                 "canonical_model": "deepseek/chat",
                                 "route_type": "direct",
                                 "cluster": "balanced-workhorse",
+                                "benchmark_cluster": "balanced-coding",
                             },
+                            "capabilities": {"cost_tier": "standard"},
                             "transport": {
                                 "profile": "openai-compatible",
                                 "compatibility": "native",
@@ -1823,6 +1825,12 @@ def test_faigate_dashboard_provider_detail_shows_canonical_lane(tmp_path: Path):
     assert "Canonical lane    deepseek/chat" in result.stdout
     assert "Route type        direct" in result.stdout
     assert "Lane cluster      balanced-workhorse" in result.stdout
+    assert "Benchmark focus   balanced-coding" in result.stdout
+    assert "Cost tier         standard" in result.stdout
+    assert (
+        "Routing fit       balanced-coding with a standard cost posture over direct routing"
+        in result.stdout
+    )
     assert "Request-ready     ready-verified" in result.stdout
     assert "Verified via      models" in result.stdout
     assert "Probe payload     openai-chat-minimal | user='ping' | max_tokens=1" in result.stdout
