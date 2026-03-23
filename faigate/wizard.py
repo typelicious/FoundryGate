@@ -1240,12 +1240,16 @@ def build_provider_probe_report(
         "family-route": 0,
         "none": 0,
     }
+    family_summaries = _build_probe_family_summaries(rows)
     for row in rows:
         recommendation = _pick_probe_recommendation(row=row, rows=rows)
         row["recommended_route"] = recommendation["provider"]
         row["recommended_strategy"] = recommendation["strategy"]
         recommendation_counts[recommendation["strategy"]] = (
             recommendation_counts.get(recommendation["strategy"], 0) + 1
+        )
+        row["family_summary"] = dict(
+            family_summaries.get(str(row.get("lane_family") or "unclassified")) or {}
         )
         row["next_action"] = _combine_probe_next_action(
             current_hint=str(row.get("next_action") or ""),
@@ -1263,6 +1267,7 @@ def build_provider_probe_report(
             "health_live": health_payload is not None,
             "live_probe": live_probe,
             "actions": action_counts,
+            "families": list(family_summaries.values()),
             "recommendations": recommendation_counts,
         },
     }
@@ -1289,6 +1294,15 @@ def render_provider_probe_text(report: dict[str, Any]) -> str:
         f"inspect={actions.get('inspect', 0)}",
     ]
     lines.append("Action summary: " + " | ".join(action_bits))
+    families = summary.get("families") or []
+    if families:
+        family_bits = []
+        for family in families[:3]:
+            family_bits.append(
+                f"{family.get('family')}: route={family.get('route', 0)}"
+                f"/watch={family.get('watch', 0)}/hold={family.get('hold', 0)}"
+            )
+        lines.append("Family actions: " + " | ".join(family_bits))
     recommendations = summary.get("recommendations") or {}
     lines.append(
         "Fallback guidance: "
@@ -1409,6 +1423,39 @@ def _default_probe_action_hint(*, action_group: str, provider_name: str, family:
     if action_group == "route":
         return f"route can carry live traffic for the {family_label} lane"
     return f"inspect runtime hints for {provider_name} before making it a primary lane"
+
+
+def _build_probe_family_summaries(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    summaries: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        family = str(row.get("lane_family") or "unclassified")
+        bucket = summaries.setdefault(
+            family,
+            {
+                "family": family,
+                "providers": 0,
+                "fix-now": 0,
+                "hold": 0,
+                "watch": 0,
+                "route": 0,
+                "inspect": 0,
+            },
+        )
+        bucket["providers"] += 1
+        action = str(row.get("action_group") or "inspect")
+        bucket[action] = bucket.get(action, 0) + 1
+    return dict(
+        sorted(
+            summaries.items(),
+            key=lambda item: (
+                item[1].get("route", 0),
+                -item[1].get("hold", 0),
+                item[1].get("providers", 0),
+                item[0],
+            ),
+            reverse=True,
+        )
+    )
 
 
 def _pick_probe_recommendation(

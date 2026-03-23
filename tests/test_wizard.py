@@ -1095,6 +1095,65 @@ providers:
     assert "prefer: openrouter-anthropic-opus (same-lane-route)" in rendered
 
 
+def test_build_provider_probe_report_prefers_family_route_during_cooldown(tmp_path: Path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        """
+providers:
+  deepseek-chat:
+    backend: openai-compat
+    api_key: "${DEEPSEEK_API_KEY}"
+    base_url: "https://api.deepseek.com/v1"
+    model: "deepseek-chat"
+    tier: default
+  deepseek-reasoner:
+    backend: openai-compat
+    api_key: "${DEEPSEEK_API_KEY}"
+    base_url: "https://api.deepseek.com/v1"
+    model: "deepseek-reasoner"
+    tier: reasoning
+""".strip(),
+        encoding="utf-8",
+    )
+    env_file = tmp_path / ".env"
+    env_file.write_text("DEEPSEEK_API_KEY=sk-demo\n", encoding="utf-8")
+
+    report = build_provider_probe_report(
+        config_path=config_path,
+        env_file=env_file,
+        health_payload={
+            "providers": {
+                "deepseek-chat": {
+                    "healthy": True,
+                    "request_readiness": {
+                        "ready": True,
+                        "status": "ready",
+                        "reason": "route looks request-ready from runtime state",
+                    },
+                },
+                "deepseek-reasoner": {
+                    "healthy": True,
+                    "request_readiness": {
+                        "ready": False,
+                        "status": "rate-limited",
+                        "reason": "route is in runtime cooldown after recent rate limited failures",
+                        "runtime_cooldown_active": True,
+                        "runtime_window_state": "cooldown",
+                    },
+                },
+            }
+        },
+    )
+
+    by_name = {row["provider"]: row for row in report["providers"]}
+    assert by_name["deepseek-reasoner"]["recommended_route"] == "deepseek-chat"
+    assert by_name["deepseek-reasoner"]["recommended_strategy"] == "cluster-degrade"
+    assert "next cluster lane" in by_name["deepseek-reasoner"]["next_action"]
+    rendered = render_provider_probe_text(report)
+    assert "Family actions: deepseek: route=1/watch=0/hold=1" in rendered
+    assert "prefer: deepseek-chat (cluster-degrade)" in rendered
+
+
 def test_list_client_scenarios_exposes_opencode_quality_path(tmp_path: Path):
     env_file = tmp_path / ".env"
     env_file.write_text(

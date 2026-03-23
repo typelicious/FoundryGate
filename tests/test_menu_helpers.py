@@ -2111,6 +2111,82 @@ def test_faigate_doctor_prefers_same_lane_route_before_cluster_degrade(tmp_path:
     )
 
 
+def test_faigate_doctor_prefers_family_route_when_route_is_on_hold(tmp_path: Path):
+    config_file = tmp_path / "config.yaml"
+    env_file = tmp_path / "faigate.env"
+    config_file.write_text("server: {}\nproviders: {}\n", encoding="utf-8")
+    env_file.write_text("", encoding="utf-8")
+
+    fake_bin = _write_fake_curl(
+        tmp_path,
+        {
+            "/health": json.dumps(
+                {
+                    "status": "ok",
+                    "summary": {
+                        "providers_total": 2,
+                        "providers_healthy": 2,
+                        "providers_unhealthy": 0,
+                    },
+                    "request_readiness": {
+                        "providers_total": 2,
+                        "providers_ready": 1,
+                        "providers_not_ready": 1,
+                    },
+                    "providers": {
+                        "deepseek-chat": {
+                            "healthy": True,
+                            "lane": {"family": "deepseek"},
+                            "request_readiness": {
+                                "ready": True,
+                                "status": "ready",
+                                "reason": "route looks request-ready from runtime state",
+                            },
+                        },
+                        "deepseek-reasoner": {
+                            "healthy": True,
+                            "lane": {"family": "deepseek"},
+                            "request_readiness": {
+                                "ready": False,
+                                "status": "rate-limited",
+                                "reason": (
+                                    "route is in runtime cooldown after recent "
+                                    "rate limited failures"
+                                ),
+                                "runtime_cooldown_active": True,
+                                "runtime_window_state": "cooldown",
+                            },
+                        },
+                    },
+                }
+            ),
+            "/v1/models": json.dumps({"data": []}),
+        },
+    )
+
+    env = os.environ.copy()
+    env["PATH"] = f"{fake_bin}:{env['PATH']}"
+    env["FAIGATE_CONFIG_FILE"] = str(config_file)
+    env["FAIGATE_ENV_FILE"] = str(env_file)
+    env["FAIGATE_PYTHON"] = sys.executable
+    env["PYTHONPATH"] = str(REPO_ROOT)
+
+    result = subprocess.run(
+        ["bash", "scripts/faigate-doctor"],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    assert "request-ready action: deepseek-reasoner -> hold [deepseek]" in result.stdout
+    assert (
+        "request-ready preferred route: deepseek-reasoner -> deepseek-chat (family-route)"
+        in result.stdout
+    )
+
+
 def test_faigate_client_scenarios_help_lists_usage():
     result = subprocess.run(
         ["bash", "scripts/faigate-client-scenarios", "--help"],
