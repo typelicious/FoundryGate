@@ -88,6 +88,9 @@ _SUPPORTED_PROVIDER_TRANSPORT_KEYS = {
     "probe_confidence",
     "auth_mode",
     "probe_strategy",
+    "probe_payload_kind",
+    "probe_payload_text",
+    "probe_payload_max_tokens",
     "models_path",
     "chat_path",
     "image_generation_path",
@@ -556,6 +559,25 @@ def _normalize_provider_transport(name: str, cfg: dict[str, Any]) -> dict[str, A
             f"'{probe_strategy}' (supported: {supported})"
         )
     normalized["probe_strategy"] = probe_strategy
+
+    probe_payload_kind = str(
+        transport.get("probe_payload_kind", "default") or "default"
+    ).strip().lower()
+    if not probe_payload_kind:
+        raise ConfigError(f"Provider '{name}' transport.probe_payload_kind must be non-empty")
+    normalized["probe_payload_kind"] = probe_payload_kind
+
+    probe_payload_text = str(transport.get("probe_payload_text", "ping") or "ping").strip()
+    if not probe_payload_text:
+        raise ConfigError(f"Provider '{name}' transport.probe_payload_text must be non-empty")
+    normalized["probe_payload_text"] = probe_payload_text
+
+    probe_payload_max_tokens = transport.get("probe_payload_max_tokens", 1)
+    if not isinstance(probe_payload_max_tokens, int) or probe_payload_max_tokens < 1:
+        raise ConfigError(
+            f"Provider '{name}' transport.probe_payload_max_tokens must be an integer >= 1"
+        )
+    normalized["probe_payload_max_tokens"] = probe_payload_max_tokens
 
     for field_name in (
         "models_path",

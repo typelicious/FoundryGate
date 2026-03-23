@@ -407,6 +407,8 @@ providers:
                                 "profile": "openai-compatible",
                                 "compatibility": "native",
                                 "probe_confidence": "high",
+                                "probe_payload": "openai-chat-minimal | user='ping' | max_tokens=1",
+                                "operator_hint": "route can carry live traffic",
                             },
                         }
                     },
@@ -435,6 +437,8 @@ providers:
     assert "request-ready: deepseek-chat -> ready" in result.stdout
     assert "request readiness summary: 1/1 provider routes look request-ready" in result.stdout
     assert "[openai-compatible | native | confidence=high]" in result.stdout
+    assert "request-ready payload: deepseek-chat -> openai-chat-minimal" in result.stdout
+    assert "request-ready next step: deepseek-chat -> route can carry live traffic" in result.stdout
 
 
 def test_faigate_service_lib_detects_homebrew_runtime_paths(tmp_path: Path):
@@ -1289,6 +1293,8 @@ def test_faigate_dashboard_overview_summarizes_live_stats(tmp_path: Path):
                                 "status": "ready-verified",
                                 "reason": "route passed a live models probe recently",
                                 "verified_via": "models",
+                                "probe_payload": "openai-chat-minimal | user='ping' | max_tokens=1",
+                                "operator_hint": "route can carry live traffic",
                             },
                         },
                         "gemini-flash": {
@@ -1435,6 +1441,8 @@ def test_faigate_dashboard_overview_summarizes_live_stats(tmp_path: Path):
                                 "status": "ready-verified",
                                 "reason": "route passed a live models probe recently",
                                 "verified_via": "models",
+                                "probe_payload": "openai-chat-minimal | user='ping' | max_tokens=1",
+                                "operator_hint": "route can carry live traffic",
                             },
                             "transport": {
                                 "profile": "openai-compatible",
@@ -1522,6 +1530,8 @@ def test_faigate_dashboard_provider_detail_shows_canonical_lane(tmp_path: Path):
                                 "status": "ready-verified",
                                 "reason": "route passed a live models probe recently",
                                 "verified_via": "models",
+                                "probe_payload": "openai-chat-minimal | user='ping' | max_tokens=1",
+                                "operator_hint": "route can carry live traffic",
                             },
                         },
                     },
@@ -1590,6 +1600,8 @@ def test_faigate_dashboard_provider_detail_shows_canonical_lane(tmp_path: Path):
                                 "status": "ready-verified",
                                 "reason": "route passed a live models probe recently",
                                 "verified_via": "models",
+                                "probe_payload": "openai-chat-minimal | user='ping' | max_tokens=1",
+                                "operator_hint": "route can carry live traffic",
                             },
                             "route_runtime_state": {
                                 "penalty": 6,
@@ -1623,6 +1635,8 @@ def test_faigate_dashboard_provider_detail_shows_canonical_lane(tmp_path: Path):
     assert "Lane cluster      balanced-workhorse" in result.stdout
     assert "Request-ready     ready-verified" in result.stdout
     assert "Verified via      models" in result.stdout
+    assert "Probe payload     openai-chat-minimal | user='ping' | max_tokens=1" in result.stdout
+    assert "Operator hint     route can carry live traffic" in result.stdout
     assert "Transport profile openai-compatible" in result.stdout
     assert "Compatibility     native" in result.stdout
     assert "Chat path         /chat/completions" in result.stdout

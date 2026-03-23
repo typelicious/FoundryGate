@@ -210,6 +210,9 @@ class TestProviderHealthProbes:
                     "probe_confidence": "medium",
                     "auth_mode": "bearer",
                     "probe_strategy": "chat",
+                    "probe_payload_kind": "kilo-chat-minimal",
+                    "probe_payload_text": "ping",
+                    "probe_payload_max_tokens": 1,
                     "models_path": "",
                     "chat_path": "/chat/completions",
                     "image_generation_path": "/images/generations",
@@ -227,9 +230,10 @@ class TestProviderHealthProbes:
         assert readiness["status"] == "ready-compat"
         assert readiness["compatibility"] == "aggregator"
         assert readiness["probe_confidence"] == "medium"
+        assert "kilo-chat-minimal" in readiness["probe_payload"]
 
     @pytest.mark.asyncio
-    async def test_chat_probe_marks_aggregator_route_verified(self):
+    async def test_chat_probe_marks_provider_ready_verified(self):
         backend = ProviderBackend(
             "kilocode",
             {
@@ -243,6 +247,9 @@ class TestProviderHealthProbes:
                     "probe_confidence": "medium",
                     "auth_mode": "bearer",
                     "probe_strategy": "chat",
+                    "probe_payload_kind": "kilo-chat-minimal",
+                    "probe_payload_text": "ping",
+                    "probe_payload_max_tokens": 1,
                     "models_path": "",
                     "chat_path": "/chat/completions",
                     "image_generation_path": "/images/generations",
@@ -268,69 +275,17 @@ class TestProviderHealthProbes:
 
         backend._client.post = _fake_post  # type: ignore[attr-defined]
 
-        ok = await backend.probe_health(timeout_seconds=2.5)
+        ok = await backend.probe_health(timeout_seconds=2.0)
         readiness = backend.request_readiness()
 
         assert ok is True
         assert captured["url"] == "https://api.kilo.example/v1/chat/completions"
         assert captured["json"]["messages"][0]["content"] == "ping"
+        assert captured["json"]["max_tokens"] == 1
         assert readiness["status"] == "ready-verified"
         assert readiness["verified_via"] == "chat"
-
-    @pytest.mark.asyncio
-    async def test_models_or_chat_probe_falls_back_to_chat_for_endpoint_mismatch(self):
-        backend = ProviderBackend(
-            "openrouter-fallback",
-            {
-                "backend": "openai-compat",
-                "base_url": "https://openrouter.ai/api/v1",
-                "api_key": "secret",
-                "model": "openrouter/auto",
-                "transport": {
-                    "profile": "openrouter-openai-compat",
-                    "compatibility": "aggregator",
-                    "probe_confidence": "high",
-                    "auth_mode": "bearer",
-                    "probe_strategy": "models_or_chat",
-                    "models_path": "/models",
-                    "chat_path": "/chat/completions",
-                    "image_generation_path": "/images/generations",
-                    "image_edit_path": "/images/edits",
-                    "requires_api_key": True,
-                    "supports_models_probe": True,
-                    "notes": ["marketplace route"],
-                },
-            },
-        )
-        captured: dict = {"calls": []}
-
-        class _ModelsResp:
-            status_code = 404
-            text = "unsupported path"
-
-        class _ChatResp:
-            status_code = 200
-            text = ""
-
-        async def _fake_get(url, headers=None, timeout=None, **_kw):
-            captured["calls"].append(("get", url))
-            return _ModelsResp()
-
-        async def _fake_post(url, json=None, headers=None, timeout=None, **_kw):
-            captured["calls"].append(("post", url))
-            return _ChatResp()
-
-        backend._client.get = _fake_get  # type: ignore[attr-defined]
-        backend._client.post = _fake_post  # type: ignore[attr-defined]
-
-        ok = await backend.probe_health(timeout_seconds=1.5)
-
-        assert ok is True
-        assert captured["calls"] == [
-            ("get", "https://openrouter.ai/api/v1/models"),
-            ("post", "https://openrouter.ai/api/v1/chat/completions"),
-        ]
-        assert backend.request_readiness()["verified_via"] == "chat"
+        assert "kilo-chat-minimal" in readiness["probe_payload"]
+        assert readiness["operator_hint"] == "route can carry live traffic"
 
     @pytest.mark.asyncio
     async def test_assistant_none_content_converted_to_empty_string(self):

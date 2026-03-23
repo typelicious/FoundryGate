@@ -846,6 +846,10 @@ def _render_provider_detail(report: dict[str, Any], provider_name: str) -> str:
         lines.append(f"Readiness detail  {request_readiness.get('reason')}")
     if request_readiness.get("verified_via"):
         lines.append(f"Verified via      {request_readiness.get('verified_via')}")
+    if request_readiness.get("probe_payload"):
+        lines.append(f"Probe payload     {request_readiness.get('probe_payload')}")
+    if request_readiness.get("operator_hint"):
+        lines.append(f"Operator hint     {request_readiness.get('operator_hint')}")
     if transport:
         lines.extend(
             [

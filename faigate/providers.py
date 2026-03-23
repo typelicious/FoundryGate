@@ -90,6 +90,7 @@ class ProviderBackend:
         }
         self.health = ProviderHealth(name=name)
         self._last_probe_strategy = ""
+        self._last_probe_payload = ""
         self._last_probe_verified = False
 
         self._client = httpx.AsyncClient(
@@ -148,8 +149,40 @@ class ProviderBackend:
             return "transport-error", "the route is reachable by config but not transport-ready"
         return "degraded", detail[:160]
 
+    def _request_readiness_action(self, status: str) -> str:
+        normalized = str(status or "").strip().lower()
+        if normalized in {"ready", "ready-verified"}:
+            return "route can carry live traffic"
+        if normalized == "ready-compat":
+            return "keep the route available, but revalidate it periodically"
+        if normalized == "missing-key":
+            return "add the missing API key before routing traffic here"
+        if normalized == "unresolved-key":
+            return "resolve the ${ENV_VAR} placeholder in the runtime environment"
+        if normalized == "auth-invalid":
+            return "rotate or fix the API key before retrying this route"
+        if normalized == "endpoint-mismatch":
+            return "review the configured base URL and transport paths for this route"
+        if normalized == "model-unavailable":
+            return "switch models or reroute within the same lane if possible"
+        if normalized in {"quota-exhausted", "rate-limited"}:
+            return "deprioritize this route until quota or rate pressure recovers"
+        if normalized == "transport-error":
+            return "treat this route as degraded until connectivity recovers"
+        return "inspect the last route error before relying on this provider"
+
+    def _probe_payload_preview(self) -> str:
+        payload_kind = str(self.transport.get("probe_payload_kind", "default") or "default")
+        payload_text = str(self.transport.get("probe_payload_text", "ping") or "ping")
+        payload_max_tokens = int(self.transport.get("probe_payload_max_tokens", 1) or 1)
+        text_preview = payload_text if len(payload_text) <= 24 else payload_text[:21] + "..."
+        return (
+            f"{payload_kind} | user='{text_preview}' | max_tokens={payload_max_tokens}"
+        )
+
     def _mark_probe_success(self, strategy: str, latency_ms: float) -> None:
         self._last_probe_strategy = strategy
+        self._last_probe_payload = self._probe_payload_preview()
         self._last_probe_verified = True
         self.health.record_success(latency_ms)
 
@@ -164,26 +197,28 @@ class ProviderBackend:
         resp = await self._client.get(url, headers=headers, timeout=timeout_seconds)
         latency = (time.time() - t0) * 1000
         if resp.status_code >= 400:
-            error_text = resp.text[:500]
-            raise ProviderError(self.name, resp.status_code, error_text)
+            raise ProviderError(self.name, resp.status_code, resp.text[:500])
         self._mark_probe_success("models", latency)
         return True
+
+    def _build_chat_probe_body(self) -> dict[str, Any]:
+        probe_text = str(self.transport.get("probe_payload_text", "ping") or "ping")
+        return {
+            "model": self.model,
+            "messages": [{"role": "user", "content": probe_text}],
+            "max_tokens": int(self.transport.get("probe_payload_max_tokens", 1) or 1),
+            "stream": False,
+        }
 
     async def _probe_via_chat(self, *, timeout_seconds: float) -> bool:
         url = self._transport_url(self._transport_path("chat_path", "/chat/completions"))
         headers = self._authorization_headers(content_type="application/json")
-        body = {
-            "model": self.model,
-            "messages": [{"role": "user", "content": "ping"}],
-            "max_tokens": 1,
-            "stream": False,
-        }
+        body = self._build_chat_probe_body()
         t0 = time.time()
         resp = await self._client.post(url, json=body, headers=headers, timeout=timeout_seconds)
         latency = (time.time() - t0) * 1000
         if resp.status_code >= 400:
-            error_text = resp.text[:500]
-            raise ProviderError(self.name, resp.status_code, error_text)
+            raise ProviderError(self.name, resp.status_code, resp.text[:500])
         self._mark_probe_success("chat", latency)
         return True
 
@@ -191,66 +226,81 @@ class ProviderBackend:
         """Return operator-facing request-readiness for one configured route."""
         requires_api_key = bool(self.transport.get("requires_api_key", True))
         probe_strategy = str(self.transport.get("probe_strategy", "models") or "models")
+        probe_strategy = probe_strategy.replace("-", "_")
         compatibility = str(self.transport.get("compatibility", "native") or "native")
         profile = str(self.transport.get("profile", "") or "")
         probe_confidence = str(self.transport.get("probe_confidence", "medium") or "medium")
         notes = list(self.transport.get("notes", []) or [])
         verified_via = self._last_probe_strategy or ""
+        probe_payload = self._last_probe_payload or self._probe_payload_preview()
 
         if requires_api_key and not self.api_key:
+            status = "missing-key"
             return {
                 "ready": False,
-                "status": "missing-key",
+                "status": status,
                 "reason": "provider is configured without an API key",
                 "probe_strategy": probe_strategy,
                 "compatibility": compatibility,
                 "profile": profile,
                 "probe_confidence": probe_confidence,
                 "notes": notes,
+                "probe_payload": probe_payload,
                 "verified_via": verified_via,
+                "operator_hint": self._request_readiness_action(status),
             }
         if requires_api_key and _UNRESOLVED_ENV_RE.search(self.api_key or ""):
+            status = "unresolved-key"
             return {
                 "ready": False,
-                "status": "unresolved-key",
+                "status": status,
                 "reason": "provider still carries an unresolved ${ENV_VAR} placeholder",
                 "probe_strategy": probe_strategy,
                 "compatibility": compatibility,
                 "profile": profile,
                 "probe_confidence": probe_confidence,
                 "notes": notes,
+                "probe_payload": probe_payload,
                 "verified_via": verified_via,
+                "operator_hint": self._request_readiness_action(status),
             }
         if self.health.last_error:
             status, reason = self._classify_request_readiness_issue(self.health.last_error)
             recovered = self.health.healthy and status == "degraded"
+            final_status = "ready" if recovered else status
             return {
                 "ready": recovered,
-                "status": "ready" if recovered else status,
+                "status": final_status,
                 "reason": "route responded successfully" if recovered else reason,
                 "probe_strategy": probe_strategy,
                 "compatibility": compatibility,
                 "profile": profile,
                 "probe_confidence": probe_confidence,
                 "notes": notes,
+                "probe_payload": probe_payload,
                 "verified_via": verified_via,
+                "operator_hint": self._request_readiness_action(final_status),
             }
         if self._last_probe_verified:
+            status = "ready-verified"
             return {
                 "ready": True,
-                "status": "ready-verified",
+                "status": status,
                 "reason": f"route passed a live {verified_via or probe_strategy} probe recently",
                 "probe_strategy": probe_strategy,
                 "compatibility": compatibility,
                 "profile": profile,
                 "probe_confidence": "high",
                 "notes": notes,
+                "probe_payload": probe_payload,
                 "verified_via": verified_via or probe_strategy,
+                "operator_hint": self._request_readiness_action(status),
             }
         if compatibility != "native" and probe_confidence != "high":
+            status = "ready-compat"
             return {
                 "ready": True,
-                "status": "ready-compat",
+                "status": status,
                 "reason": (
                     "route looks request-ready, but this transport profile is still based on "
                     f"{probe_confidence}-confidence compatibility assumptions"
@@ -260,18 +310,23 @@ class ProviderBackend:
                 "profile": profile,
                 "probe_confidence": probe_confidence,
                 "notes": notes,
+                "probe_payload": probe_payload,
                 "verified_via": verified_via,
+                "operator_hint": self._request_readiness_action(status),
             }
+        status = "ready"
         return {
             "ready": True,
-            "status": "ready",
+            "status": status,
             "reason": "route looks request-ready from config and recent runtime state",
             "probe_strategy": probe_strategy,
             "compatibility": compatibility,
             "profile": profile,
             "probe_confidence": probe_confidence,
             "notes": notes,
+            "probe_payload": probe_payload,
             "verified_via": verified_via,
+            "operator_hint": self._request_readiness_action(status),
         }
 
     async def probe_health(self, timeout_seconds: float = 10.0) -> bool:
@@ -282,12 +337,10 @@ class ProviderBackend:
         """
         if self.backend_type == "google-genai":
             return self.health.healthy
-
         strategy = str(self.transport.get("probe_strategy", "models") or "models").strip().lower()
         strategy = strategy.replace("-", "_")
         if strategy == "none":
             return self.health.healthy
-
         try:
             if strategy == "chat":
                 return await self._probe_via_chat(timeout_seconds=timeout_seconds)

@@ -894,7 +894,58 @@ providers:
     rendered = render_provider_probe_text(report)
     assert "Configured: 2 | Ready now: 1" in rendered
     assert "- deepseek-chat  (ready)" in rendered
-    assert "transport: openai-compatible | native | confidence: high" in rendered
+    assert "transport: openai-compatible | native | confidence: high | strategy: models" in rendered
+
+
+def test_build_provider_probe_report_surfaces_verified_payload_details(tmp_path: Path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        """
+providers:
+  kilocode:
+    backend: openai-compat
+    api_key: "${KILOCODE_API_KEY}"
+    base_url: "https://api.kilo.example/v1"
+    model: "z-ai/glm-5:free"
+    tier: fallback
+""".strip(),
+        encoding="utf-8",
+    )
+    env_file = tmp_path / ".env"
+    env_file.write_text("KILOCODE_API_KEY=sk-demo\n", encoding="utf-8")
+
+    report = build_provider_probe_report(
+        config_path=config_path,
+        env_file=env_file,
+        health_payload={
+            "providers": {
+                "kilocode": {
+                    "healthy": True,
+                    "request_readiness": {
+                        "ready": True,
+                        "status": "ready-verified",
+                        "reason": "route passed a live chat probe recently",
+                        "profile": "kilo-openai-compat",
+                        "compatibility": "aggregator",
+                        "probe_confidence": "high",
+                        "probe_strategy": "chat",
+                        "probe_payload": "kilo-chat-minimal | user='ping' | max_tokens=1",
+                        "verified_via": "chat",
+                        "operator_hint": "route can carry live traffic",
+                    },
+                }
+            }
+        },
+    )
+
+    row = report["providers"][0]
+    assert row["status"] == "ready-verified"
+    assert row["verified_via"] == "chat"
+    assert "kilo-chat-minimal" in row["probe_payload"]
+    rendered = render_provider_probe_text(report)
+    assert "verified via: chat" in rendered
+    assert "probe payload: kilo-chat-minimal" in rendered
+    assert "next: route can carry live traffic" in rendered
 
 
 def test_build_provider_probe_report_live_probe_surfaces_verified_route(
