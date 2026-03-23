@@ -1216,6 +1216,11 @@ def test_list_client_scenarios_exposes_opencode_quality_path(tmp_path: Path):
         line.startswith("anthropic/opus-4.6 ->")
         for line in by_id["opencode-quality"]["degrade_chains"]
     )
+    assert by_id["opencode-quality"]["route_additions"]
+    assert (
+        by_id["opencode-quality"]["route_additions"][0]["provider_name"]
+        == "openrouter-anthropic-opus"
+    )
 
 
 def test_apply_client_scenario_sets_client_profile_mode_and_adds_providers(tmp_path: Path):
@@ -1262,6 +1267,8 @@ client_profiles:
     assert "Operator guidance" in summary
     assert "best when:" in summary
     assert "Change preview" in summary
+    assert "Operator follow-up" in summary
+    assert "add route:" in summary
 
 
 def test_render_client_scenarios_text_mentions_opencode_free(tmp_path: Path):
@@ -1275,4 +1282,5 @@ def test_render_client_scenarios_text_mentions_opencode_free(tmp_path: Path):
     assert "best when:" in rendered
     assert "tradeoff:" in rendered
     assert "known route mirrors:" in rendered or "degrade chain:" in rendered
+    assert "add for fuller coverage:" in rendered
     assert "ready now" in rendered or "needs keys for" in rendered

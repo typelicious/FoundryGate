@@ -1692,6 +1692,8 @@ def test_faigate_dashboard_overview_summarizes_live_stats(tmp_path: Path):
     assert "Top family         deepseek" in result.stdout
     assert "Cooldown routes    1" in result.stdout
     assert "Recovery watch     1" in result.stdout
+    assert "Add opportunities" in result.stdout
+    assert "Next add" in result.stdout
     assert "Top alert" in result.stdout
 
 

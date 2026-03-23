@@ -871,6 +871,12 @@ def _render_overview(report: dict[str, Any]) -> str:
                 f"  Add opportunities  {_safe_int(report['cards']['lane_families']['route_additions'])}",
             ]
         )
+        route_additions = report.get("route_additions") or []
+        if route_additions:
+            top_addition = route_additions[0]
+            lines.append(
+                f"  Next add           {top_addition.get('add_provider')} ({top_addition.get('strategy')})"
+            )
     if report["alerts"]:
         alert = report["alerts"][0]
         lines.extend(
