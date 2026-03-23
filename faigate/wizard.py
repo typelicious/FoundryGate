@@ -1183,6 +1183,7 @@ def build_provider_probe_report(
                 or ""
             ),
         )
+        lane = dict(provider.get("lane") or lane_binding or {})
         rows.append(
             {
                 "provider": name,
@@ -1195,9 +1196,12 @@ def build_provider_probe_report(
                 "env": env_name,
                 "healthy": healthy,
                 "avg_latency_ms": float(health.get("avg_latency_ms", 0.0) or 0.0),
+                "canonical_model": str(lane.get("canonical_model") or ""),
                 "lane_family": str(
-                    (provider.get("lane") or {}).get("family") or lane_binding.get("family") or ""
+                    lane.get("family") or ""
                 ),
+                "lane_cluster": str(lane.get("cluster") or ""),
+                "degrade_to": [str(item) for item in (lane.get("degrade_to") or []) if str(item)],
                 "transport_profile": str(
                     request_readiness.get("profile")
                     or (provider.get("transport") or {}).get("profile")
@@ -1230,6 +1234,27 @@ def build_provider_probe_report(
             }
         )
 
+    recommendation_counts = {
+        "same-lane-route": 0,
+        "cluster-degrade": 0,
+        "family-route": 0,
+        "none": 0,
+    }
+    for row in rows:
+        recommendation = _pick_probe_recommendation(row=row, rows=rows)
+        row["recommended_route"] = recommendation["provider"]
+        row["recommended_strategy"] = recommendation["strategy"]
+        recommendation_counts[recommendation["strategy"]] = (
+            recommendation_counts.get(recommendation["strategy"], 0) + 1
+        )
+        row["next_action"] = _combine_probe_next_action(
+            current_hint=str(row.get("next_action") or ""),
+            action_group=str(row.get("action_group") or "inspect"),
+            family=str(row.get("lane_family") or ""),
+            preferred_route=str(recommendation["provider"] or ""),
+            strategy=str(recommendation["strategy"] or "none"),
+        )
+
     return {
         "providers": rows,
         "summary": {
@@ -1238,6 +1263,7 @@ def build_provider_probe_report(
             "health_live": health_payload is not None,
             "live_probe": live_probe,
             "actions": action_counts,
+            "recommendations": recommendation_counts,
         },
     }
 
@@ -1263,6 +1289,17 @@ def render_provider_probe_text(report: dict[str, Any]) -> str:
         f"inspect={actions.get('inspect', 0)}",
     ]
     lines.append("Action summary: " + " | ".join(action_bits))
+    recommendations = summary.get("recommendations") or {}
+    lines.append(
+        "Fallback guidance: "
+        + " | ".join(
+            [
+                f"same-lane={recommendations.get('same-lane-route', 0)}",
+                f"cluster={recommendations.get('cluster-degrade', 0)}",
+                f"family={recommendations.get('family-route', 0)}",
+            ]
+        )
+    )
     lines.append("")
     for row in report.get("providers", []):
         lines.append(f"- {row['provider']}  ({row['status']})")
@@ -1272,7 +1309,12 @@ def render_provider_probe_text(report: dict[str, Any]) -> str:
         if row.get("lane_family") or row.get("action_group"):
             family = row.get("lane_family") or "unclassified"
             action = row.get("action_group") or "inspect"
-            lines.append("  " + f"family: {family} | action: {action}")
+            bits = [f"family: {family}", f"action: {action}"]
+            if row.get("canonical_model"):
+                bits.append(f"canonical: {row['canonical_model']}")
+            if row.get("lane_cluster"):
+                bits.append(f"cluster: {row['lane_cluster']}")
+            lines.append("  " + " | ".join(bits))
         if row.get("transport_profile"):
             lines.append(
                 "  "
@@ -1296,6 +1338,13 @@ def render_provider_probe_text(report: dict[str, Any]) -> str:
         if row.get("avg_latency_ms"):
             lines.append("  " + f"latency: {row['avg_latency_ms']:.1f} ms")
         lines.append("  " + f"why: {row['reason']}")
+        if row.get("recommended_route"):
+            lines.append(
+                "  "
+                + "prefer: "
+                + f"{row['recommended_route']} "
+                + f"({row.get('recommended_strategy') or 'fallback'})"
+            )
         if row.get("next_action"):
             lines.append("  " + f"next: {row['next_action']}")
     lines.append("")
@@ -1360,6 +1409,100 @@ def _default_probe_action_hint(*, action_group: str, provider_name: str, family:
     if action_group == "route":
         return f"route can carry live traffic for the {family_label} lane"
     return f"inspect runtime hints for {provider_name} before making it a primary lane"
+
+
+def _pick_probe_recommendation(
+    *, row: dict[str, Any], rows: list[dict[str, Any]]
+) -> dict[str, str]:
+    action_group = str(row.get("action_group") or "inspect")
+    if action_group == "route":
+        return {"provider": "", "strategy": "none"}
+
+    def candidate_pool(*, matcher) -> list[dict[str, Any]]:
+        candidates = [
+            candidate
+            for candidate in rows
+            if candidate.get("provider") != row.get("provider")
+            and str(candidate.get("action_group") or "inspect") in {"route", "watch"}
+            and matcher(candidate)
+        ]
+        candidates.sort(
+            key=lambda candidate: (
+                0 if str(candidate.get("action_group") or "") == "route" else 1,
+                float(candidate.get("avg_latency_ms") or 0.0),
+                str(candidate.get("provider") or ""),
+            )
+        )
+        return candidates
+
+    canonical_model = str(row.get("canonical_model") or "")
+    if canonical_model:
+        candidates = candidate_pool(
+            matcher=lambda candidate: str(candidate.get("canonical_model") or "") == canonical_model
+        )
+        if candidates:
+            return {
+                "provider": str(candidates[0].get("provider") or ""),
+                "strategy": "same-lane-route",
+            }
+
+    degrade_to = [str(item) for item in (row.get("degrade_to") or []) if str(item)]
+    if degrade_to:
+        candidates = candidate_pool(
+            matcher=lambda candidate: str(candidate.get("canonical_model") or "") in degrade_to
+        )
+        if candidates:
+            return {
+                "provider": str(candidates[0].get("provider") or ""),
+                "strategy": "cluster-degrade",
+            }
+
+    family = str(row.get("lane_family") or "")
+    if family:
+        candidates = candidate_pool(
+            matcher=lambda candidate: str(candidate.get("lane_family") or "") == family
+        )
+        if candidates:
+            return {
+                "provider": str(candidates[0].get("provider") or ""),
+                "strategy": "family-route",
+            }
+
+    return {"provider": "", "strategy": "none"}
+
+
+def _combine_probe_next_action(
+    *,
+    current_hint: str,
+    action_group: str,
+    family: str,
+    preferred_route: str,
+    strategy: str,
+) -> str:
+    if not preferred_route:
+        return current_hint
+    strategy_label = {
+        "same-lane-route": "same lane",
+        "cluster-degrade": "next cluster lane",
+        "family-route": "family route",
+    }.get(strategy, "fallback route")
+    traffic_label = family or "this"
+    if action_group == "hold":
+        return (
+            f"{current_hint}; prefer {preferred_route} as the {strategy_label} "
+            f"for {traffic_label} traffic meanwhile"
+        )
+    if action_group == "watch":
+        return (
+            f"{current_hint}; favor {preferred_route} as the {strategy_label} "
+            f"for steady {traffic_label} traffic"
+        )
+    if action_group in {"fix-now", "inspect"}:
+        return (
+            f"{current_hint}; route {traffic_label} traffic through {preferred_route} "
+            f"as the {strategy_label} until fixed"
+        )
+    return current_hint
 
 
 def _scenario_provider_selection(*, purpose: str, client: str) -> list[str]:

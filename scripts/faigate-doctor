@@ -146,6 +146,13 @@ if health_raw:
         "route": 0,
         "inspect": 0,
     }
+    recommendation_counts = {
+        "same-lane-route": 0,
+        "cluster-degrade": 0,
+        "family-route": 0,
+        "none": 0,
+    }
+    rows = []
 
     def classify_action(*, status: str, ready: bool, cooldown_active: bool, window_state: str, recovered_recently: bool) -> str:
         if status in {"missing-key", "unresolved-key", "auth-invalid", "endpoint-mismatch", "model-unavailable"}:
@@ -192,43 +199,117 @@ if health_raw:
             recovered_recently=runtime_recovered_recently,
         )
         action_counts[action_group] += 1
+        canonical_model = str(lane.get("canonical_model") or "")
+        lane_cluster = str(lane.get("cluster") or "")
+        degrade_to = [str(item) for item in (lane.get("degrade_to") or []) if str(item)]
+        rows.append(
+            {
+                "provider": provider_name,
+                "family": family or "unclassified",
+                "canonical_model": canonical_model,
+                "lane_cluster": lane_cluster,
+                "degrade_to": degrade_to,
+                "action": action_group,
+                "ready": bool(request_readiness.get("ready")),
+                "status": status,
+                "reason": reason,
+                "profile": profile,
+                "compatibility": compatibility,
+                "confidence": confidence,
+                "verified_via": verified_via,
+                "probe_payload": probe_payload,
+                "operator_hint": operator_hint,
+                "runtime_penalty": runtime_penalty,
+                "runtime_issue_type": runtime_issue_type,
+                "cooldown_active": cooldown_active,
+                "runtime_window_state": runtime_window_state,
+                "runtime_cooldown_remaining": runtime_cooldown_remaining,
+                "runtime_degraded_remaining": runtime_degraded_remaining,
+                "runtime_recovered_recently": runtime_recovered_recently,
+                "runtime_recovery_remaining": runtime_recovery_remaining,
+                "runtime_last_recovered_issue": runtime_last_recovered_issue,
+            }
+        )
+
+    def pick_recommendation(current_row):
+        if current_row["action"] == "route":
+            return "", "none"
+        candidates = [
+            row
+            for row in rows
+            if row["provider"] != current_row["provider"] and row["action"] in {"route", "watch"}
+        ]
+        candidates.sort(key=lambda row: (0 if row["action"] == "route" else 1, row["provider"]))
+        if current_row["canonical_model"]:
+            for candidate in candidates:
+                if candidate["canonical_model"] == current_row["canonical_model"]:
+                    return candidate["provider"], "same-lane-route"
+        for candidate in candidates:
+            if candidate["canonical_model"] in current_row["degrade_to"]:
+                return candidate["provider"], "cluster-degrade"
+        for candidate in candidates:
+            if candidate["family"] == current_row["family"]:
+                return candidate["provider"], "family-route"
+        return "", "none"
+
+    for row in rows:
         profile_bits = []
-        if profile:
-            profile_bits.append(profile)
-        if compatibility:
-            profile_bits.append(compatibility)
-        if confidence:
-            profile_bits.append(f"confidence={confidence}")
-        if verified_via:
-            profile_bits.append(f"verified={verified_via}")
+        if row["profile"]:
+            profile_bits.append(row["profile"])
+        if row["compatibility"]:
+            profile_bits.append(row["compatibility"])
+        if row["confidence"]:
+            profile_bits.append(f"confidence={row['confidence']}")
+        if row["verified_via"]:
+            profile_bits.append(f"verified={row['verified_via']}")
         profile_suffix = f" [{' | '.join(profile_bits)}]" if profile_bits else ""
-        if request_readiness.get("ready"):
+        if row["ready"]:
             ready += 1
-            print(f"[ok] request-ready: {provider_name} -> {status}{profile_suffix} ({reason})")
-        else:
-            print(f"[warn] request-ready: {provider_name} -> {status}{profile_suffix} ({reason})")
-        if family or action_group:
-            family_label = family or "unclassified"
-            print(f"[ok] request-ready action: {provider_name} -> {action_group} [{family_label}]")
-        if probe_payload:
-            print(f"[ok] request-ready payload: {provider_name} -> {probe_payload}")
-        if operator_hint:
-            print(f"[ok] request-ready next step: {provider_name} -> {operator_hint}")
-        if runtime_penalty or runtime_issue_type:
-            cooldown_suffix = " | cooldown active" if cooldown_active else ""
-            window_suffix = ""
-            if runtime_window_state == "cooldown" and runtime_cooldown_remaining:
-                window_suffix = f" | cooldown {runtime_cooldown_remaining}s left"
-            elif runtime_window_state == "degraded" and runtime_degraded_remaining:
-                window_suffix = f" | degraded {runtime_degraded_remaining}s left"
             print(
-                f"[ok] request-ready runtime: {provider_name} -> penalty={runtime_penalty}"
-                f" | issue={runtime_issue_type or 'n/a'}{cooldown_suffix}{window_suffix}"
+                f"[ok] request-ready: {row['provider']} -> {row['status']}{profile_suffix} "
+                f"({row['reason']})"
             )
-        if runtime_recovered_recently:
+        else:
             print(
-                f"[ok] request-ready recovery: {provider_name} -> recovered from "
-                f"{runtime_last_recovered_issue or 'n/a'} | watch {runtime_recovery_remaining}s"
+                f"[warn] request-ready: {row['provider']} -> {row['status']}{profile_suffix} "
+                f"({row['reason']})"
+            )
+        details = [row["family"]]
+        if row["canonical_model"]:
+            details.append(row["canonical_model"])
+        if row["lane_cluster"]:
+            details.append(row["lane_cluster"])
+        print(
+            f"[ok] request-ready action: {row['provider']} -> {row['action']} "
+            f"[{' | '.join(details)}]"
+        )
+        if row["probe_payload"]:
+            print(f"[ok] request-ready payload: {row['provider']} -> {row['probe_payload']}")
+        if row["operator_hint"]:
+            print(f"[ok] request-ready next step: {row['provider']} -> {row['operator_hint']}")
+        if row["runtime_penalty"] or row["runtime_issue_type"]:
+            cooldown_suffix = " | cooldown active" if row["cooldown_active"] else ""
+            window_suffix = ""
+            if row["runtime_window_state"] == "cooldown" and row["runtime_cooldown_remaining"]:
+                window_suffix = f" | cooldown {row['runtime_cooldown_remaining']}s left"
+            elif row["runtime_window_state"] == "degraded" and row["runtime_degraded_remaining"]:
+                window_suffix = f" | degraded {row['runtime_degraded_remaining']}s left"
+            print(
+                f"[ok] request-ready runtime: {row['provider']} -> penalty={row['runtime_penalty']}"
+                f" | issue={row['runtime_issue_type'] or 'n/a'}{cooldown_suffix}{window_suffix}"
+            )
+        if row["runtime_recovered_recently"]:
+            print(
+                f"[ok] request-ready recovery: {row['provider']} -> recovered from "
+                f"{row['runtime_last_recovered_issue'] or 'n/a'} | watch "
+                f"{row['runtime_recovery_remaining']}s"
+            )
+        preferred_route, strategy = pick_recommendation(row)
+        recommendation_counts[strategy] = recommendation_counts.get(strategy, 0) + 1
+        if preferred_route:
+            print(
+                f"[ok] request-ready preferred route: {row['provider']} -> {preferred_route} "
+                f"({strategy})"
             )
     if total:
         print(f"[ok] request readiness summary: {ready}/{total} provider routes look request-ready")
@@ -237,6 +318,12 @@ if health_raw:
             f"fix-now={action_counts['fix-now']} | hold={action_counts['hold']} | "
             f"watch={action_counts['watch']} | route={action_counts['route']} | "
             f"inspect={action_counts['inspect']}"
+        )
+        print(
+            "[ok] request-ready fallback guidance: "
+            f"same-lane={recommendation_counts['same-lane-route']} | "
+            f"cluster={recommendation_counts['cluster-degrade']} | "
+            f"family={recommendation_counts['family-route']}"
         )
 PY
 then

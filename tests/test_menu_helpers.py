@@ -2006,6 +2006,111 @@ providers:
     assert "- anthropic-claude  (missing-key)" in result.stdout
 
 
+def test_faigate_doctor_prefers_same_lane_route_before_cluster_degrade(tmp_path: Path):
+    config_file = tmp_path / "config.yaml"
+    env_file = tmp_path / "faigate.env"
+    config_file.write_text("server: {}\nproviders: {}\n", encoding="utf-8")
+    env_file.write_text("", encoding="utf-8")
+
+    fake_bin = _write_fake_curl(
+        tmp_path,
+        {
+            "/health": json.dumps(
+                {
+                    "status": "ok",
+                    "summary": {
+                        "providers_total": 3,
+                        "providers_healthy": 3,
+                        "providers_unhealthy": 0,
+                    },
+                    "request_readiness": {
+                        "providers_total": 3,
+                        "providers_ready": 2,
+                        "providers_not_ready": 1,
+                    },
+                    "providers": {
+                        "anthropic-claude": {
+                            "healthy": True,
+                            "lane": {
+                                "family": "anthropic",
+                                "canonical_model": "anthropic/opus-4.6",
+                                "cluster": "elite-reasoning",
+                                "degrade_to": ["openai/gpt-4o"],
+                            },
+                            "request_readiness": {
+                                "ready": False,
+                                "status": "rate-limited",
+                                "reason": (
+                                    "route is in runtime cooldown after recent "
+                                    "rate limited failures"
+                                ),
+                                "runtime_cooldown_active": True,
+                                "runtime_window_state": "cooldown",
+                            },
+                        },
+                        "openrouter-anthropic-opus": {
+                            "healthy": True,
+                            "lane": {
+                                "family": "anthropic",
+                                "canonical_model": "anthropic/opus-4.6",
+                                "cluster": "elite-reasoning",
+                            },
+                            "request_readiness": {
+                                "ready": True,
+                                "status": "ready-compat",
+                                "reason": "route looks request-ready from runtime state",
+                            },
+                        },
+                        "openai-gpt4o": {
+                            "healthy": True,
+                            "lane": {
+                                "family": "openai",
+                                "canonical_model": "openai/gpt-4o",
+                                "cluster": "quality-workhorse",
+                            },
+                            "request_readiness": {
+                                "ready": True,
+                                "status": "ready",
+                                "reason": "route looks request-ready from runtime state",
+                            },
+                        },
+                    },
+                }
+            ),
+            "/v1/models": json.dumps({"data": []}),
+        },
+    )
+
+    env = os.environ.copy()
+    env["PATH"] = f"{fake_bin}:{env['PATH']}"
+    env["FAIGATE_CONFIG_FILE"] = str(config_file)
+    env["FAIGATE_ENV_FILE"] = str(env_file)
+    env["FAIGATE_PYTHON"] = sys.executable
+    env["PYTHONPATH"] = str(REPO_ROOT)
+
+    result = subprocess.run(
+        ["bash", "scripts/faigate-doctor"],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    assert (
+        "request-ready action: anthropic-claude -> hold "
+        "[anthropic | anthropic/opus-4.6 | elite-reasoning]"
+    ) in result.stdout
+    assert (
+        "request-ready preferred route: anthropic-claude -> "
+        "openrouter-anthropic-opus (same-lane-route)"
+    ) in result.stdout
+    assert (
+        "request-ready fallback guidance: same-lane=1 | cluster=0 | family=0"
+        in result.stdout
+    )
+
+
 def test_faigate_client_scenarios_help_lists_usage():
     result = subprocess.run(
         ["bash", "scripts/faigate-client-scenarios", "--help"],
